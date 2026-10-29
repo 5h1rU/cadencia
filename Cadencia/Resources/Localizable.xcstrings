@@ -55,16 +55,6 @@
         }
       }
     },
-    "%@ left": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quedan %@"
-          }
-        }
-      }
-    },
     "%@, %@%@ · priority %@": {
       "localizations": {
         "en": {
@@ -452,7 +442,16 @@
         }
       }
     },
-    "Cadence": {},
+    "Cadence": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadencia"
+          }
+        }
+      }
+    },
     "Cadencia": {},
     "Cadencia keeps Intervals.icu as the system of record. Nothing is stored on other servers.": {
       "localizations": {
@@ -484,13 +483,12 @@
         }
       }
     },
-    "Ceiling": {},
-    "Ceiling %lld W": {
+    "Ceiling": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Techo %lld W"
+            "value": "Techo"
           }
         }
       }
@@ -754,16 +752,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Esfuerzo (RPE)"
-          }
-        }
-      }
-    },
-    "End": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Terminar"
           }
         }
       }
@@ -1110,7 +1098,16 @@
         }
       }
     },
-    "HR": {},
+    "HR": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC"
+          }
+        }
+      }
+    },
     "HRV": {},
     "HRV (SDNN), resting heart rate and sleep from your watch. Health values win over Intervals for the same day.": {
       "localizations": {
@@ -1714,7 +1711,16 @@
         }
       }
     },
-    "Power": {},
+    "Power": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potencia"
+          }
+        }
+      }
+    },
     "Power curve, last %lld days": {
       "localizations": {
         "es": {
@@ -2319,7 +2325,16 @@
         }
       }
     },
-    "Time": {},
+    "Time": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo"
+          }
+        }
+      }
+    },
     "To": {
       "localizations": {
         "es": {
@@ -3783,6 +3798,196 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ten en cuenta"
+          }
+        }
+      }
+    },
+    "Left": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restante"
+          }
+        }
+      }
+    },
+    "In zone": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En zona"
+          }
+        }
+      }
+    },
+    "Too hard": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiado fuerte"
+          }
+        }
+      }
+    },
+    "Too easy": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiado suave"
+          }
+        }
+      }
+    },
+    "Over the ceiling": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por encima del techo"
+          }
+        }
+      }
+    },
+    "No power": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin potencia"
+          }
+        }
+      }
+    },
+    "%lld % of block": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld % del bloque"
+          }
+        }
+      }
+    },
+    "Up next": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siguiente"
+          }
+        }
+      }
+    },
+    "Last block": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Último bloque"
+          }
+        }
+      }
+    },
+    "Reading your numbers…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leyendo tus números…"
+          }
+        }
+      }
+    },
+    "Listening to your numbers.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atento a tus números."
+          }
+        }
+      }
+    },
+    "Voice": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voz"
+          }
+        }
+      }
+    },
+    "Captions": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtítulos"
+          }
+        }
+      }
+    },
+    "Easier": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más suave"
+          }
+        }
+      }
+    },
+    "Harder": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más fuerte"
+          }
+        }
+      }
+    },
+    "Intensity": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensidad"
+          }
+        }
+      }
+    },
+    "Coach voice": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voz del coach"
+          }
+        }
+      }
+    },
+    "Coach during rides": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coach durante el rodaje"
+          }
+        }
+      }
+    },
+    "At the start of each block, halfway through long ones and at the finish, the coach reads your numbers and says what they mean. Spoken over your music; you can mute it from the ride screen.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al empezar cada bloque, a mitad de los largos y al terminar, el coach lee tus números y te dice qué significan. Se escucha sobre tu música; puedes silenciarlo desde la pantalla del rodaje."
           }
         }
       }

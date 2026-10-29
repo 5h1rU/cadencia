@@ -12,6 +12,28 @@ struct AppState: Codable, Equatable {
         var llmEndpoint = AppConfig.defaultLLMEndpoint
         var llmModel = AppConfig.defaultLLMModel
         var unitsMetric = true
+        /// The coach speaks during rides (block starts, long-block midpoints, the finish).
+        var rideVoice = true
+        /// The same lines shown as captions on the ride screen.
+        var rideCaptions = true
+
+        init() {}
+
+        /// Every key is optional on the way in, so a setting added in a later version never makes an
+        /// older `AppState` file undecodable (which would silently reset the whole app).
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            ergByDefault = try c.decodeIfPresent(Bool.self, forKey: .ergByDefault) ?? ergByDefault
+            pushWellnessToIntervals = try c.decodeIfPresent(Bool.self, forKey: .pushWellnessToIntervals) ?? pushWellnessToIntervals
+            writeWorkoutsToHealth = try c.decodeIfPresent(Bool.self, forKey: .writeWorkoutsToHealth) ?? writeWorkoutsToHealth
+            readHealth = try c.decodeIfPresent(Bool.self, forKey: .readHealth) ?? readHealth
+            llmEnabled = try c.decodeIfPresent(Bool.self, forKey: .llmEnabled) ?? llmEnabled
+            llmEndpoint = try c.decodeIfPresent(URL.self, forKey: .llmEndpoint) ?? llmEndpoint
+            llmModel = try c.decodeIfPresent(String.self, forKey: .llmModel) ?? llmModel
+            unitsMetric = try c.decodeIfPresent(Bool.self, forKey: .unitsMetric) ?? unitsMetric
+            rideVoice = try c.decodeIfPresent(Bool.self, forKey: .rideVoice) ?? rideVoice
+            rideCaptions = try c.decodeIfPresent(Bool.self, forKey: .rideCaptions) ?? rideCaptions
+        }
     }
 
     struct TodayState: Codable, Equatable {

@@ -6,7 +6,8 @@ Native iOS cycling-training app that keeps **Intervals.icu as the system of reco
 - has an **AI head coach** decide every day: readiness verdict, today's ERG-ready session and the shape of the week, from 28 days of HRV / resting HR / sleep / load / RPE, the power curve, the plan and the goal event. There is no on-device fallback: the AI is the only coach, and the app range-checks every number it returns before it reaches the trainer,
 - lets you plan around a goal or an event, but only keeps the coming week concrete; later weeks are intentions,
 - takes voice or text notes to the coach ("Saturday I have a 120 km group ride, Thursday only 45 minutes") and revises the week,
-- runs structured workouts on a smart trainer over Bluetooth (FTMS, ERG) with a heart-rate band and optional power meter,
+- runs structured workouts on a smart trainer over Bluetooth (FTMS, ERG) with a heart-rate band and optional power meter, on a game-style HUD (live numbers, workout timeline with playhead, target band with the live marker, block countdown, what's next),
+- has the coach talk during the ride: at each block start, halfway through long blocks and at the finish, the live numbers (power vs target, HR, cadence, time in zone) go to the AI and its one-line verdict comes back as a caption and spoken aloud over your music (`RideCommentary` + `RideCommentator`; mutable per ride or in Settings),
 - saves the ride locally, uploads it to Intervals.icu exactly once, writes it to Apple Health, and pushes RPE/feel back,
 - estimates FTP from sustained efforts and asks before changing zones.
 

@@ -12,16 +12,20 @@ final class RideSession {
     private(set) var engine: RideEngine
     var ergEnabled: Bool
     private(set) var trainerLostAlert = false
+    /// The AI voice for this ride; nil when no coach is connected.
+    let commentator: RideCommentator?
 
     let bluetooth: BluetoothManager
     private var ticker: Task<Void, Never>?
     private var lastDropSeen: Date?
 
-    init(workout: Workout, ftp: Int, athleteID: String, plannedSessionID: UUID?, intervalsEventID: Int?, bluetooth: BluetoothManager, ergEnabled: Bool) {
+    init(workout: Workout, ftp: Int, athleteID: String, plannedSessionID: UUID?, intervalsEventID: Int?, bluetooth: BluetoothManager,
+         ergEnabled: Bool, commentator: RideCommentator? = nil) {
         let recording = RideRecording(athleteID: athleteID, workout: workout, plannedSessionID: plannedSessionID, intervalsEventID: intervalsEventID, startedAt: Date())
         self.engine = RideEngine(recording: recording, ftp: ftp)
         self.bluetooth = bluetooth
         self.ergEnabled = ergEnabled
+        self.commentator = commentator
     }
 
     var live: BluetoothManager.Live { bluetooth.live }
@@ -64,6 +68,8 @@ final class RideSession {
         engine.finish(at: Date())
         bluetooth.releaseControl()
         UIApplication.shared.isIdleTimerDisabled = false
+        // Ending early is the athlete's call; the voice stops rather than commenting on it.
+        commentator?.stop()
         return engine.recording
     }
 
@@ -86,8 +92,10 @@ final class RideSession {
             ticker = nil
             bluetooth.releaseControl()
             UIApplication.shared.isIdleTimerDisabled = false
+            commentator?.observe(engine, live: live)
             return
         }
+        commentator?.observe(engine, live: live)
         sendTarget()
         if let dropped = bluetooth.trainerDroppedAt, dropped != lastDropSeen {
             lastDropSeen = dropped

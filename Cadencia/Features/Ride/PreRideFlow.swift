@@ -23,9 +23,12 @@ struct PreRideFlow: View {
                 }
             } else {
                 DevicesView(workout: workout, ergEnabled: $ergEnabled) {
-                    session = RideSession(workout: workout, ftp: model.workingFTP ?? 200, athleteID: model.athleteID,
-                                          plannedSessionID: plannedSession?.id, intervalsEventID: plannedSession?.intervalsEventID,
-                                          bluetooth: model.bluetooth, ergEnabled: ergEnabled)
+                    Task {
+                        let commentator = await model.rideCommentator()
+                        session = RideSession(workout: workout, ftp: model.workingFTP ?? 200, athleteID: model.athleteID,
+                                              plannedSessionID: plannedSession?.id, intervalsEventID: plannedSession?.intervalsEventID,
+                                              bluetooth: model.bluetooth, ergEnabled: ergEnabled, commentator: commentator)
+                    }
                 } cancel: { dismiss() }
             }
         }

@@ -136,6 +136,14 @@ final class AppModel {
         }
     }
 
+    /// The voice for one ride, on the same coach that decided the day. Nil without a coach, or when the
+    /// athlete turned both voice and captions off.
+    func rideCommentator() async -> RideCommentator? {
+        let settings = state.settings
+        guard settings.rideVoice || settings.rideCaptions, let coach = await coachEngine() else { return nil }
+        return RideCommentator(coach: coach, locale: coachLocale, voiceEnabled: settings.rideVoice, captionsEnabled: settings.rideCaptions)
+    }
+
     // MARK: Lifecycle
 
     func start() async {
