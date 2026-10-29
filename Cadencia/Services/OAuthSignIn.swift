@@ -30,9 +30,13 @@ final class OAuthSignIn: NSObject, ASWebAuthenticationPresentationContextProvidi
 
         let callback: URL = try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(url: url, callbackURLScheme: AppConfig.intervalsOAuthCallbackScheme) { url, error in
-                if let url { continuation.resume(returning: url) }
-                else if let error as? ASWebAuthenticationSessionError, error.code == .canceledLogin { continuation.resume(throwing: Failure.cancelled) }
-                else { continuation.resume(throwing: error ?? Failure.cancelled) }
+                if let callbackURL = url {
+                    continuation.resume(returning: callbackURL)
+                } else if let sessionError = error as? ASWebAuthenticationSessionError, sessionError.code == .canceledLogin {
+                    continuation.resume(throwing: Failure.cancelled)
+                } else {
+                    continuation.resume(throwing: error ?? Failure.cancelled)
+                }
             }
             session.presentationContextProvider = self
             session.prefersEphemeralWebBrowserSession = false
