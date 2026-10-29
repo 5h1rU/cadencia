@@ -151,7 +151,7 @@ struct DataSourcesView: View {
             Section {
                 Toggle("Read Apple Health", isOn: Binding(get: { model.state.settings.readHealth }, set: { on in
                     model.updateSettings { $0.readHealth = on }
-                    if on { Task { await model.readHealth(); model.prescribeToday() } }
+                    if on { Task { await model.readHealth(); await model.askCoachForToday() } }
                 }))
                 Toggle("Save rides to Apple Health", isOn: Binding(get: { model.state.settings.writeWorkoutsToHealth }, set: { on in model.updateSettings { $0.writeWorkoutsToHealth = on } }))
                 LabeledContent("Last read", value: Format.relative(model.state.lastHealthReadAt))
@@ -211,10 +211,11 @@ struct CoachSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var key = ""
     @State private var endpoint = ""
-    @State private var modelName = ""
     @State private var signingIn = false
     @State private var signInError: String?
-    @State private var planModels: [LLMCoach.Model] = []
+    @State private var availableModels: [LLMCoach.Model] = []
+    @State private var loadingModels = false
+    @State private var modelsError: String?
     @State private var confirmSignOut = false
 
     var body: some View {
@@ -228,8 +229,8 @@ struct CoachSettingsView: View {
                     if key != Self.maskedKey { model.setLLMKey(key) }
                     model.updateSettings {
                         if let url = URL(string: endpoint), url.scheme?.hasPrefix("http") == true { $0.llmEndpoint = url }
-                        if !modelName.trimmingCharacters(in: .whitespaces).isEmpty { $0.llmModel = modelName }
                     }
+                    Task { await loadModels() }
                 }
             } footer: {
                 Text(currentSource)
@@ -239,10 +240,9 @@ struct CoachSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             endpoint = model.state.settings.llmEndpoint.absoluteString
-            modelName = model.state.settings.llmModel
             key = model.hasLLMKey ? Self.maskedKey : ""
         }
-        .task(id: model.chatGPT?.accessToken) { await loadPlanModels() }
+        .task(id: "\(model.chatGPT?.accessToken ?? "")|\(model.coachSource.debugDescription)") { await loadModels() }
         .alert("Could not sign in", isPresented: Binding(get: { signInError != nil }, set: { if !$0 { signInError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(signInError ?? "") }
@@ -250,7 +250,7 @@ struct CoachSettingsView: View {
         .confirmationDialog("Sign out of ChatGPT?", isPresented: $confirmSignOut, titleVisibility: .visible) {
             Button("Sign out", role: .destructive) { Task { await model.signOutChatGPT() } }
         } message: {
-            Text("The coach goes back to your API key, or to on-device rules if there is none.")
+            Text("The coach goes back to your API key. Without one, Cadencia cannot decide your days.")
         }
     }
 
@@ -316,43 +316,52 @@ struct CoachSettingsView: View {
 
     private var modelSection: some View {
         Section {
-            Picker("Model", selection: $modelName) {
-                if model.coachSource == .chatGPTPlan, !planModels.isEmpty {
-                    ForEach(planModels) { m in
+            if loadingModels {
+                HStack { Text("Model"); Spacer(); ProgressView() }
+            } else if !availableModels.isEmpty {
+                Picker("Model", selection: Binding(get: { model.state.settings.llmModel }, set: { model.setCoachModel($0) })) {
+                    ForEach(availableModels) { m in
                         VStack(alignment: .leading) {
                             Text(m.name)
-                            Text(m.id).font(.caption).foregroundStyle(.secondary)
+                            if m.name != m.id { Text(m.id).font(.caption).foregroundStyle(.secondary) }
                         }
                         .tag(m.id)
                     }
-                    if !planModels.contains(where: { $0.id == modelName }) { Text(modelName).tag(modelName) }
-                } else {
-                    ForEach(AppConfig.llmModelPresets, id: \.id) { preset in
-                        VStack(alignment: .leading) {
-                            Text(preset.id)
-                            Text(preset.note).font(.caption).foregroundStyle(.secondary)
-                        }
-                        .tag(preset.id)
+                    if !availableModels.contains(where: { $0.id == model.state.settings.llmModel }) {
+                        Text(model.state.settings.llmModel).tag(model.state.settings.llmModel)
                     }
-                    if !AppConfig.llmModelPresets.contains(where: { $0.id == modelName }) { Text(modelName).tag(modelName) }
                 }
+                .pickerStyle(.navigationLink)
+            } else {
+                LabeledContent("Model", value: model.state.settings.llmModel)
+                if let modelsError {
+                    Label(modelsError, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.secondary)
+                }
+                Button("Reload models", systemImage: "arrow.clockwise") { Task { await loadModels() } }
+                    .disabled(model.coachSource == nil)
             }
-            .pickerStyle(.navigationLink)
-            TextField("Custom model id", text: $modelName)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
         } header: {
             Text("Model")
         } footer: {
-            if model.coachSource == .chatGPTPlan {
-                Text("Models listed here are the ones your ChatGPT plan can use.")
+            switch model.coachSource {
+            case .chatGPTPlan: Text("The models your ChatGPT plan can use. Changing it asks the coach to decide today again.")
+            case .apiKey: Text("The models your API key can use. Changing it asks the coach to decide today again.")
+            case nil: Text("Connect ChatGPT or an API key to choose a model.")
             }
         }
     }
 
-    private func loadPlanModels() async {
-        guard model.coachSource == .chatGPTPlan else { planModels = []; return }
-        planModels = (try? await model.listCoachModels()) ?? []
+    private func loadModels() async {
+        guard model.coachSource != nil else { availableModels = []; modelsError = nil; return }
+        loadingModels = true
+        defer { loadingModels = false }
+        do {
+            availableModels = try await model.listCoachModels()
+            modelsError = availableModels.isEmpty ? String(localized: "Your account returned no models.") : nil
+        } catch {
+            availableModels = []
+            modelsError = error.localizedDescription
+        }
     }
 
     // MARK: API key
@@ -372,7 +381,7 @@ struct CoachSettingsView: View {
         } footer: {
             Text(model.chatGPT?.planUsageEnabled == true
                  ? "Used only if you sign out of ChatGPT. Any OpenAI-compatible chat completions endpoint."
-                 : "Any OpenAI-compatible chat completions endpoint. The key is stored in the Keychain and only ever sent to this endpoint, together with today's readiness, your plan and your words. Leave it empty to interpret on the phone only.")
+                 : "Any OpenAI-compatible chat completions endpoint. The key is stored in the Keychain and only ever sent to this endpoint, together with your recovery data, your plan and your words.")
         }
     }
 
@@ -380,7 +389,7 @@ struct CoachSettingsView: View {
         switch model.coachSource {
         case .chatGPTPlan: return String(localized: "Currently: ChatGPT plan · \(model.state.settings.llmModel)")
         case .apiKey: return String(localized: "Currently: API key · \(model.state.settings.llmModel)")
-        case .onDevice: return String(localized: "Currently: on-device interpretation")
+        case nil: return String(localized: "No coach connected. Sign in with ChatGPT or add an API key; Cadencia needs one to work.")
         }
     }
 

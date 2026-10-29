@@ -112,7 +112,7 @@ final class IntervalsClientTests: XCTestCase {
     func testPlannedWorkoutUpsertRendersStructureAndUsesStableUID() async throws {
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"id":5,"uid":"cadencia-x","start_date_local":"2026-10-28T00:00:00"}"#.utf8))])
         let client = IntervalsClient(transport: t, credential: .apiKey("k"))
-        let workout = Workout(name: "Easy endurance", kind: .endurance, steps: DailyPrescriber.steps(kind: .endurance, minutes: 60), intensityCeiling: 0.69, rationale: "Low HRV")
+        let workout = Workout(name: "Easy endurance", kind: .endurance, steps: [WorkoutStep(name: "Warm-up", duration: 600, startIntensity: 0.45, endIntensity: 0.6), WorkoutStep(name: "Endurance", duration: 2700, intensity: 0.65, cadenceRPM: 88), WorkoutStep(name: "Cool-down", duration: 300, startIntensity: 0.6, endIntensity: 0.45)], intensityCeiling: 0.69, rationale: "Low HRV")
         let session = PlannedSession(day: Day(year: 2026, month: 10, day: 28), kind: .endurance, title: "Easy endurance", targetMinutes: 60, status: .generated, workout: workout)
         let event = try await client.upsertPlannedWorkout(session, ftp: 240)
         XCTAssertEqual(event.id, 5)

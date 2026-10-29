@@ -65,7 +65,7 @@ public struct PlanBuilder: Sendable {
                 }
                 let targetMinutes = kind == .longRide ? minutes : min(minutes, kind.isHard ? 75 : 90)
                 let targetLoad = Self.provisionalLoad(kind: kind, minutes: targetMinutes)
-                sessions.append(PlannedSession(day: day, kind: kind, title: DailyPrescriber.name(for: kind),
+                sessions.append(PlannedSession(day: day, kind: kind, title: kind.defaultTitle,
                                                targetMinutes: targetMinutes, targetLoad: targetLoad))
             }
         }
@@ -242,7 +242,7 @@ public struct WeekReviser: Sendable {
                     let target: SessionKind = back == 1 ? .openerActivation : .endurance
                     if plan.sessions[idx].kind != target {
                         plan.sessions[idx].kind = target
-                        plan.sessions[idx].title = DailyPrescriber.name(for: target)
+                        plan.sessions[idx].title = target.defaultTitle
                         plan.sessions[idx].targetMinutes = min(plan.sessions[idx].targetMinutes, back == 1 ? 30 : 60)
                         changed.append(plan.sessions[idx])
                     }
@@ -261,12 +261,12 @@ public struct WeekReviser: Sendable {
                     plan.sessions[idx].targetMinutes = max
                     if plan.sessions[idx].kind.isHard, max < 45 {
                         plan.sessions[idx].kind = .endurance
-                        plan.sessions[idx].title = DailyPrescriber.name(for: .endurance)
+                        plan.sessions[idx].title = SessionKind.endurance.defaultTitle
                     }
                 }
                 changed.append(plan.sessions[idx])
             } else if !c.unavailable, let max = c.maxMinutes {
-                let s = PlannedSession(day: c.day, kind: .endurance, title: DailyPrescriber.name(for: .endurance), targetMinutes: max)
+                let s = PlannedSession(day: c.day, kind: .endurance, title: SessionKind.endurance.defaultTitle, targetMinutes: max)
                 plan.sessions.append(s)
                 changed.append(s)
             }

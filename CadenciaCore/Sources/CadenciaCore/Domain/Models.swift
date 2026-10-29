@@ -222,6 +222,23 @@ public enum SessionKind: String, Codable, Sendable, CaseIterable {
     case race
     case strength
 
+    /// English working title for a session of this kind, used when nobody named it.
+    public var defaultTitle: String {
+        switch self {
+        case .rest: return "Rest day"
+        case .recovery: return "Recovery spin"
+        case .endurance: return "Easy endurance"
+        case .tempo: return "Sweet spot"
+        case .threshold: return "Threshold"
+        case .vo2max: return "VO₂max intervals"
+        case .openerActivation: return "Opener"
+        case .longRide: return "Long ride"
+        case .groupRide: return "Group ride"
+        case .race: return "Race"
+        case .strength: return "Strength"
+        }
+    }
+
     public var isHard: Bool {
         switch self {
         case .threshold, .vo2max, .race, .tempo: return true

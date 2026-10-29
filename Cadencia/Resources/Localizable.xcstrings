@@ -637,16 +637,6 @@
     },
     "CTL": {},
     "Currently: %@": {},
-    "Currently: on-device interpretation": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ahora: interpretación en el dispositivo"
-          }
-        }
-      }
-    },
     "Data": {
       "localizations": {
         "es": {
@@ -1132,16 +1122,6 @@
         }
       }
     },
-    "I could not process that right now. Try again, or type it.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No pude procesar eso ahora. Inténtalo de nuevo o escríbelo."
-          }
-        }
-      }
-    },
     "IF": {},
     "In": {
       "localizations": {
@@ -1280,16 +1260,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mantener %lld W"
-          }
-        }
-      }
-    },
-    "Language model": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modelo de lenguaje"
           }
         }
       }
@@ -1643,16 +1613,6 @@
       }
     },
     "OK": {},
-    "On-device interpretation": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Interpretación en el teléfono"
-          }
-        }
-      }
-    },
     "Open Intervals.icu settings": {
       "localizations": {
         "es": {
@@ -1796,7 +1756,6 @@
         }
       }
     },
-    "Preparing your day…": {},
     "Priority": {
       "localizations": {
         "es": {
@@ -2798,16 +2757,6 @@
         }
       }
     },
-    "Custom model id": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Id de modelo personalizado"
-          }
-        }
-      }
-    },
     "Z1 Recovery": {
       "localizations": {
         "es": {
@@ -2918,16 +2867,6 @@
         }
       }
     },
-    "The coach goes back to your API key, or to on-device rules if there is none.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El coach vuelve a tu clave de API o, si no hay ninguna, a las reglas en el dispositivo."
-          }
-        }
-      }
-    },
     "Using ChatGPT plan": {
       "localizations": {
         "es": {
@@ -3024,16 +2963,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Usa el coach con el consumo incluido en tu plan de ChatGPT en vez de pagar por consulta con una clave de API. Inicias sesión con OpenAI en una hoja del navegador; Cadencia nunca ve tu contraseña."
-          }
-        }
-      }
-    },
-    "Models listed here are the ones your ChatGPT plan can use.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los modelos listados aquí son los que puede usar tu plan de ChatGPT."
           }
         }
       }
@@ -3348,26 +3277,6 @@
         }
       }
     },
-    "On-device rules": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reglas en el dispositivo"
-          }
-        }
-      }
-    },
-    "Sign in with ChatGPT in Settings → Coach to have the AI coach decide your days.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inicia sesión con ChatGPT en Ajustes → Coach para que el coach IA decida tus días."
-          }
-        }
-      }
-    },
     "Ask the coach again": {
       "localizations": {
         "es": {
@@ -3444,16 +3353,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "La respuesta del coach no pasó una comprobación de seguridad (%@). Se muestra el plan del dispositivo."
-          }
-        }
-      }
-    },
-    "The coach could not be reached. Showing the on-device plan instead.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo contactar con el coach. Se muestra el plan del dispositivo."
           }
         }
       }
@@ -3644,6 +3543,226 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lo que cuentas es una señal más para el coach. Puede suavizar la sesión de hoy, nunca endurecerla."
+          }
+        }
+      }
+    },
+    "The coach is reading your data…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El coach está leyendo tus datos…"
+          }
+        }
+      }
+    },
+    "Recovery, load, power curve and plan. This takes a few seconds.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recuperación, carga, curva de potencia y plan. Tarda unos segundos."
+          }
+        }
+      }
+    },
+    "Ask the coach": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preguntar al coach"
+          }
+        }
+      }
+    },
+    "Connect your coach": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conecta tu coach"
+          }
+        }
+      }
+    },
+    "Cadencia's coach is an AI that reads your recovery, load, power and plan every day and decides your session. Sign in with ChatGPT to use your plan, or add an OpenAI API key.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El coach de Cadencia es una IA que lee cada día tu recuperación, carga, potencia y plan y decide tu sesión. Inicia sesión con ChatGPT para usar tu plan o añade una API key de OpenAI."
+          }
+        }
+      }
+    },
+    "Set up the coach": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configurar el coach"
+          }
+        }
+      }
+    },
+    "Asking the coach…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preguntando al coach…"
+          }
+        }
+      }
+    },
+    "Decided %@ from your recovery, load, power and plan. Every number was range-checked before it reached the trainer.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decidido a las %@ a partir de tu recuperación, carga, potencia y plan. Cada número se comprobó dentro de rango antes de llegar al rodillo."
+          }
+        }
+      }
+    },
+    "You've reached the usage limit of your ChatGPT plan for now. Manage it in Settings → Coach, or wait for it to reset.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Has alcanzado por ahora el límite de uso de tu plan de ChatGPT. Gestiónalo en Ajustes → Coach o espera a que se reinicie."
+          }
+        }
+      }
+    },
+    "Your ChatGPT account can't share its plan with apps. Use an API key in Settings → Coach.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuenta de ChatGPT no puede compartir su plan con apps. Usa una API key en Ajustes → Coach."
+          }
+        }
+      }
+    },
+    "Reload models": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recargar modelos"
+          }
+        }
+      }
+    },
+    "Your account returned no models.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuenta no devolvió modelos."
+          }
+        }
+      }
+    },
+    "The models your ChatGPT plan can use. Changing it asks the coach to decide today again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los modelos que puede usar tu plan de ChatGPT. Al cambiarlo, el coach vuelve a decidir el día de hoy."
+          }
+        }
+      }
+    },
+    "Connect ChatGPT or an API key to choose a model.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conecta ChatGPT o una API key para elegir un modelo."
+          }
+        }
+      }
+    },
+    "No coach connected": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin coach conectado"
+          }
+        }
+      }
+    },
+    "No coach connected. Sign in with ChatGPT or add an API key; Cadencia needs one to work.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin coach conectado. Inicia sesión con ChatGPT o añade una API key; Cadencia necesita uno para funcionar."
+          }
+        }
+      }
+    },
+    "The coach goes back to your API key. Without one, Cadencia cannot decide your days.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El coach vuelve a tu API key. Sin una, Cadencia no puede decidir tus días."
+          }
+        }
+      }
+    },
+    "Connect ChatGPT (or an API key) in Settings → Coach first.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Primero conecta ChatGPT (o una API key) en Ajustes → Coach."
+          }
+        }
+      }
+    },
+    "I could not reach the coach right now (%@). Try again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pude contactar con el coach ahora mismo (%@). Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "The coach's answer failed a safety check (%@). Ask again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La respuesta del coach no pasó una comprobación de seguridad (%@). Pregunta de nuevo."
+          }
+        }
+      }
+    },
+    "The coach could not be reached (%@). Ask again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo contactar con el coach (%@). Pregunta de nuevo."
+          }
+        }
+      }
+    },
+    "The models your API key can use. Changing it asks the coach to decide today again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los modelos que puede usar tu API key. Al cambiarlo, el coach vuelve a decidir el día de hoy."
           }
         }
       }

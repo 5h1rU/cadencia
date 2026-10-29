@@ -60,61 +60,6 @@ final class ReadinessEngineTests: XCTestCase {
     }
 }
 
-final class DailyPrescriberTests: XCTestCase {
-    let p = DailyPrescriber()
-    let day = Day(year: 2026, month: 10, day: 28)
-
-    func readiness(_ level: Readiness.Level) -> Readiness {
-        Readiness(level: level, score: 50, signals: [], missingData: [], summary: "")
-    }
-
-    func testEasyReadinessTurnsThresholdIntoCappedEndurance() {
-        let planned = PlannedSession(day: day, kind: .threshold, title: "Threshold", targetMinutes: 90)
-        let w = p.prescribe(.init(day: day, planned: planned, readiness: readiness(.easy), ftp: 240))
-        XCTAssertEqual(w.kind, .endurance)
-        XCTAssertEqual(w.totalDuration, 75 * 60)
-        XCTAssertEqual(w.intensityCeiling, 0.69)
-        XCTAssertEqual(w.targetWatts(ftp: 240, at: 20 * 60), 156) // 0.65 × 240
-        XCTAssertLessThanOrEqual(w.steps.map(\.endIntensity).max()!, 0.69)
-    }
-
-    func testStrongReadinessKeepsThresholdAsPlanned() {
-        let planned = PlannedSession(day: day, kind: .threshold, title: "Threshold", targetMinutes: 75)
-        let w = p.prescribe(.init(day: day, planned: planned, readiness: readiness(.strong), ftp: 240))
-        XCTAssertEqual(w.kind, .threshold)
-        XCTAssertEqual(w.totalDuration, 75 * 60, accuracy: 1)
-        XCTAssertTrue(w.steps.contains { $0.name.hasPrefix("Threshold") && $0.startIntensity == 0.98 })
-    }
-
-    func testRestReadinessProducesNoSteps() {
-        let planned = PlannedSession(day: day, kind: .endurance, title: "Endurance", targetMinutes: 60)
-        let w = p.prescribe(.init(day: day, planned: planned, readiness: readiness(.rest), ftp: 240))
-        XCTAssertEqual(w.kind, .rest)
-        XCTAssertTrue(w.steps.isEmpty)
-    }
-
-    func testDayBeforeAPriorityEventIsAnOpenerEvenWhenStrong() {
-        let event = TrainingEvent(name: "Gran fondo", day: day.adding(days: 1), distanceKm: 200)
-        let planned = PlannedSession(day: day, kind: .vo2max, title: "VO2", targetMinutes: 75)
-        let w = p.prescribe(.init(day: day, planned: planned, readiness: readiness(.strong), ftp: 240, upcomingPriorityEvent: event))
-        XCTAssertEqual(w.kind, .openerActivation)
-        XCTAssertLessThanOrEqual(w.totalDuration, 30 * 60)
-    }
-
-    func testAvailableMinutesCapTheSession() {
-        let planned = PlannedSession(day: day, kind: .endurance, title: "Endurance", targetMinutes: 90)
-        let w = p.prescribe(.init(day: day, planned: planned, readiness: readiness(.normal), ftp: 240, availableMinutes: 40))
-        XCTAssertEqual(w.totalDuration, 40 * 60)
-    }
-
-    func testCeilingClampsTargetWattsInsideRamp() {
-        let w = Workout(name: "x", kind: .endurance, steps: [WorkoutStep(name: "ramp", duration: 100, startIntensity: 0.5, endIntensity: 1.0)], intensityCeiling: 0.7)
-        XCTAssertEqual(w.targetWatts(ftp: 200, at: 0), 100)
-        XCTAssertEqual(w.targetWatts(ftp: 200, at: 50), 140)   // 0.75 clamped to 0.7
-        XCTAssertNil(w.targetWatts(ftp: 200, at: 100))
-    }
-}
-
 final class FTPEstimatorTests: XCTestCase {
     let e = FTPEstimator()
 
@@ -147,88 +92,50 @@ final class FTPEstimatorTests: XCTestCase {
 }
 
 final class WorkoutOutlineTests: XCTestCase {
+    private func steady(_ name: String, minutes: Double, _ intensity: Double) -> WorkoutStep {
+        WorkoutStep(name: name, duration: minutes * 60, intensity: intensity)
+    }
+
     func testIntervalsCollapseIntoOneSetRow() {
-        let w = Workout(name: "Threshold", kind: .threshold, steps: DailyPrescriber.steps(kind: .threshold, minutes: 75))
+        // Warm-up, (Threshold 10' @ 98 %, Recovery 5' @ 50 %) × 4, Cool-down: a coach-shaped 75-minute session.
+        var steps = [WorkoutStep(name: "Warm-up", duration: 15 * 60, startIntensity: 0.45, endIntensity: 0.65)]
+        for n in 1...4 {
+            steps.append(steady("Threshold \(n)", minutes: 10, 0.98))
+            steps.append(steady("Recovery \(n)", minutes: 5, 0.50))
+        }
+        steps.append(steady("Cool-down", minutes: 10, 0.45))
+        let w = Workout(name: "Threshold", kind: .threshold, steps: steps)
         let rows = w.outline
         XCTAssertEqual(rows.map(\.title), ["Warm-up", "Threshold", "Cool-down"])
         let set = rows[1]
         XCTAssertEqual(set.repeats, 4)
-        XCTAssertEqual(set.rest?.name, "Recovery")
-        XCTAssertEqual(set.totalDuration, w.totalDuration - 25 * 60, accuracy: 1, "the set row owns every work and recovery step between warm-up and cool-down")
+        XCTAssertEqual(set.rest?.name, "Recovery 1")
+        XCTAssertEqual(set.totalDuration, 60 * 60, accuracy: 1, "the set row owns every work and recovery step between warm-up and cool-down")
         XCTAssertEqual(rows.reduce(0) { $0 + $1.totalDuration }, w.totalDuration, accuracy: 1)
     }
 
     func testSteadySessionKeepsThreeRows() {
-        let w = Workout(name: "Easy endurance", kind: .endurance, steps: DailyPrescriber.steps(kind: .endurance, minutes: 60))
+        let w = Workout(name: "Easy endurance", kind: .endurance, steps: [
+            WorkoutStep(name: "Warm-up", duration: 10 * 60, startIntensity: 0.45, endIntensity: 0.6),
+            steady("Steady endurance", minutes: 45, 0.65),
+            steady("Cool-down", minutes: 5, 0.45),
+        ])
         XCTAssertEqual(w.outline.map(\.repeats), [1, 1, 1])
         XCTAssertEqual(w.outline[1].title, "Steady endurance")
     }
 
     func testOpenersWithTrailingEasyAreOneSet() {
-        let w = Workout(name: "Opener", kind: .openerActivation, steps: DailyPrescriber.steps(kind: .openerActivation, minutes: 30))
-        // Warm-up, (Opener, Easy) × 3, Cool-down → the trailing Easy belongs to the set.
+        // Warm-up, (Opener 1' @ 110 %, Easy 2' @ 50 %) × 3, Cool-down → the trailing Easy belongs to the set.
+        var steps = [steady("Warm-up", minutes: 10, 0.5)]
+        for n in 1...3 {
+            steps.append(steady("Opener \(n)", minutes: 1, 1.10))
+            steps.append(steady("Easy \(n)", minutes: 2, 0.50))
+        }
+        steps.append(steady("Cool-down", minutes: 5, 0.45))
+        let w = Workout(name: "Opener", kind: .openerActivation, steps: steps)
         XCTAssertEqual(w.outline.map(\.title), ["Warm-up", "Opener", "Cool-down"])
         XCTAssertEqual(w.outline[1].repeats, 3)
         XCTAssertEqual(w.outline[1].totalDuration, 9 * 60, accuracy: 1)
-    }
-}
-
-final class RuleBriefingTests: XCTestCase {
-    let today = Day(year: 2026, month: 10, day: 29)
-
-    func history() -> [WellnessDay] {
-        (1...28).map { i in
-            let wobble = Double(i % 5) - 2
-            return WellnessDay(day: today.adding(days: -i), hrvMs: 50 + wobble * 2, restingHR: 48 + Int(wobble), sleepSeconds: 7 * 3600 + Int(wobble) * 600, ctl: 64, atl: 64)
-        }
-    }
-
-    func input(wellness: WellnessDay, feedback: SubjectiveFeedback? = nil, planned: PlannedSession? = nil) -> BriefingInput {
-        let readiness = ReadinessEngine().evaluate(today: wellness, history: history(), feedback: feedback)
-        let workout = DailyPrescriber().prescribe(.init(day: today, planned: planned, readiness: readiness, ftp: 198))
-        return BriefingInput(today: today, readiness: readiness, feedback: feedback, workout: workout, ftp: 198, planned: planned)
-    }
-
-    func testNormalDayWithoutHRVNamesTheGapAndTheSession() {
-        let text = RuleBriefing.compose(input(wellness: WellnessDay(day: today, sleepSeconds: Int(7.7 * 3600), ctl: 64, atl: 66)))
-        XCTAssertTrue(text.hasPrefix("Your body is in its normal range today:"), text)
-        XCTAssertTrue(text.contains("you slept 7.7 h"), text)
-        XCTAssertTrue(text.contains("form is neutral at −2"), text)
-        XCTAssertTrue(text.contains("No HRV or resting HR came in today, so I am leaning on sleep, form, and fatigue."), text)
-        XCTAssertTrue(text.contains("That makes today a normal training day: 1 h easy endurance at 129 W, never above 150 W."), text)
-        XCTAssertFalse(text.contains("usual 6.0–8.1 h, form"), "no run-on numbers list from the old summary")
-    }
-
-    func testEasyDayExplainsWhatMovedAndWhy() {
-        let planned = PlannedSession(day: today, kind: .threshold, title: "Threshold 4×8", targetMinutes: 75)
-        let text = RuleBriefing.compose(input(wellness: WellnessDay(day: today, hrvMs: 38, sleepSeconds: 5 * 3600, ctl: 64, atl: 66), planned: planned))
-        XCTAssertTrue(text.hasPrefix("Today asks for restraint: HRV is down at 38 ms against your usual"), text)
-        XCTAssertTrue(text.contains("you slept only 5.0 h, short of your usual"), text)
-        XCTAssertTrue(text.contains("So today stays easy:"), text)
-        XCTAssertTrue(text.contains("The week asked for threshold 4×8; I moved it rather than dropping it."), text)
-    }
-
-    func testHeavyLegsUseTheAthletesOwnWords() {
-        let fb = SubjectiveFeedback(day: today, legs: .heavy)
-        let text = RuleBriefing.compose(input(wellness: WellnessDay(day: today, hrvMs: 50, sleepSeconds: 7 * 3600, ctl: 64, atl: 64), feedback: fb))
-        XCTAssertTrue(text.contains("you told me your legs are heavy, and that counts more than any sensor"), text)
-        XCTAssertFalse(text.contains("your legs feel heavy"), text)
-    }
-
-    func testFactsSheetAndCacheKeyCoverWhatTheCoachMayCite() {
-        let planned = PlannedSession(day: today, kind: .endurance, title: "Endurance", targetMinutes: 60)
-        var i = input(wellness: WellnessDay(day: today, hrvMs: 50, sleepSeconds: 7 * 3600, ctl: 64, atl: 66), planned: planned)
-        i.event = TrainingEvent(name: "Gran Fondo Andes", day: today.adding(days: 47), priority: .a)
-        i.recentActivities = [ActivitySummary(id: "x", name: "Sweet spot", type: "VirtualRide", startDateLocal: today.adding(days: -2).date(), movingTime: 3600, trainingLoad: 70, intensity: 88)]
-        let sheet = i.factsSheet()
-        for expected in ["Working FTP: 198 W", "Signal HRV: HRV 50 ms (usual", "Today's session: Easy endurance, 60 min", "main block 129 W", "ceiling 150 W",
-                         "Blocks: Warm-up 10 min", "kept as planned", "Last 7 days: 1 rides, 70 TSS", "Last hard ride: Sweet spot, 2 days ago, IF 0.88",
-                         "Next event: Gran Fondo Andes on \(today.adding(days: 47).iso), in 47 days, priority A"] {
-            XCTAssertTrue(sheet.contains(expected), "missing '\(expected)' in:\n\(sheet)")
-        }
-        let before = i.cacheKey
-        i.feedback = SubjectiveFeedback(day: today, legs: .heavy)
-        XCTAssertNotEqual(before, i.cacheKey, "the athlete's check-in must force a new briefing")
     }
 }
 
@@ -309,33 +216,8 @@ final class WeekReviserTests: XCTestCase {
     }
 }
 
-final class HeuristicCoachTests: XCTestCase {
-    let wednesday = Day(year: 2026, month: 10, day: 28)
-
-    func testSpanishVoiceNoteFromTheDesign() {
-        let intent = HeuristicCoach.parse("El domingo tengo una salida de 200 km. Quiero llegar fresco y mañana solo tengo 40 minutos.", today: wednesday)
-        XCTAssertEqual(intent.event?.day, Day(year: 2026, month: 11, day: 1))
-        XCTAssertEqual(intent.event?.distanceKm, 200)
-        XCTAssertEqual(intent.event?.objective, "arrive fresh")
-        XCTAssertEqual(intent.constraints, [.init(day: Day(year: 2026, month: 10, day: 29), maxMinutes: 40)])
-        XCTAssertTrue(intent.needsClarification.isEmpty)
-    }
-
-    func testEnglishWithHoursAndDayOff() {
-        let intent = HeuristicCoach.parse("Saturday I can't train. Tuesday I only have 1 hour. Legs feel heavy today.", today: wednesday)
-        XCTAssertEqual(intent.constraints.count, 2)
-        XCTAssertEqual(intent.constraints.first { $0.unavailable }?.day, Day(year: 2026, month: 10, day: 31))
-        XCTAssertEqual(intent.constraints.first { !$0.unavailable }?.maxMinutes, 60)
-        XCTAssertEqual(intent.constraints.first { !$0.unavailable }?.day, Day(year: 2026, month: 11, day: 3), "next Tuesday, not last")
-        XCTAssertEqual(intent.feeling, .heavy)
-        XCTAssertNil(intent.event)
-    }
-
-    func testNothingUnderstoodAsksForClarification() {
-        let intent = HeuristicCoach.parse("hola qué tal", today: wednesday)
-        XCTAssertTrue(intent.isEmpty)
-        XCTAssertFalse(intent.needsClarification.isEmpty)
-    }
+final class ChatGPTPlanCoachTests: XCTestCase {
+    let context = CoachContext(today: Day(year: 2026, month: 10, day: 28))
 
     func testLLMWireMapping() {
         let wire = LLMCoach.Wire(event: .init(name: "Race", day: "2026-11-01", distanceKm: 120, priority: "b", objective: "finish strong"),
@@ -347,10 +229,6 @@ final class HeuristicCoachTests: XCTestCase {
         XCTAssertEqual(intent.feeling, .fresh)
         XCTAssertEqual(intent.goal, .climbing)
     }
-}
-
-final class ChatGPTPlanCoachTests: XCTestCase {
-    let context = CoachContext(today: Day(year: 2026, month: 10, day: 28))
 
     func query(_ url: URL) -> [String: String] {
         Dictionary(uniqueKeysWithValues: (URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems ?? []).map { ($0.name, $0.value ?? "") })
@@ -514,10 +392,12 @@ final class ChatGPTPlanCoachTests: XCTestCase {
             XCTFail("expected usage limit")
         } catch { XCTAssertEqual(error as? LLMCoachError, .usageLimitReached) }
 
-        // An incomplete stream (no response.completed) is not an athlete-facing error: fall back.
+        // An incomplete stream (no response.completed) is an error too: there is no on-device fallback.
         let partial = FakeTransport(responses: [HTTPResponse(status: 200, body: Data("data: {\"type\":\"response.output_text.delta\",\"delta\":\"{\"}\n".utf8))])
-        let intent = try? await LLMCoach(transport: partial, backend: .chatGPTPlan(accessToken: "tok")).interpret("me siento fresco", context: context)
-        XCTAssertNotNil(intent)
+        do {
+            _ = try await LLMCoach(transport: partial, backend: .chatGPTPlan(accessToken: "tok")).interpret("me siento fresco", context: context)
+            XCTFail("expected an error")
+        } catch { XCTAssertEqual(error as? LLMCoach.CompletionError, .emptyResponse) }
     }
 
     func testModelCatalogShapes() async throws {
@@ -538,7 +418,7 @@ final class AICoachTests: XCTestCase {
                              missingData: ["sleep"], summary: "Within usual range.")
 
     func parse(_ json: String, available: Int? = nil) throws -> DailyPrescription {
-        try DailyPrescription.parse(Data(json.utf8), baseline: baseline, today: today, availableMinutes: available, model: "m", now: Date(timeIntervalSince1970: 0))
+        try DailyPrescription.parse(Data(json.utf8), measured: .init(baseline), today: today, availableMinutes: available, model: "m", now: Date(timeIntervalSince1970: 0))
     }
 
     func testValidAnswerBecomesTrainerReadyWorkoutAndKeepsBaselineSignals() throws {
@@ -580,7 +460,7 @@ final class AICoachTests: XCTestCase {
     func testRestDayHasNoStepsAndZeroCeiling() throws {
         let p = try parse(#"{"readiness":{"level":"rest"},"workout":{"name":"Descanso","kind":"rest","ceiling":0.6,"steps":[]},"coachNote":"Para."}"#)
         XCTAssertEqual(p.readiness.score, 20, "a missing score takes the level's default")
-        XCTAssertEqual(p.readiness.summary, "Within usual range.", "no words from the model → keep the baseline's")
+        XCTAssertEqual(p.readiness.summary, "", "no words from the model → nothing invented")
         XCTAssertTrue(p.workout.steps.isEmpty)
         XCTAssertEqual(p.workout.intensityCeiling, 0)
     }
@@ -623,8 +503,7 @@ final class AICoachTests: XCTestCase {
                           ftpEstimate: FTPEstimate(watts: 179, confidence: .moderate, sustainedEfforts: 0, basis: "20 min × 0.95", windowDays: 42),
                           powerCurve: [.init(seconds: 300, watts: 240), .init(seconds: 1200, watts: 188), .init(seconds: 7, watts: 800)],
                           wellness: wellness, feedback: feedback, activities: rides + [old], plan: plan, upcomingEvent: nil,
-                          availableMinutes: available, recentCoachNotes: [], baselineReadiness: baseline,
-                          baselineWorkout: Workout(name: "Endurance", kind: .endurance, steps: [WorkoutStep(name: "z2", duration: 3600, intensity: 0.65)]))
+                          availableMinutes: available, recentCoachNotes: [], measured: baseline)
     }
 
     func testBriefIsWindowedCompactAndCarriesTheBaseline() throws {
@@ -638,14 +517,15 @@ final class AICoachTests: XCTestCase {
         XCTAssertEqual(b.activities.last?.ifx, 0.72)
         XCTAssertEqual(b.powerCurve, ["5m": 240, "20m": 188], "only the standard durations")
         XCTAssertEqual(b.ftpEstimate, "179 W (moderate confidence, 20 min × 0.95, 0 sustained efforts in 42 d)")
-        XCTAssertEqual(b.baseline.readinessLevel, "normal")
-        XCTAssertEqual(b.baseline.signals, ["hrv: typical (61.0, usual 55.0–68.0)"])
-        XCTAssertEqual(b.baseline.workoutMinutes, 60)
+        XCTAssertEqual(b.measured.signals, ["hrv: typical (61.0, usual 55.0–68.0)"])
+        XCTAssertEqual(b.measured.missingData, ["sleep"])
         XCTAssertNotNil(b.plan?.phase)
         XCTAssertFalse(b.plan!.next7Days.isEmpty)
         XCTAssertTrue(b.plan!.next7Days.allSatisfy { Day(iso: $0.day)! >= today && Day(iso: $0.day)! <= today.adding(days: 7) })
         let json = try AICoachPrompt.userMessage(b)
         XCTAssertTrue(json.contains("\"ftp\":198"))
+        XCTAssertFalse(json.contains("sourceSignals"), "structured signals stay in the app; the model gets the text")
+        XCTAssertFalse(json.contains("baseline"), "nothing is pre-decided for the model")
         XCTAssertLessThan(json.count, 12_000, "the brief stays small enough to send on every refresh")
     }
 
@@ -662,7 +542,7 @@ final class AICoachTests: XCTestCase {
         let sse = "data: {\"type\":\"response.output_text.delta\",\"delta\":\(try String(decoding: JSONEncoder().encode(answer), as: UTF8.self))}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\"}}\n\n"
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(sse.utf8))])
         let coach = LLMCoach(transport: t, backend: .chatGPTPlan(accessToken: "tok"), model: "gpt-6-astra")
-        let p = try await coach.prescribe(brief: brief(legs: .heavy), baseline: baseline)
+        let p = try await coach.prescribe(brief: brief(legs: .heavy))
         XCTAssertEqual(p.readiness.level, .easy)
         XCTAssertEqual(p.workout.totalDuration, 3600)
         XCTAssertEqual(p.model, "gpt-6-astra")
@@ -680,14 +560,14 @@ final class AICoachTests: XCTestCase {
         let long = #"{"readiness":{"level":"strong"},"workout":{"name":"x","kind":"longRide","steps":[{"name":"a","minutes":180,"intensity":0.65}]}}"#
         let t2 = FakeTransport(responses: [HTTPResponse(status: 200, body: Data("data: {\"type\":\"response.output_text.delta\",\"delta\":\(try String(decoding: JSONEncoder().encode(long), as: UTF8.self))}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{}}\n\n".utf8))])
         do {
-            _ = try await LLMCoach(transport: t2, backend: .chatGPTPlan(accessToken: "tok")).prescribe(brief: brief(), baseline: baseline)
+            _ = try await LLMCoach(transport: t2, backend: .chatGPTPlan(accessToken: "tok")).prescribe(brief: brief())
             XCTFail("expected rejection")
         } catch { XCTAssertEqual(error as? DailyPrescription.ValidationError, .tooLong(180)) }
 
         // Plan errors still surface as such so the UI can show "manage usage".
         let t3 = FakeTransport(responses: [HTTPResponse(status: 429, body: Data(#"{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}"#.utf8))])
         do {
-            _ = try await LLMCoach(transport: t3, backend: .chatGPTPlan(accessToken: "tok")).prescribe(brief: brief(), baseline: baseline)
+            _ = try await LLMCoach(transport: t3, backend: .chatGPTPlan(accessToken: "tok")).prescribe(brief: brief())
             XCTFail("expected usage limit")
         } catch { XCTAssertEqual(error as? LLMCoachError, .usageLimitReached) }
     }

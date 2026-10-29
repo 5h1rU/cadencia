@@ -20,126 +20,6 @@ public struct CoachContext: Sendable {
     }
 }
 
-/// Interprets free-form athlete input (voice transcript or text) into a structured intent.
-public protocol CoachEngine: Sendable {
-    func interpret(_ utterance: String, context: CoachContext) async throws -> CoachIntent
-}
-
-// MARK: - Heuristic (offline) coach
-
-/// Pattern-based interpreter that handles the common cases without a network: an event on a weekday with
-/// a distance, limited time on a day, and how the legs feel. Spanish and English.
-public struct HeuristicCoach: CoachEngine {
-    public init() {}
-
-    public func interpret(_ utterance: String, context: CoachContext) async throws -> CoachIntent {
-        Self.parse(utterance, today: context.today)
-    }
-
-    static let weekdays: [(names: [String], weekday: Int)] = [
-        (["domingo", "sunday"], 1), (["lunes", "monday"], 2), (["martes", "tuesday"], 3), (["miércoles", "miercoles", "wednesday"], 4),
-        (["jueves", "thursday"], 5), (["viernes", "friday"], 6), (["sábado", "sabado", "saturday"], 7),
-    ]
-
-    public static func parse(_ text: String, today: Day) -> CoachIntent {
-        let lower = text.lowercased()
-        let sentences = lower.split(whereSeparator: { ".;!?\n".contains($0) }).map { $0.trimmingCharacters(in: .whitespaces) }
-        var intent = CoachIntent()
-
-        for sentence in sentences where !sentence.isEmpty {
-            let day = sentences.count == 1 || sentence.contains("mañana") || sentence.contains("tomorrow") || weekdayMentioned(sentence) != nil
-                ? resolveDay(in: sentence, today: today) : nil
-            let km = firstNumber(before: ["km", "kilómetros", "kilometros", "kilometers"], in: sentence)
-            let minutes = firstNumber(before: ["min", "minutos", "minutes"], in: sentence)
-                ?? firstNumber(before: ["hora", "horas", "hour", "hours", "h "], in: sentence).map { $0 * 60 }
-
-            let mentionsEvent = ["salida", "carrera", "fondo", "ride", "race", "event", "evento", "grupo", "group"].contains { sentence.contains($0) }
-            if mentionsEvent, let day, km != nil || sentence.contains("carrera") || sentence.contains("race") || sentence.contains("salida") {
-                let name: String
-                if sentence.contains("carrera") || sentence.contains("race") { name = km.map { "Race \(Int($0)) km" } ?? "Race" }
-                else { name = km.map { "Group ride \(Int($0)) km" } ?? "Group ride" }
-                let isRace = sentence.contains("carrera") || sentence.contains("race")
-                intent.event = TrainingEvent(name: name, day: day, distanceKm: km, priority: .a, objective: objective(in: lower), isRace: isRace)
-                continue
-            }
-
-            let limited = ["solo tengo", "sólo tengo", "only have", "tengo solo", "solamente", "only"].contains { sentence.contains($0) }
-            if let day, let minutes, limited || sentence.contains("min") || sentence.contains("hora") || sentence.contains("hour") {
-                intent.constraints.append(.init(day: day, maxMinutes: Int(minutes)))
-                continue
-            }
-
-            let unavailable = ["no puedo", "can't", "cannot", "no voy a poder", "descanso", "day off", "libre"].contains { sentence.contains($0) }
-            if let day, unavailable {
-                intent.constraints.append(.init(day: day, unavailable: true))
-                continue
-            }
-
-            if ["pesad", "cansad", "heavy", "tired", "fatigad", "cargad", "exhausted"].contains(where: { sentence.contains($0) }) {
-                intent.feeling = .heavy
-            } else if ["fresco", "fresh", "bien recuperado", "con ganas", "feel great"].contains(where: { sentence.contains($0) }) {
-                intent.feeling = .fresh
-            }
-        }
-
-        if intent.isEmpty {
-            intent.needsClarification = ["I could not find a date, a distance or a time limit. Tell me which day and what changes."]
-            intent.reply = "Tell me the day and what changes (an event, less time, how you feel) and I will adjust the week."
-        } else {
-            intent.reply = Self.reply(for: intent)
-        }
-        return intent
-    }
-
-    /// The objective is usually in its own sentence ("Quiero llegar fresco"), so look at the whole note.
-    static func objective(in text: String) -> String {
-        if text.contains("fresco") || text.contains("fresh") { return "arrive fresh" }
-        if text.contains("fuerte") || text.contains("strong") || text.contains("hard") { return "finish strong" }
-        return ""
-    }
-
-    static func reply(for intent: CoachIntent) -> String {
-        var parts: [String] = []
-        if let e = intent.event { parts.append("\(e.name) on \(e.day.iso) will be the priority. I will adjust the week so you arrive with margin.") }
-        for c in intent.constraints {
-            if c.unavailable { parts.append("\(c.day.iso) stays free.") }
-            else if let m = c.maxMinutes { parts.append("\(c.day.iso) is capped at \(m) min.") }
-        }
-        if intent.feeling == .heavy { parts.append("Heavy legs noted: today stays easy.") }
-        return parts.joined(separator: " ")
-    }
-
-    static func weekdayMentioned(_ s: String) -> Int? {
-        for entry in weekdays where entry.names.contains(where: { s.contains($0) }) { return entry.weekday }
-        return nil
-    }
-
-    /// "mañana"/"tomorrow", "hoy"/"today", or the next occurrence of a weekday name (today counts as "this" weekday).
-    static func resolveDay(in s: String, today: Day) -> Day? {
-        if s.contains("pasado mañana") || s.contains("day after tomorrow") { return today.adding(days: 2) }
-        if s.contains("mañana") || s.contains("tomorrow") { return today.adding(days: 1) }
-        if s.contains("hoy") || s.contains("today") { return today }
-        guard let wd = weekdayMentioned(s) else { return nil }
-        let delta = (wd - today.weekday() + 7) % 7
-        return today.adding(days: delta)
-    }
-
-    static func firstNumber(before units: [String], in s: String) -> Double? {
-        let tokens = s.replacingOccurrences(of: ",", with: ".").split(separator: " ").map(String.init)
-        for (i, token) in tokens.enumerated() {
-            for unit in units {
-                let u = unit.trimmingCharacters(in: .whitespaces)
-                if token.hasSuffix(u), let n = Double(token.dropLast(u.count)) { return n }
-                if token == u || token.hasPrefix(u), i > 0, let n = Double(tokens[i - 1]) { return n }
-            }
-        }
-        return nil
-    }
-}
-
-// MARK: - LLM coach
-
-/// Errors the athlete must act on; everything else degrades silently to the heuristic coach.
 public enum LLMCoachError: Error, Equatable, Sendable {
     /// ChatGPT plan: weekly/app limit reached. Point at chatgpt.com/settings/usage.
     case usageLimitReached
@@ -154,7 +34,7 @@ public enum LLMCoachError: Error, Equatable, Sendable {
 /// - `.chatGPTPlan`: the athlete's own ChatGPT subscription through Sign in with ChatGPT, which
 ///   only speaks the Responses API with `store:false, stream:true`.
 /// Either way the model is asked for strict JSON matching `CoachIntent`'s fields; nothing else is used.
-public struct LLMCoach: CoachEngine {
+public struct LLMCoach: Sendable {
     public enum Backend: Sendable, Equatable {
         case apiKey(endpoint: URL, key: String)
         case chatGPTPlan(accessToken: String)
@@ -163,21 +43,19 @@ public struct LLMCoach: CoachEngine {
     public var transport: any HTTPTransport
     public var backend: Backend
     public var model: String
-    public var fallback: any CoachEngine
 
     public static let defaultModel = "gpt-5.6-sol"
     public static let responsesURL = URL(string: "https://api.openai.com/v1/responses")!
     public static let modelsURL = URL(string: "https://api.openai.com/v1/models")!
 
-    public init(transport: any HTTPTransport, backend: Backend, model: String = LLMCoach.defaultModel, fallback: any CoachEngine = HeuristicCoach()) {
+    public init(transport: any HTTPTransport, backend: Backend, model: String = LLMCoach.defaultModel) {
         self.transport = transport
         self.backend = backend
         self.model = model
-        self.fallback = fallback
     }
 
-    public init(transport: any HTTPTransport, endpoint: URL, apiKey: String, model: String = LLMCoach.defaultModel, fallback: any CoachEngine = HeuristicCoach()) {
-        self.init(transport: transport, backend: .apiKey(endpoint: endpoint, key: apiKey), model: model, fallback: fallback)
+    public init(transport: any HTTPTransport, endpoint: URL, apiKey: String, model: String = LLMCoach.defaultModel) {
+        self.init(transport: transport, backend: .apiKey(endpoint: endpoint, key: apiKey), model: model)
     }
 
     struct Wire: Codable {
@@ -210,18 +88,10 @@ public struct LLMCoach: CoachEngine {
         return s
     }
 
+    /// Interprets what the athlete said (voice transcript or text) into a structured intent.
     public func interpret(_ utterance: String, context: CoachContext) async throws -> CoachIntent {
-        let content: String
-        do {
-            content = try await complete(instructions: Self.systemPrompt(context: context), userText: utterance)
-        } catch let error as LLMCoachError {
-            throw error
-        } catch {
-            return try await fallback.interpret(utterance, context: context)
-        }
-        guard let wire = try? JSONDecoder().decode(Wire.self, from: Data(content.utf8)) else {
-            return try await fallback.interpret(utterance, context: context)
-        }
+        let content = try await complete(instructions: Self.systemPrompt(context: context), userText: utterance)
+        guard let wire = try? JSONDecoder().decode(Wire.self, from: Data(content.utf8)) else { throw CompletionError.unusableAnswer }
         return Self.intent(from: wire)
     }
 
@@ -230,6 +100,7 @@ public struct LLMCoach: CoachEngine {
         case transport(String)
         case httpStatus(Int)
         case emptyResponse
+        case unusableAnswer
     }
 
     /// One JSON-mode completion on whichever backend is configured. Returns the model's text.
@@ -255,13 +126,12 @@ public struct LLMCoach: CoachEngine {
     }
 
     /// The full daily decision: readiness, today's session, the week's shape. Throws on plan errors,
-    /// transport failures and on any answer that fails `DailyPrescription.parse`'s safety checks; the
-    /// caller keeps the deterministic baseline in those cases.
-    public func prescribe(brief: CoachBrief, baseline: Readiness, now: Date = Date()) async throws -> DailyPrescription {
+    /// transport failures and on any answer that fails `DailyPrescription.parse`'s safety checks.
+    public func prescribe(brief: CoachBrief, now: Date = Date()) async throws -> DailyPrescription {
         guard let today = Day(iso: brief.today) else { throw DailyPrescription.ValidationError.badDay(brief.today) }
         let content = try await complete(instructions: AICoachPrompt.instructions(locale: brief.locale),
                                          userText: try AICoachPrompt.userMessage(brief))
-        return try DailyPrescription.parse(Data(content.utf8), baseline: baseline, today: today,
+        return try DailyPrescription.parse(Data(content.utf8), measured: brief.measured, today: today,
                                            availableMinutes: brief.availableMinutes, model: model, now: now)
     }
 

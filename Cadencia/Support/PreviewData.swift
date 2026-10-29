@@ -50,10 +50,30 @@ enum PreviewData {
         s.powerCurve = curve
         s.plan = plan
         s.ftpEstimate = FTPEstimator().estimate(curve: curve, sustainedEfforts: 4)
-        let readiness = ReadinessEngine().evaluate(today: wellness.last!, history: wellness)
-        let planned = plan.sessions.first { $0.day == today }
-        let workout = DailyPrescriber().prescribe(.init(day: today, planned: planned, readiness: readiness, ftp: 240, upcomingPriorityEvent: plan.event))
-        s.today = .init(day: today, workout: workout, readiness: readiness)
+        var readiness = ReadinessEngine().evaluate(today: wellness.last!, history: wellness)
+        readiness.level = .normal
+        readiness.summary = "Día normal. HRV 62 ms dentro de tu rango (55–68), 7,4 h de sueño, TSB −8: carga asimilada, sin señales de fatiga acumulada."
+        let workout = Workout(name: "Sweet spot 3×12", kind: .tempo, steps: [
+            WorkoutStep(name: "Calentamiento", duration: 600, startIntensity: 0.45, endIntensity: 0.7),
+            WorkoutStep(name: "Sweet spot", duration: 720, intensity: 0.9, cadenceRPM: 90),
+            WorkoutStep(name: "Recuperación", duration: 240, intensity: 0.55),
+            WorkoutStep(name: "Sweet spot", duration: 720, intensity: 0.9, cadenceRPM: 90),
+            WorkoutStep(name: "Recuperación", duration: 240, intensity: 0.55),
+            WorkoutStep(name: "Sweet spot", duration: 720, intensity: 0.9, cadenceRPM: 90),
+            WorkoutStep(name: "Vuelta a la calma", duration: 360, startIntensity: 0.6, endIntensity: 0.4),
+        ], intensityCeiling: 0.95, rationale: "Tres bloques de 12 min al 90 % (216 W) para seguir construyendo umbral sin comprometer la salida larga del sábado.")
+        let week: [DailyPrescription.DayOutlook] = [
+            .init(day: today, kind: .tempo, minutes: 60, title: "Sweet spot 3×12"),
+            .init(day: today.adding(days: 1), kind: .recovery, minutes: 45, title: "Rodaje suave"),
+            .init(day: today.adding(days: 2), kind: .endurance, minutes: 90, title: "Z2"),
+            .init(day: today.adding(days: 3), kind: .rest, minutes: 0, title: "Descanso"),
+            .init(day: today.adding(days: 4), kind: .openerActivation, minutes: 45, title: "Activación"),
+            .init(day: today.adding(days: 5), kind: .longRide, minutes: 240, title: "Salida larga 120 km"),
+            .init(day: today.adding(days: 6), kind: .recovery, minutes: 40, title: "Rodaje suave"),
+        ]
+        let ai = DailyPrescription(readiness: readiness, workout: workout, week: week,
+                                   coachNote: "Buen momento para apretar un poco: llegas fresco y el sábado está lejos.", flags: [], model: "gpt-6-astra")
+        s.today = .init(day: today, workout: workout, readiness: readiness, ai: ai, aiFingerprint: "preview")
         s.coachMessages = [
             .init(role: .athlete, text: "El sábado tengo una salida larga de 120 km, y el jueves solo tengo 45 minutos."),
             .init(role: .coach, text: "Entendido: salida larga el sábado y jueves corto.",

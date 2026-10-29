@@ -158,7 +158,11 @@ enum Zone {
 #Preview("Full") {
     VStack {
         WorkoutProfileView(workout: PreviewData.state.today!.workout, ftp: 240, ceilingWatts: 182).frame(height: 220).padding()
-        WorkoutProfileView(workout: Workout(name: "Threshold", kind: .threshold, steps: DailyPrescriber.steps(kind: .threshold, minutes: 75), intensityCeiling: 1.05, rationale: ""), ftp: 240, ceilingWatts: 252).frame(height: 220).padding()
+        WorkoutProfileView(workout: Workout(name: "Threshold", kind: .threshold, steps: [
+            WorkoutStep(name: "Warm-up", duration: 900, startIntensity: 0.45, endIntensity: 0.75),
+            WorkoutStep(name: "Threshold", duration: 1200, intensity: 0.98), WorkoutStep(name: "Recovery", duration: 300, intensity: 0.55),
+            WorkoutStep(name: "Threshold", duration: 1200, intensity: 0.98), WorkoutStep(name: "Cool-down", duration: 600, startIntensity: 0.6, endIntensity: 0.4),
+        ], intensityCeiling: 1.05, rationale: ""), ftp: 240, ceilingWatts: 252).frame(height: 220).padding()
     }
 }
 

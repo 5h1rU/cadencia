@@ -16,15 +16,8 @@ enum AppConfig {
     }
 
     static let defaultLLMEndpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
+    /// Only until the account's model list has loaded once; Settings then switches to a listed model.
     static let defaultLLMModel = LLMCoach.defaultModel
-
-    /// OpenAI models offered in Settings → Coach (Oct 2026). Any other id can still be typed.
-    static let llmModelPresets: [(id: String, note: String)] = [
-        ("gpt-6-astra", "Most capable reasoning"),
-        ("gpt-5.6-sol", "Balanced, o1's successor"),
-        ("gpt-5.6-terra", "Lower cost"),
-        ("gpt-5.6-luna", "Fastest, cheapest"),
-    ]
 
     static let intervalsSettingsURL = URL(string: "https://intervals.icu/settings")!
 }

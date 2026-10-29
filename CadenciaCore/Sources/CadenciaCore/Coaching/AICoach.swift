@@ -121,18 +121,18 @@ public struct CoachBrief: Codable, Equatable, Sendable {
         }
     }
 
-    public struct Baseline: Codable, Equatable, Sendable {
-        public var readinessLevel: String
-        public var readinessScore: Int
+    /// Today's wellness compared with the athlete's own recent range, computed by `ReadinessEngine`.
+    /// These are measurements, not a verdict: the model decides what they mean.
+    public struct Measured: Codable, Equatable, Sendable {
         public var signals: [String]
-        public var workoutName: String
-        public var workoutKind: String
-        public var workoutMinutes: Int
-        public var rationale: String
+        public var missingData: [String]
+        /// The structured signals behind `signals`, kept for the app's Recovery row; not sent to the model.
+        public var sourceSignals: [Readiness.Signal] = []
 
-        public init(readiness: Readiness, workout: Workout) {
-            readinessLevel = readiness.level.rawValue
-            readinessScore = readiness.score
+        enum CodingKeys: String, CodingKey { case signals, missingData }
+
+        public init(_ readiness: Readiness) {
+            sourceSignals = readiness.signals
             signals = readiness.signals.map { s in
                 var t = "\(s.name): \(s.verdict.rawValue)"
                 if let v = s.value { t += " (\((v * 10).rounded() / 10)" }
@@ -140,10 +140,7 @@ public struct CoachBrief: Codable, Equatable, Sendable {
                 if s.value != nil { t += ")" }
                 return t
             }
-            workoutName = workout.name
-            workoutKind = workout.kind.rawValue
-            workoutMinutes = Int((workout.totalDuration / 60).rounded())
-            rationale = workout.rationale
+            missingData = readiness.missingData
         }
     }
 
@@ -159,12 +156,12 @@ public struct CoachBrief: Codable, Equatable, Sendable {
     public var upcomingEvent: Event?
     public var availableMinutes: Int?
     public var recentCoachNotes: [String]   // what the athlete told the coach lately
-    public var baseline: Baseline
+    public var measured: Measured
 
     public init(today: Day, locale: String, athlete: Athlete, ftpEstimate: FTPEstimate?, powerCurve: [PowerCurvePoint],
                 wellness: [WellnessDay], feedback: [Day: SubjectiveFeedback], activities: [ActivitySummary],
                 plan: TrainingPlan?, upcomingEvent: TrainingEvent?, availableMinutes: Int?, recentCoachNotes: [String],
-                baselineReadiness: Readiness, baselineWorkout: Workout, wellnessDays: Int = 28, activityDays: Int = 28) {
+                measured: Readiness, wellnessDays: Int = 28, activityDays: Int = 28) {
         self.today = today.iso
         self.weekday = today.weekday()
         self.locale = locale
@@ -184,7 +181,7 @@ public struct CoachBrief: Codable, Equatable, Sendable {
         self.upcomingEvent = upcomingEvent.map { Event($0, today: today) }
         self.availableMinutes = availableMinutes
         self.recentCoachNotes = recentCoachNotes
-        self.baseline = Baseline(readiness: baselineReadiness, workout: baselineWorkout)
+        self.measured = Measured(measured)
     }
 
     /// A stable fingerprint of the inputs that should trigger a new decision. Same key → same answer is fine.
@@ -254,16 +251,15 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
         var flags: [String]?
     }
 
-    /// Builds a validated prescription from the model's JSON. The baseline readiness supplies the
-    /// signals (the model does not re-derive HRV ranges); the model supplies the verdict and the words.
-    public static func parse(_ json: Data, baseline: Readiness, today: Day, availableMinutes: Int?, model: String, now: Date = Date()) throws -> DailyPrescription {
+    /// Builds a validated prescription from the model's JSON. The measured signals (HRV vs the athlete's
+    /// range, etc.) are kept as computed; the model supplies the verdict and the words.
+    public static func parse(_ json: Data, measured: CoachBrief.Measured, today: Day, availableMinutes: Int?, model: String, now: Date = Date()) throws -> DailyPrescription {
         let w = try JSONDecoder().decode(Wire.self, from: json)
 
         guard let level = Readiness.Level(rawValue: w.readiness.level.lowercased()) else { throw ValidationError.unknownReadiness(w.readiness.level) }
         let score = min(max(w.readiness.score ?? Self.defaultScore(level), 0), 100)
         let summary = [w.readiness.headline, w.readiness.rationale].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: " ")
-        let readiness = Readiness(level: level, score: score, signals: baseline.signals, missingData: baseline.missingData,
-                                  summary: summary.isEmpty ? baseline.summary : summary)
+        let readiness = Readiness(level: level, score: score, signals: measured.sourceSignals, missingData: measured.missingData, summary: summary)
 
         guard let kind = SessionKind(rawValue: w.workout.kind) else { throw ValidationError.unknownKind(w.workout.kind) }
         var steps: [WorkoutStep] = []
@@ -295,7 +291,7 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
             guard let day = Day(iso: o.day) else { throw ValidationError.badDay(o.day) }
             guard day >= today, day <= today.adding(days: 7), !week.contains(where: { $0.day == day }) else { continue }
             guard let k = SessionKind(rawValue: o.kind) else { throw ValidationError.unknownKind(o.kind) }
-            week.append(DayOutlook(day: day, kind: k, minutes: min(max(o.minutes ?? 0, 0), maxTotalMinutes), title: o.title ?? DailyPrescriber.name(for: k), note: o.note))
+            week.append(DayOutlook(day: day, kind: k, minutes: min(max(o.minutes ?? 0, 0), maxTotalMinutes), title: o.title ?? k.defaultTitle, note: o.note))
         }
         week.sort { $0.day < $1.day }
 
@@ -323,9 +319,9 @@ public enum AICoachPrompt {
         You receive a JSON brief with: the athlete (FTP in watts), their power curve, up to 28 days of wellness \
         (HRV, resting HR, sleep hours, Intervals.icu CTL/ATL/TSB, fatigue/soreness 1–4, how the legs felt), up to 28 days of \
         activities (duration, load, intensity factor, NP, RPE, feel 1=strong…5=weak), the active plan with the next seven \
-        planned days and the goal event, any time limit for today, recent notes from the athlete, and a `baseline`: the \
-        reading of the app's rule-based engine. The baseline is a sanity check, not an order; agree with it or argue with \
-        it, but be explicit about why.
+        planned days and the goal event, any time limit for today, recent notes from the athlete, and `measured`: today's \
+        HRV, sleep, resting HR, form, fatigue and legs compared with the athlete's own 28-day range (below / typical / above). \
+        Nothing has been decided for you; you are the only coach.
 
         Decide like a coach who sees this athlete every day:
         - Readiness comes from the trend, not one number. Compare today's HRV, resting HR and sleep with the athlete's own \

@@ -52,7 +52,17 @@ struct TodayView: View {
 
     @ViewBuilder private var briefingSection: some View {
         Section {
-            if let readiness = model.readiness, let note = model.coachNote {
+            if !model.aiCoachAvailable {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Connect your coach", systemImage: "sparkles").font(.headline)
+                    Text("Cadencia's coach is an AI that reads your recovery, load, power and plan every day and decides your session. Sign in with ChatGPT to use your plan, or add an OpenAI API key.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+                NavigationLink { CoachSettingsView() } label: {
+                    Label("Set up the coach", systemImage: "arrow.right.circle")
+                }
+            } else if let ai, let readiness = model.readiness {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 6) {
                         Image(systemName: readiness.level.symbol)
@@ -62,51 +72,75 @@ struct TodayView: View {
                     }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(readiness.level.tint)
-                    Text(note)
-                        .font(.body)
-                        .lineSpacing(2)
-                    ForEach(ai?.flags ?? [], id: \.self) { flag in
+                    if let note = model.coachNote {
+                        Text(note)
+                            .font(.body)
+                            .lineSpacing(2)
+                    }
+                    ForEach(ai.flags, id: \.self) { flag in
                         Label(flagText(flag), systemImage: "flag").font(.footnote).foregroundStyle(.secondary)
                     }
                 }
                 .padding(.vertical, 6)
                 if let notice = model.coachNotice {
                     Label(notice, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.secondary)
-                } else if !model.aiCoachAvailable {
-                    Label("Sign in with ChatGPT in Settings → Coach to have the AI coach decide your days.", systemImage: "sparkles")
-                        .font(.footnote).foregroundStyle(.secondary)
                 }
-                if model.aiCoachAvailable {
-                    Button {
-                        Task { await model.askCoachForToday(force: true) }
-                    } label: {
-                        Label("Ask the coach again", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    .disabled(model.coachThinking)
-                }
+                askAgainButton
             } else if model.workingFTP == nil {
                 Label("Set an FTP in Intervals.icu to get prescriptions.", systemImage: "exclamationmark.circle")
+            } else if model.coachThinking {
+                HStack(spacing: 12) {
+                    ProgressView()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("The coach is reading your data…")
+                        Text("Recovery, load, power curve and plan. This takes a few seconds.").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+            } else if let notice = model.coachNotice {
+                Label(notice, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                Button("Ask the coach", systemImage: "sparkles") { Task { await model.askCoachForToday(force: true) } }
+            } else if let issue = model.coachIssue {
+                Label(issueText(issue), systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
             } else {
-                ProgressView("Preparing your day…")
+                Button("Ask the coach", systemImage: "sparkles") { Task { await model.askCoachForToday(force: true) } }
             }
         } header: {
             Text("Your coach")
         } footer: {
             if let ai {
-                Text("Decided \(ai.generatedAt.formatted(date: .omitted, time: .shortened)) from your recovery, load, power and plan. The on-device rules checked every number before it reached the trainer.")
+                Text("Decided \(ai.generatedAt.formatted(date: .omitted, time: .shortened)) from your recovery, load, power and plan. Every number was range-checked before it reached the trainer.")
             }
         }
     }
 
-    /// Who wrote the note: the model, or the on-device rules while it thinks or when it is off.
+    private var askAgainButton: some View {
+        Button {
+            Task { await model.askCoachForToday(force: true) }
+        } label: {
+            if model.coachThinking {
+                HStack(spacing: 8) { ProgressView(); Text("Asking the coach…") }
+            } else {
+                Label("Ask the coach again", systemImage: "arrow.triangle.2.circlepath")
+            }
+        }
+        .disabled(model.coachThinking)
+    }
+
+    private func issueText(_ issue: AppModel.CoachIssue) -> LocalizedStringKey {
+        switch issue {
+        case .usageLimit: return "You've reached the usage limit of your ChatGPT plan for now. Manage it in Settings → Coach, or wait for it to reset."
+        case .notEligible: return "Your ChatGPT account can't share its plan with apps. Use an API key in Settings → Coach."
+        case .signInAgain: return "ChatGPT no longer accepts this sign-in. Sign in again in Settings → Coach."
+        }
+    }
+
+    /// Who wrote the note: the model, or a spinner while it thinks.
     @ViewBuilder private var coachBadge: some View {
         Group {
             if model.coachThinking {
                 HStack(spacing: 4) { ProgressView().controlSize(.mini); Text("Coach is deciding…") }
             } else if let ai {
                 Label("AI coach · \(ai.model)", systemImage: "sparkles")
-            } else {
-                Label("On-device rules", systemImage: "cpu")
             }
         }
         .font(.caption)
@@ -263,14 +297,14 @@ struct TodayView: View {
         } header: {
             Text("Recovery signals")
         } footer: {
-            if let r = model.readiness, !r.isSufficientlyInformed {
+            if !model.measuredSignals.isSufficientlyInformed {
                 Text("Few recovery signals today, so the prescription is conservative. Connect Apple Health or wear your watch to sleep for a sharper call.")
             }
         }
     }
 
     private func signalRow(_ title: LocalizedStringKey, name: String, missing: LocalizedStringKey, value: String?) -> some View {
-        let signal = model.readiness?.signals.first { $0.name == name }
+        let signal = model.measuredSignals.signals.first { $0.name == name }
         let informed = value != nil && signal?.verdict != .missing
         let tint: Color = informed ? (signal?.verdictTint ?? .secondary) : Color(.systemGray4)
         return HStack(spacing: 10) {

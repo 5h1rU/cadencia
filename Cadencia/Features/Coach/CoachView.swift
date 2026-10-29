@@ -56,8 +56,8 @@ struct CoachView: View {
                             Link(destination: ChatGPTAuth.usageSettingsURL) { Label("Manage usage", systemImage: "arrow.up.right.square") }
                         case .apiKey:
                             Label("Using \(model.state.settings.llmModel)", systemImage: "sparkles")
-                        case .onDevice:
-                            Label("On-device interpretation", systemImage: "iphone")
+                        case nil:
+                            Label("No coach connected", systemImage: "exclamationmark.triangle")
                         }
                     } label: { Image(systemName: "ellipsis.circle") }
                 }

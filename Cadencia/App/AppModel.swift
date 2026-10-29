@@ -92,20 +92,11 @@ final class AppModel {
         return proposal == state.dismissedFTPProposal ? nil : proposal
     }
 
-    /// The coach's note at the top of Today: what the body says and why the session is what it is.
-    /// The AI coach's own words when it decided the day; otherwise the rules write it from the same facts.
+    /// The coach's note at the top of Today, in the AI coach's own words. Nil until it has decided the day.
     var coachNote: String? {
-        guard let t = state.today, t.day == today else { return nil }
-        if let ai = t.ai {
-            return [ai.readiness.summary, ai.coachNote].filter { !$0.isEmpty }.joined(separator: " ")
-        }
-        let since = today.adding(days: -7)
-        let facts = BriefingInput(today: today, locale: coachLocale, athleteName: state.athlete?.name,
-                                  readiness: t.readiness, feedback: state.feedback(for: today), workout: t.workout,
-                                  ftp: workingFTP ?? 200, planned: plannedToday,
-                                  recentActivities: state.activities.filter { $0.day >= since && $0.day < today },
-                                  phase: state.plan?.phase(for: today), event: upcomingEvent)
-        return RuleBriefing.compose(facts)
+        guard let t = state.today, t.day == today, let ai = t.ai else { return nil }
+        let note = [ai.readiness.summary, ai.coachNote].filter { !$0.isEmpty }.joined(separator: " ")
+        return note.isEmpty ? nil : note
     }
 
     var pendingUploads: [UploadEntry] { state.ledger.pending(for: athleteID) }
@@ -116,35 +107,39 @@ final class AppModel {
         credential.map { IntervalsClient(transport: transport, credential: $0, athleteID: athleteID) }
     }
 
-    /// Which coach answers, in order of preference: the athlete's ChatGPT plan, their own API key, on-device rules.
-    enum CoachSource: Equatable { case chatGPTPlan, apiKey, onDevice }
+    /// Which AI answers: the athlete's ChatGPT plan, or their own API key. There is no on-device
+    /// fallback; without one of these the coach, and so Today, cannot work.
+    enum CoachSource: Equatable { case chatGPTPlan, apiKey }
 
-    var coachSource: CoachSource {
-        // While a plan problem is showing (limit reached, sign-in dead) the plan is skipped so the
-        // athlete still gets an answer; dismissing the banner tries the plan again.
+    var coachSource: CoachSource? {
+        // While a plan problem is showing (limit reached, sign-in dead) the API key is tried if there is one;
+        // dismissing the banner tries the plan again.
         if chatGPT?.planUsageEnabled == true, coachIssue == nil { return .chatGPTPlan }
         if state.settings.llmEnabled, hasLLMKey { return .apiKey }
-        return .onDevice
+        return nil
     }
 
+    /// Whether any AI coach is connected. Today and the coach chat need one.
+    var aiCoachAvailable: Bool { coachSource != nil }
+
     /// Resolves the coach for one request, refreshing the ChatGPT token first when it is about to expire.
-    private func coachEngine() async -> any CoachEngine {
+    /// Nil when the ChatGPT sign-in is dead (`coachIssue` is set) and no API key exists.
+    private func coachEngine() async -> LLMCoach? {
         switch coachSource {
         case .chatGPTPlan:
-            guard let credential = await freshChatGPTCredential() else { return HeuristicCoach() }
+            guard let credential = await freshChatGPTCredential() else { return nil }
             return LLMCoach(transport: transport, backend: .chatGPTPlan(accessToken: credential.accessToken), model: state.settings.llmModel)
         case .apiKey:
             let key = keychain.readString(Self.llmKeyAccount) ?? ""
             return LLMCoach(transport: transport, endpoint: state.settings.llmEndpoint, apiKey: key, model: state.settings.llmModel)
-        case .onDevice:
-            return HeuristicCoach()
+        case nil:
+            return nil
         }
     }
 
     // MARK: Lifecycle
 
     func start() async {
-        if state.today?.day != today { prescribeToday() }
         guard isSignedIn else { return }
         await refresh()
     }
@@ -275,10 +270,23 @@ final class AppModel {
         return await task.value
     }
 
-    /// Models the athlete's plan (or key) can use, for the Settings picker.
+    /// Models the athlete's plan (or key) can use, for the Settings picker. Chooses the first listed
+    /// one when the stored model id is not available on this account, so nothing stays hardcoded.
     func listCoachModels() async throws -> [LLMCoach.Model] {
-        guard let engine = await coachEngine() as? LLMCoach else { return [] }
-        return try await engine.listModels()
+        guard let engine = await coachEngine() else { return [] }
+        let models = try await engine.listModels()
+        if !models.isEmpty, !models.contains(where: { $0.id == state.settings.llmModel }), let first = models.first {
+            setCoachModel(first.id)
+        }
+        return models
+    }
+
+    /// Switches the model and has it decide today again.
+    func setCoachModel(_ id: String) {
+        let trimmed = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != state.settings.llmModel else { return }
+        mutate { $0.settings.llmModel = trimmed }
+        Task { await askCoachForToday(force: true) }
     }
 
     /// Clears a plan problem and lets the plan coach try today again.
@@ -330,7 +338,6 @@ final class AppModel {
 
         await readHealth()
         recomputeFTPEstimate()
-        prescribeToday()
         await askCoachForToday()
         await runUploads()
         await pushWeekToIntervals()
@@ -359,24 +366,20 @@ final class AppModel {
     func enableHealth() async {
         mutate { $0.settings.readHealth = true }
         await readHealth()
-        prescribeToday()
         await askCoachForToday()
     }
 
     // MARK: Today
 
-    /// The rule-based reading of today: instant, offline, and the sanity check the AI coach is measured against.
-    private func baselineForToday() -> (readiness: Readiness, workout: Workout) {
+    /// Today's wellness against the athlete's own range: measurements for the model and for the Recovery row.
+    private func measuredToday() -> Readiness {
         let day = today
         let todayWellness = state.wellness(on: day) ?? WellnessDay(day: day)
-        let readiness = ReadinessEngine().evaluate(today: todayWellness, history: state.wellness, feedback: state.feedback(for: day))
-        let input = DailyPrescriber.Input(day: day, planned: plannedToday, readiness: readiness, ftp: workingFTP ?? 200,
-                                          availableMinutes: nil, upcomingPriorityEvent: upcomingEvent)
-        return (readiness, DailyPrescriber().prescribe(input))
+        return ReadinessEngine().evaluate(today: todayWellness, history: state.wellness, feedback: state.feedback(for: day))
     }
 
     /// Everything the AI coach is shown. Built fresh each time so the fingerprint tracks the real inputs.
-    private func coachBrief(baseline: (readiness: Readiness, workout: Workout)) -> CoachBrief {
+    private func coachBrief() -> CoachBrief {
         let recentNotes = state.coachMessages.filter { $0.role == .athlete && $0.sentAt > today.adding(days: -7).date() }.suffix(5).map(\.text)
         return CoachBrief(today: today, locale: coachLocale,
                           athlete: .init(ftp: workingFTP ?? 200, weightKg: state.athlete?.weightKg ?? latestWellness?.weightKg,
@@ -384,7 +387,7 @@ final class AppModel {
                           ftpEstimate: state.ftpEstimate, powerCurve: state.powerCurve,
                           wellness: state.wellness, feedback: feedbackIndex, activities: state.activities,
                           plan: state.plan, upcomingEvent: upcomingEvent, availableMinutes: nil, recentCoachNotes: Array(recentNotes),
-                          baselineReadiness: baseline.readiness, baselineWorkout: baseline.workout)
+                          measured: measuredToday())
     }
 
     private var feedbackIndex: [Day: SubjectiveFeedback] {
@@ -393,47 +396,30 @@ final class AppModel {
 
     private var coachLocale: String { Locale.current.language.languageCode?.identifier ?? "es" }
 
-    /// Whether today's screen can be decided by the language model at all.
-    var aiCoachAvailable: Bool { coachSource != .onDevice }
+    /// Today's measured signals even before the coach has answered (the Recovery row shows them).
+    var measuredSignals: Readiness { state.today?.day == today ? state.today!.readiness : measuredToday() }
 
-    /// Recomputes today from the rule-based engines. Rides already started today keep their workout.
-    /// An AI decision made from the same inputs is kept; otherwise the baseline shows at once and
-    /// `askCoachForToday()` replaces it when the model answers.
-    func prescribeToday() {
-        let day = today
-        if state.rideIndex.contains(where: { Day($0.startedAt) == day }), state.today?.day == day { return }
-        let baseline = baselineForToday()
-        if let current = state.today, current.day == day, current.ai != nil,
-           current.aiFingerprint == coachBrief(baseline: baseline).fingerprint {
-            return
-        }
-        mutate { s in
-            s.today = AppState.TodayState(day: day, workout: baseline.workout, readiness: baseline.readiness)
-            s.attachTodayWorkout(baseline.workout, day: day)
-        }
-    }
-
-    /// `prescribeToday()` for synchronous call sites: the baseline shows now, the AI answer lands when it arrives.
-    private func prescribeTodayThenAskCoach() {
-        prescribeToday()
+    /// Asks the coach again from synchronous call sites (feedback, FTP change, plan change).
+    private func reaskCoach() {
         Task { await askCoachForToday() }
     }
 
     /// Asks the language model for today's decision when the inputs changed since the last answer
     /// (or always, with `force`). Keeps the rule-based baseline on any failure; plan problems become `coachIssue`.
     func askCoachForToday(force: Bool = false) async {
-        guard aiCoachAvailable, !coachThinking else { return }
+        guard !coachThinking else { return }
         let day = today
-        if state.rideIndex.contains(where: { Day($0.startedAt) == day }), state.today?.day == day { return }
-        let baseline = baselineForToday()
-        let brief = coachBrief(baseline: baseline)
-        if !force, let current = state.today, current.day == day, current.ai != nil, current.aiFingerprint == brief.fingerprint { return }
+        let brief = coachBrief()
+        if !force, let current = state.today, current.day == day, current.aiFingerprint == brief.fingerprint { return }
 
-        guard let engine = await coachEngine() as? LLMCoach else { return }
+        guard let engine = await coachEngine() else {
+            coachNotice = coachSource == nil ? nil : String(localized: "ChatGPT no longer accepts this sign-in. Sign in again in Settings → Coach.")
+            return
+        }
         coachThinking = true
         defer { coachThinking = false }
         do {
-            let prescription = try await engine.prescribe(brief: brief, baseline: baseline.readiness)
+            let prescription = try await engine.prescribe(brief: brief)
             guard today == day else { return }
             mutate { s in
                 s.today = AppState.TodayState(day: day, workout: prescription.workout, readiness: prescription.readiness, ai: prescription)
@@ -442,7 +428,7 @@ final class AppModel {
             let dropped = mergeWeekOutlook(prescription.week)
             // The merged week is itself an input to the brief; the fingerprint must describe the merged state
             // or the next refresh would ask again and loop.
-            let fingerprint = coachBrief(baseline: baseline).fingerprint
+            let fingerprint = coachBrief().fingerprint
             mutate { $0.today?.aiFingerprint = fingerprint }
             coachNotice = nil
             // Sessions the AI turned into rest days still exist in Intervals until deleted; the rest is re-mirrored.
@@ -457,9 +443,11 @@ final class AppModel {
             case .unauthorized: coachIssue = .signInAgain
             }
         } catch let error as DailyPrescription.ValidationError {
-            coachNotice = String(localized: "The coach's answer failed a safety check (\(String(describing: error))). Showing the on-device plan instead.")
+            coachNotice = String(localized: "The coach's answer failed a safety check (\(String(describing: error))). Ask again.")
+        } catch let error as LLMCoach.CompletionError {
+            coachNotice = String(localized: "The coach could not be reached (\(String(describing: error))). Ask again.")
         } catch {
-            coachNotice = String(localized: "The coach could not be reached. Showing the on-device plan instead.")
+            coachNotice = String(localized: "The coach could not be reached (\(error.localizedDescription)). Ask again.")
         }
     }
 
@@ -501,7 +489,7 @@ final class AppModel {
         fb.legs = legs
         if let motivation { fb.motivation = motivation }
         mutate { $0.setFeedback(fb) }
-        prescribeTodayThenAskCoach()
+        reaskCoach()
     }
 
     // MARK: FTP
@@ -515,7 +503,7 @@ final class AppModel {
 
     func acceptFTP(_ watts: Int) {
         mutate { $0.acceptedFTP = watts; $0.dismissedFTPProposal = nil }
-        prescribeTodayThenAskCoach()
+        reaskCoach()
     }
 
     func keepCurrentFTP() {
@@ -525,7 +513,7 @@ final class AppModel {
     /// Drops the locally accepted FTP so the Intervals value becomes the working FTP again.
     func useIntervalsFTP() {
         mutate { $0.acceptedFTP = nil; $0.dismissedFTPProposal = nil }
-        prescribeTodayThenAskCoach()
+        reaskCoach()
     }
 
     // MARK: Plan
@@ -534,7 +522,6 @@ final class AppModel {
         var plan = PlanBuilder().build(request)
         plan.isActive = true
         mutate { $0.plan = plan }
-        prescribeToday()
         await askCoachForToday()
         await pushWeekToIntervals()
     }
@@ -547,7 +534,6 @@ final class AppModel {
             }
         }
         mutate { $0.plan = nil }
-        prescribeToday()
         await askCoachForToday()
     }
 
@@ -566,7 +552,6 @@ final class AppModel {
             fb.legs = legs
             mutate { $0.setFeedback(fb) }
         }
-        prescribeToday()
         await askCoachForToday()
         await pushWeekToIntervals()
     }
@@ -594,9 +579,12 @@ final class AppModel {
         mutate { $0.coachMessages.append(.init(role: .athlete, text: trimmed)) }
         let context = CoachContext(today: today, locale: Locale.current.language.languageCode?.identifier ?? "es",
                                    readiness: readiness, plan: state.plan, recentActivities: Array(state.activities.suffix(10)), ftp: workingFTP)
-        // When the ChatGPT refresh token is dead this falls back to the heuristic coach and sets
-        // `coachIssue = .signInAgain`; the Coach screen shows that as a banner with a sign-in action.
-        let engine = await coachEngine()
+        // When the ChatGPT refresh token is dead `freshChatGPTCredential` sets `coachIssue = .signInAgain`;
+        // the Coach screen shows that as a banner with a sign-in action.
+        guard let engine = await coachEngine() else {
+            mutate { $0.coachMessages.append(.init(role: .coach, text: String(localized: "Connect ChatGPT (or an API key) in Settings → Coach first."))) }
+            return
+        }
         do {
             let intent = try await engine.interpret(trimmed, context: context)
             mutate { $0.coachMessages.append(.init(role: .coach, text: intent.reply, intent: intent)) }
@@ -615,7 +603,7 @@ final class AppModel {
             }
             mutate { $0.coachMessages.append(.init(role: .coach, text: text)) }
         } catch {
-            mutate { $0.coachMessages.append(.init(role: .coach, text: String(localized: "I could not process that right now. Try again, or type it."))) }
+            mutate { $0.coachMessages.append(.init(role: .coach, text: String(localized: "I could not reach the coach right now (\(error.localizedDescription)). Try again."))) }
         }
     }
 
