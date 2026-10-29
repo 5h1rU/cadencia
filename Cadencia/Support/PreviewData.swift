@@ -72,7 +72,11 @@ enum PreviewData {
             .init(day: today.adding(days: 6), kind: .recovery, minutes: 40, title: "Rodaje suave"),
         ]
         let ai = DailyPrescription(readiness: readiness, workout: workout, week: week,
-                                   coachNote: "Buen momento para apretar un poco: llegas fresco y el sábado está lejos.", flags: [], model: "gpt-6-astra")
+                                   note: CoachNote(headline: "Buen día para apretar un poco",
+                                                   body: "Dormiste 7,2 horas y tu recuperación está en su rango habitual; la carga de la semana pasada ya está absorbida.",
+                                                   session: "Una hora de sweet spot en tres bloques de 12 minutos a unos 210 W: suficiente para construir sin dejarte vacío para el sábado.",
+                                                   watch: "Si las piernas van pesadas en el segundo bloque, corta el tercero."),
+                                   flags: [], model: "gpt-6-astra")
         s.today = .init(day: today, workout: workout, readiness: readiness, ai: ai, aiFingerprint: "preview")
         s.coachMessages = [
             .init(role: .athlete, text: "El sábado tengo una salida larga de 120 km, y el jueves solo tengo 45 minutos."),

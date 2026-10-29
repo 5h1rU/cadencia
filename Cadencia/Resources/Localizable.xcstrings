@@ -3766,6 +3766,26 @@
           }
         }
       }
+    },
+    "Your body": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuerpo"
+          }
+        }
+      }
+    },
+    "Keep in mind": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ten en cuenta"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

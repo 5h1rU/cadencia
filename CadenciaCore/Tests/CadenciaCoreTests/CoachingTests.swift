@@ -437,8 +437,8 @@ final class AICoachTests: XCTestCase {
 
     func testValidAnswerBecomesTrainerReadyWorkoutAndKeepsBaselineSignals() throws {
         let p = try parse("""
-        {"readiness":{"level":"strong","score":81,"headline":"Día para apretar","rationale":"HRV 66 ms, dormiste 8 h."},
-         "workout":{"name":"2×20 umbral","kind":"threshold","ceiling":1.05,"rationale":"Estás fresco.",
+        {"readiness":{"level":"strong","score":81},
+         "workout":{"name":"2×20 umbral","kind":"threshold","ceiling":1.05,
                     "steps":[{"name":"Calentamiento","minutes":10,"from":0.5,"to":0.75},
                              {"name":"Umbral","minutes":20,"intensity":0.98,"cadence":90},
                              {"name":"Recuperación","minutes":5,"intensity":0.55},
@@ -449,11 +449,15 @@ final class AICoachTests: XCTestCase {
                  {"day":"2026-11-05","kind":"endurance","minutes":90,"title":"Z2"},
                  {"day":"2026-11-06","kind":"rest","minutes":0,"title":"Fuera de la semana"},
                  {"day":"2026-10-20","kind":"rest","minutes":0,"title":"Pasado"}],
-         "coachNote":"Buen momento para construir.","flags":["ftp_review"]}
+         "note":{"headline":"Día para apretar","body":"Dormiste bien y la recuperación está por encima de lo habitual.","session":"Dos bloques de 20 minutos a ritmo de umbral.","watch":" "},
+         "flags":["ftp_review"]}
         """)
         XCTAssertEqual(p.readiness.level, .strong)
         XCTAssertEqual(p.readiness.score, 81)
-        XCTAssertEqual(p.readiness.summary, "Día para apretar HRV 66 ms, dormiste 8 h.")
+        XCTAssertEqual(p.readiness.summary, "Dormiste bien y la recuperación está por encima de lo habitual.", "the note's body doubles as the readiness summary")
+        XCTAssertEqual(p.note.headline, "Día para apretar")
+        XCTAssertNil(p.note.watch, "a blank watch line is no watch line")
+        XCTAssertEqual(p.workout.rationale, "Dos bloques de 20 minutos a ritmo de umbral.", "the session part is the workout's rationale")
         XCTAssertEqual(p.readiness.signals, baseline.signals, "the model does not rewrite the measured signals")
         XCTAssertEqual(p.readiness.missingData, ["sleep"])
         XCTAssertEqual(p.workout.kind, .threshold)
@@ -466,13 +470,25 @@ final class AICoachTests: XCTestCase {
         XCTAssertEqual(p.workout.totalDuration, 3600)
         XCTAssertEqual(p.workout.intensityCeiling, 1.05)
         XCTAssertEqual(p.week.map(\.day.iso), ["2026-10-29", "2026-10-30", "2026-11-05"], "outlook is clipped to today…+7 days")
-        XCTAssertEqual(p.coachNote, "Buen momento para construir.")
         XCTAssertEqual(p.flags, ["ftp_review"])
         XCTAssertEqual(p.model, "m")
     }
 
+    func testPrescriptionSavedWithFlatCoachNoteStillDecodes() throws {
+        let p = try parse(#"{"readiness":{"level":"normal"},"workout":{"name":"x","kind":"endurance","steps":[{"name":"a","minutes":10,"intensity":0.6}]},"note":{"headline":"Hoy normal","body":"Bien.","session":"Rueda.","watch":""}}"#)
+        var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(p)) as! [String: Any]
+        XCTAssertNotNil(json["note"])
+        json["note"] = nil
+        json["coachNote"] = "Buen momento para construir."
+        let legacy = try JSONDecoder().decode(DailyPrescription.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(legacy.note.watch, "Buen momento para construir.")
+        XCTAssertEqual(legacy.note.body, "Bien.", "the readiness summary fills the body")
+        XCTAssertEqual(legacy.note.session, "Rueda.", "the workout rationale fills the session")
+        XCTAssertEqual(legacy.note.headline, "")
+    }
+
     func testRestDayHasNoStepsAndZeroCeiling() throws {
-        let p = try parse(#"{"readiness":{"level":"rest"},"workout":{"name":"Descanso","kind":"rest","ceiling":0.6,"steps":[]},"coachNote":"Para."}"#)
+        let p = try parse(#"{"readiness":{"level":"rest"},"workout":{"name":"Descanso","kind":"rest","ceiling":0.6,"steps":[]},"note":{"headline":"Para","body":"","session":"","watch":""}}"#)
         XCTAssertEqual(p.readiness.score, 20, "a missing score takes the level's default")
         XCTAssertEqual(p.readiness.summary, "", "no words from the model → nothing invented")
         XCTAssertTrue(p.workout.steps.isEmpty)
@@ -552,7 +568,7 @@ final class AICoachTests: XCTestCase {
     }
 
     func testPrescribeSendsTheExpertPromptOnThePlanRouteAndRejectsUnsafeOutput() async throws {
-        let answer = #"{"readiness":{"level":"easy","score":40,"headline":"Suave hoy","rationale":"HRV 60 vs 58 habitual, piernas pesadas."},"workout":{"name":"Z2 corto","kind":"endurance","ceiling":0.7,"rationale":"Mantén el volumen.","steps":[{"name":"Calentamiento","minutes":10,"from":0.45,"to":0.6},{"name":"Z2","minutes":45,"intensity":0.65},{"name":"Vuelta a la calma","minutes":5,"from":0.55,"to":0.4}]},"week":[],"coachNote":"Mañana vemos.","flags":[]}"#
+        let answer = #"{"readiness":{"level":"easy","score":40},"workout":{"name":"Z2 corto","kind":"endurance","ceiling":0.7,"steps":[{"name":"Calentamiento","minutes":10,"from":0.45,"to":0.6},{"name":"Z2","minutes":45,"intensity":0.65},{"name":"Vuelta a la calma","minutes":5,"from":0.55,"to":0.4}]},"week":[],"note":{"headline":"Suave hoy","body":"Piernas pesadas.","session":"Mantén el volumen.","watch":"Mañana vemos."},"flags":[]}"#
         let sse = "data: {\"type\":\"response.output_text.delta\",\"delta\":\(try String(decoding: JSONEncoder().encode(answer), as: UTF8.self))}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\"}}\n\n"
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(sse.utf8))])
         let coach = LLMCoach(transport: t, backend: .chatGPTPlan(accessToken: "tok"), model: "gpt-6-astra")

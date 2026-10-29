@@ -63,7 +63,7 @@ struct TodayView: View {
                     Label("Set up the coach", systemImage: "arrow.right.circle")
                 }
             } else if let ai, let readiness = model.readiness {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
                         Image(systemName: readiness.level.symbol)
                         Text(readiness.level.title)
@@ -73,9 +73,18 @@ struct TodayView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(readiness.level.tint)
                     if let note = model.coachNote {
-                        Text(note)
-                            .font(.body)
-                            .lineSpacing(2)
+                        if !note.headline.isEmpty {
+                            Text(note.headline).font(.title3.weight(.semibold))
+                        }
+                        if !note.body.isEmpty {
+                            notePart("Your body", text: note.body)
+                        }
+                        if !note.session.isEmpty {
+                            notePart("Today", text: note.session)
+                        }
+                        if let watch = note.watch {
+                            notePart("Keep in mind", text: watch)
+                        }
                     }
                     ForEach(ai.flags, id: \.self) { flag in
                         Label(flagText(flag), systemImage: "flag").font(.footnote).foregroundStyle(.secondary)
@@ -110,6 +119,13 @@ struct TodayView: View {
             if let ai {
                 Text("Decided \(ai.generatedAt.formatted(date: .omitted, time: .shortened)) from your recovery, load, power and plan. Every number was range-checked before it reached the trainer.")
             }
+        }
+    }
+
+    private func notePart(_ title: LocalizedStringKey, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
+            Text(text).font(.body).lineSpacing(2)
         }
     }
 

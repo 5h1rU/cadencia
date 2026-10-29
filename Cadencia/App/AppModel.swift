@@ -93,10 +93,9 @@ final class AppModel {
     }
 
     /// The coach's note at the top of Today, in the AI coach's own words. Nil until it has decided the day.
-    var coachNote: String? {
-        guard let t = state.today, t.day == today, let ai = t.ai else { return nil }
-        let note = [ai.readiness.summary, ai.coachNote].filter { !$0.isEmpty }.joined(separator: " ")
-        return note.isEmpty ? nil : note
+    var coachNote: CoachNote? {
+        guard let t = state.today, t.day == today, let ai = t.ai, !ai.note.isEmpty else { return nil }
+        return ai.note
     }
 
     var pendingUploads: [UploadEntry] { state.ledger.pending(for: athleteID) }

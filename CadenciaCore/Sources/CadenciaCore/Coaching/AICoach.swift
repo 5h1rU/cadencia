@@ -197,6 +197,36 @@ public struct CoachBrief: Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - Note: the coach's words for the athlete
+
+/// The coach's morning note, in fixed parts so the screen can lay them out and a rider who is not a sports
+/// scientist can follow them: the call in a few words, what the body is saying, what today is and why,
+/// and the one thing to keep in mind.
+public struct CoachNote: Codable, Equatable, Sendable {
+    /// The decision in plain words, a handful of them: "Easy spin today", "Green light for intervals".
+    public var headline: String
+    /// What the athlete's body is telling the coach, one or two sentences.
+    public var body: String
+    /// What today's session is and why it fits, one or two sentences.
+    public var session: String
+    /// The one thing to keep in mind, or nothing.
+    public var watch: String?
+
+    public init(headline: String, body: String, session: String, watch: String? = nil) {
+        self.headline = headline
+        self.body = body
+        self.session = session
+        self.watch = watch?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? watch : nil
+    }
+
+    public var isEmpty: Bool { headline.isEmpty && body.isEmpty && session.isEmpty && watch == nil }
+
+    /// The note as one paragraph, for places that only take prose.
+    public var text: String {
+        [body, session, watch ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
+    }
+}
+
 // MARK: - Prescription: what the AI coach decided
 
 /// A full daily decision from the AI coach: readiness verdict, the session as trainer-ready blocks,
@@ -219,14 +249,45 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
     public var readiness: Readiness
     public var workout: Workout
     public var week: [DayOutlook]
-    public var coachNote: String
+    public var note: CoachNote
     public var flags: [String]
     public var model: String
     public var generatedAt: Date
 
-    public init(readiness: Readiness, workout: Workout, week: [DayOutlook], coachNote: String, flags: [String], model: String, generatedAt: Date = Date()) {
-        self.readiness = readiness; self.workout = workout; self.week = week; self.coachNote = coachNote
+    public init(readiness: Readiness, workout: Workout, week: [DayOutlook], note: CoachNote, flags: [String], model: String, generatedAt: Date = Date()) {
+        self.readiness = readiness; self.workout = workout; self.week = week; self.note = note
         self.flags = flags; self.model = model; self.generatedAt = generatedAt
+    }
+
+    private enum CodingKeys: String, CodingKey { case readiness, workout, week, note, coachNote, flags, model, generatedAt }
+
+    /// States saved before the note had parts carried one `coachNote` string; it becomes the "keep in mind" line
+    /// and the readiness summary and workout rationale fill the rest, so nothing on disk is lost.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        readiness = try c.decode(Readiness.self, forKey: .readiness)
+        workout = try c.decode(Workout.self, forKey: .workout)
+        week = try c.decodeIfPresent([DayOutlook].self, forKey: .week) ?? []
+        flags = try c.decodeIfPresent([String].self, forKey: .flags) ?? []
+        model = try c.decode(String.self, forKey: .model)
+        generatedAt = try c.decode(Date.self, forKey: .generatedAt)
+        if let n = try c.decodeIfPresent(CoachNote.self, forKey: .note) {
+            note = n
+        } else {
+            note = CoachNote(headline: "", body: readiness.summary, session: workout.rationale,
+                             watch: try c.decodeIfPresent(String.self, forKey: .coachNote))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(readiness, forKey: .readiness)
+        try c.encode(workout, forKey: .workout)
+        try c.encode(week, forKey: .week)
+        try c.encode(note, forKey: .note)
+        try c.encode(flags, forKey: .flags)
+        try c.encode(model, forKey: .model)
+        try c.encode(generatedAt, forKey: .generatedAt)
     }
 
     public enum ValidationError: Error, Equatable, Sendable {
@@ -240,14 +301,15 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
 
     /// The JSON shape the model is asked for. Intensities are fractions of FTP, minutes are minutes.
     struct Wire: Decodable {
-        struct ReadinessWire: Decodable { var level: String; var score: Int?; var headline: String?; var rationale: String? }
+        struct ReadinessWire: Decodable { var level: String; var score: Int? }
         struct Step: Decodable { var name: String; var minutes: Double; var from: Double?; var to: Double?; var intensity: Double?; var cadence: Int? }
-        struct WorkoutWire: Decodable { var name: String; var kind: String; var ceiling: Double?; var steps: [Step]?; var rationale: String? }
+        struct WorkoutWire: Decodable { var name: String; var kind: String; var ceiling: Double?; var steps: [Step]? }
         struct Outlook: Decodable { var day: String; var kind: String; var minutes: Int?; var title: String?; var note: String? }
+        struct NoteWire: Decodable { var headline: String?; var body: String?; var session: String?; var watch: String? }
         var readiness: ReadinessWire
         var workout: WorkoutWire
         var week: [Outlook]?
-        var coachNote: String?
+        var note: NoteWire?
         var flags: [String]?
     }
 
@@ -258,8 +320,9 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
 
         guard let level = Readiness.Level(rawValue: w.readiness.level.lowercased()) else { throw ValidationError.unknownReadiness(w.readiness.level) }
         let score = min(max(w.readiness.score ?? Self.defaultScore(level), 0), 100)
-        let summary = [w.readiness.headline, w.readiness.rationale].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.joined(separator: " ")
-        let readiness = Readiness(level: level, score: score, signals: measured.sourceSignals, missingData: measured.missingData, summary: summary)
+        func clean(_ s: String?) -> String { s?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+        let note = CoachNote(headline: clean(w.note?.headline), body: clean(w.note?.body), session: clean(w.note?.session), watch: clean(w.note?.watch))
+        let readiness = Readiness(level: level, score: score, signals: measured.sourceSignals, missingData: measured.missingData, summary: note.body)
 
         guard let kind = SessionKind(rawValue: w.workout.kind) else { throw ValidationError.unknownKind(w.workout.kind) }
         var steps: [WorkoutStep] = []
@@ -284,7 +347,7 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
         if let c = ceiling, c > 0, let top = steps.map({ max($0.startIntensity, $0.endIntensity) }).max(), top > c { ceiling = top }
 
         let workout = Workout(name: w.workout.name, kind: kind, steps: steps, intensityCeiling: ceiling,
-                              rationale: w.workout.rationale ?? "", createdAt: now)
+                              rationale: note.session, createdAt: now)
 
         var week: [DayOutlook] = []
         for o in w.week ?? [] {
@@ -295,8 +358,7 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
         }
         week.sort { $0.day < $1.day }
 
-        return DailyPrescription(readiness: readiness, workout: workout, week: week,
-                                 coachNote: w.coachNote?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+        return DailyPrescription(readiness: readiness, workout: workout, week: week, note: note,
                                  flags: w.flags ?? [], model: model, generatedAt: now)
     }
 
@@ -339,17 +401,30 @@ public enum AICoachPrompt {
         build toward the goal with sensible hard/easy alternation and total hours close to the plan's hours per week.
         - If the power curve or recent efforts suggest the FTP is wrong, say so in `flags` (e.g. "ftp_review") and in the note.
 
-        Write `headline`, `rationale`, `workout.rationale`, `week[].note` and `coachNote` in the athlete's language (\(locale)). \
-        Use concrete numbers (watts, minutes, hours of sleep, HRV values) and name the signals you relied on. Be direct, \
-        warm and brief: a headline of at most 8 words, rationales of 2–4 sentences, a coach note of 1–3 sentences.
+        The `note` is what the athlete reads on the home screen. They are a committed rider, not a sports scientist, \
+        and they read it on a phone before the ride. Write it in the athlete's language (\(locale)), in the second \
+        person, warm and direct, as a coach who sees them every day. Its parts:
+        - `headline`: the call in at most 6 words, as a verdict they can act on ("Easy spin, you earned it", \
+        "Green light for the intervals", "Rest: your body is still paying for Sunday").
+        - `body`: what their body is telling you, 1–2 sentences. Plain words: say "recovery", "fatigue", "freshness", \
+        "sleep", "resting pulse" rather than HRV, ATL, CTL, TSB or IF. Compare with their own normal ("higher than your \
+        usual", "the worst night this week") instead of listing values; quote at most two numbers, rounded, only when \
+        they help the athlete understand. Mention what the athlete told you if it mattered.
+        - `session`: what today is and why it fits, 1–2 sentences: the shape of the ride in riding terms (how long, \
+        how it should feel, the one number to hold if any) and what it does for them. If you moved away from the \
+        plan, say what the plan asked and why you changed it.
+        - `watch`: the one thing to keep in mind or do next, one sentence, or an empty string. Put the FTP review \
+        here when you flag it, in plain words.
+        Never repeat a fact across parts. No bullet lists, no headers, no technical caveats about the data.
+        `week[].note` is one short sentence per day in the same language.
 
         Answer ONLY with a JSON object of this exact shape:
-        {"readiness": {"level": "rest"|"easy"|"normal"|"strong", "score": 0-100, "headline": string, "rationale": string},
+        {"readiness": {"level": "rest"|"easy"|"normal"|"strong", "score": 0-100},
          "workout": {"name": string, "kind": "rest"|"recovery"|"endurance"|"tempo"|"threshold"|"vo2max"|"openerActivation"|"longRide"|"groupRide"|"race"|"strength",
-                     "ceiling": number, "rationale": string,
+                     "ceiling": number,
                      "steps": [{"name": string, "minutes": number, "intensity": number} | {"name": string, "minutes": number, "from": number, "to": number}, ...]},
          "week": [{"day": "YYYY-MM-DD", "kind": <same kinds>, "minutes": number, "title": string, "note": string}, ...],
-         "coachNote": string,
+         "note": {"headline": string, "body": string, "session": string, "watch": string},
          "flags": [string]}
         """
     }
