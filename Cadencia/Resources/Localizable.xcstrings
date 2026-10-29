@@ -340,8 +340,26 @@
         }
       }
     },
-    "Avg": {},
-    "Avg HR": {},
+    "Avg": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media"
+          }
+        }
+      }
+    },
+    "Avg HR": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC media"
+          }
+        }
+      }
+    },
     "B · important": {
       "localizations": {
         "es": {
@@ -1331,7 +1349,16 @@
         }
       }
     },
-    "Load": {},
+    "Load": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga"
+          }
+        }
+      }
+    },
     "Long ride": {
       "localizations": {
         "es": {
@@ -1558,7 +1585,16 @@
         }
       }
     },
-    "NP": {},
+    "NP": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NP"
+          }
+        }
+      }
+    },
     "OAuth": {
       "localizations": {
         "es": {
@@ -4088,6 +4124,406 @@
           "stringUnit": {
             "state": "translated",
             "value": "Al empezar cada bloque, a mitad de los largos y al terminar, el coach lee tus números y te dice qué significan. El inicio de sesión con ChatGPT solo cubre texto, así que habla la voz del propio teléfono; añade una clave de API de OpenAI en Coach para desbloquear las voces de OpenAI. Para una mejor voz del iPhone, descarga una mejorada en Ajustes › Accesibilidad › Contenido hablado › Voces."
+          }
+        }
+      }
+    },
+    "Coach debrief": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Análisis del coach"
+          }
+        }
+      }
+    },
+    "Reading your session…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leyendo tu sesión…"
+          }
+        }
+      }
+    },
+    "Waiting for Intervals to process the file.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esperando a que Intervals procese el archivo."
+          }
+        }
+      }
+    },
+    "The coach has the numbers and is writing.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El coach ya tiene los números y está escribiendo."
+          }
+        }
+      }
+    },
+    "Ask again": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preguntar de nuevo"
+          }
+        }
+      }
+    },
+    "The debrief arrives once the ride is in Intervals.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El análisis llega cuando la salida esté en Intervals."
+          }
+        }
+      }
+    },
+    "Written by %@ from this recording and the Intervals analysis.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrito por %@ a partir de esta grabación y el análisis de Intervals."
+          }
+        }
+      }
+    },
+    "What it built": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qué construyó"
+          }
+        }
+      }
+    },
+    "How you rode it": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cómo la pedaleaste"
+          }
+        }
+      }
+    },
+    "What your body said": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qué dijo tu cuerpo"
+          }
+        }
+      }
+    },
+    "Next": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siguiente"
+          }
+        }
+      }
+    },
+    "From Intervals": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desde Intervals"
+          }
+        }
+      }
+    },
+    "Decoupling is how much heart rate drifted for the same power between the two halves; efficiency factor is normalized power per heartbeat; HR recovery is the drop in the first minute after the hardest effort.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El desacople es cuánto subió el pulso a la misma potencia entre las dos mitades; el factor de eficiencia es la potencia normalizada por latido; la recuperación de FC es la caída en el primer minuto tras el esfuerzo más duro."
+          }
+        }
+      }
+    },
+    "Watch": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vigilar"
+          }
+        }
+      }
+    },
+    "Nailed it": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clavada"
+          }
+        }
+      }
+    },
+    "Solid": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sólida"
+          }
+        }
+      }
+    },
+    "Partial": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parcial"
+          }
+        }
+      }
+    },
+    "Off plan": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fuera de plan"
+          }
+        }
+      }
+    },
+    "On target": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En objetivo"
+          }
+        }
+      }
+    },
+    "Over target": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por encima"
+          }
+        }
+      }
+    },
+    "Under target": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por debajo"
+          }
+        }
+      }
+    },
+    "Cut short": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cortado"
+          }
+        }
+      }
+    },
+    "Block %lld": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloque %lld"
+          }
+        }
+      }
+    },
+    "%lld % in zone": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld % en zona"
+          }
+        }
+      }
+    },
+    "Power zones": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zonas de potencia"
+          }
+        }
+      }
+    },
+    "Heart-rate zones": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zonas de pulso"
+          }
+        }
+      }
+    },
+    "Intensity": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensidad"
+          }
+        }
+      }
+    },
+    "Avg power": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potencia media"
+          }
+        }
+      }
+    },
+    "Max HR": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FC máx"
+          }
+        }
+      }
+    },
+    "Efficiency": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eficiencia"
+          }
+        }
+      }
+    },
+    "Decoupling": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desacople"
+          }
+        }
+      }
+    },
+    "HR recovery": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recuperación FC"
+          }
+        }
+      }
+    },
+    "Variability": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variabilidad"
+          }
+        }
+      }
+    },
+    "eFTP": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eFTP"
+          }
+        }
+      }
+    },
+    "Compliance": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cumplimiento"
+          }
+        }
+      }
+    },
+    "Last session": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última sesión"
+          }
+        }
+      }
+    },
+    "Ride not found": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salida no encontrada"
+          }
+        }
+      }
+    },
+    "The coach is reading your session…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El coach está leyendo tu sesión…"
+          }
+        }
+      }
+    },
+    "The coach could not be reached. Check the coach connection in Settings and try again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo contactar al coach. Revisa la conexión del coach en Ajustes e inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "The coach could not be reached (%@). Try again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo contactar al coach (%@). Inténtalo de nuevo."
           }
         }
       }

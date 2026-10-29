@@ -23,6 +23,7 @@ struct TodayView: View {
                 briefingSection
                 workoutSection
                 if let week = ai?.week, !week.isEmpty, model.todayWorkout != nil { weekSection(week) }
+                if let last = model.lastRide { lastSessionSection(last) }
                 recoverySection
                 if let event = model.thisWeekEvent { eventSection(event) }
                 checkInSection
@@ -203,6 +204,44 @@ struct TodayView: View {
             if model.state.plan != nil {
                 Text("Mirrored to your Intervals.icu calendar. Tell the coach about changes and it re-shapes the week.")
             }
+        }
+    }
+
+    // MARK: Last session
+
+    /// The most recent ride and where its debrief stands; tapping opens the full read.
+    private func lastSessionSection(_ entry: AppState.RideIndexEntry) -> some View {
+        let report = model.ride(id: entry.id)?.debrief
+        let status = model.debriefStatus[entry.id]
+        return Section {
+            NavigationLink {
+                RideDebriefView(rideID: entry.id)
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(entry.name).font(.headline)
+                        Spacer()
+                        Text(Format.relative(entry.startedAt)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let report {
+                        GradeBadge(grade: report.grade)
+                        Text(report.headline).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
+                    } else if case .failed(let message) = status {
+                        Label(message, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.secondary).lineLimit(2)
+                    } else if status != nil {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("The coach is reading your session…").font(.footnote).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text("\(Format.minutes(entry.duration)) · \(Format.watts(entry.averageWatts)) · Load \(entry.load.map { "\($0)" } ?? "–")")
+                            .font(.footnote.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        } header: {
+            Text("Last session")
         }
     }
 

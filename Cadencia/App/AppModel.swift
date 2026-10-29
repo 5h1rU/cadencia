@@ -23,6 +23,16 @@ final class AppModel {
     /// Why today shows the rule-based plan although an AI coach is configured (transport or safety failure).
     private(set) var coachNotice: String?
     var showChatGPTWelcome = false
+    /// Where each ride's post-ride debrief stands. No entry: not started, or done (`ride.debrief` is set).
+    private(set) var debriefStatus: [UUID: DebriefStatus] = [:]
+
+    enum DebriefStatus: Equatable {
+        /// Intervals is still processing the upload.
+        case waitingForIntervals
+        /// The coach has the numbers and is writing.
+        case reading
+        case failed(String)
+    }
 
     enum CoachIssue: Equatable {
         case usageLimit, notEligible, signInAgain
@@ -357,6 +367,7 @@ final class AppModel {
         await askCoachForToday()
         await runUploads()
         await pushWeekToIntervals()
+        debriefRecentRides()
     }
 
     func readHealth() async {
@@ -685,6 +696,7 @@ final class AppModel {
                 if let existing = try? await client.activity(externalID: ride.externalID, around: Day(ride.startedAt)) {
                     mutate { $0.ledger.markConfirmed(entry.rideID, activityID: existing.id, at: Date()) }
                     await syncFeedback(for: entry.rideID)
+                    Task { await debriefRide(entry.rideID) }
                     continue
                 }
             }
@@ -693,11 +705,91 @@ final class AppModel {
                                                              externalID: ride.externalID, pairedEventID: ride.intervalsEventID)
                 mutate { $0.ledger.markConfirmed(entry.rideID, activityID: result.activityID, at: Date()) }
                 await syncFeedback(for: entry.rideID)
+                Task { await debriefRide(entry.rideID) }
             } catch let error as HTTPError {
                 mutate { $0.ledger.markFailure(entry.rideID, error: error, requestWasSent: true) }
             } catch {
                 mutate { $0.ledger.markFailure(entry.rideID, error: .transport(error.localizedDescription), requestWasSent: true) }
             }
+        }
+    }
+
+    // MARK: Post-ride debrief
+
+    /// The most recent ride on this phone from the last few days, for the "Last session" card on Today.
+    var lastRide: AppState.RideIndexEntry? {
+        let cutoff = today.adding(days: -3).date()
+        return state.rideIndex.last { $0.startedAt >= cutoff }
+    }
+
+    /// Debriefs confirmed rides that never got one (the app was closed while the coach was writing, or
+    /// the upload only went through on a later refresh).
+    private func debriefRecentRides() {
+        let cutoff = today.adding(days: -3).date()
+        for entry in state.rideIndex where entry.startedAt >= cutoff {
+            guard state.ledger.entry(for: entry.id)?.state == .confirmed, debriefStatus[entry.id] == nil,
+                  ride(id: entry.id)?.debrief == nil else { continue }
+            Task { await debriefRide(entry.id) }
+        }
+    }
+
+    /// Asks the coach for the session's debrief: waits for Intervals to finish processing the upload,
+    /// fetches its analysis, then hands the recording and that analysis to the coach. The answer is kept
+    /// on the ride file; failures are kept in `debriefStatus` so the screen can offer a retry.
+    func debriefRide(_ rideID: UUID) async {
+        guard let client, let entry = state.ledger.entry(for: rideID), entry.state == .confirmed,
+              let activityID = entry.intervalsActivityID, var ride = ride(id: rideID) else { return }
+        switch debriefStatus[rideID] {
+        case .waitingForIntervals, .reading: return
+        case .failed, nil: break
+        }
+        debriefStatus[rideID] = .waitingForIntervals
+
+        // Intervals analyses an upload within seconds; the numbers are only there once `analyzed` flips.
+        var analysis: ActivityDetail? = ride.analysis?.analyzed == true ? ride.analysis : nil
+        var attempt = 0
+        while analysis == nil, attempt < 8 {
+            if attempt > 0 { try? await Task.sleep(for: .seconds(3)) }
+            attempt += 1
+            if let detail = try? await client.activityDetail(id: activityID), detail.analyzed { analysis = detail }
+        }
+        // Re-read before writing: the review sheet may have saved RPE/legs while we waited.
+        ride = self.ride(id: rideID) ?? ride
+        if let analysis {
+            ride.analysis = analysis
+            rideCache[rideID] = ride
+            try? store.save(ride, at: "rides/\(rideID.uuidString).json")
+        }
+
+        guard let coach = await coachEngine() else {
+            debriefStatus[rideID] = .failed(String(localized: "Connect ChatGPT (or an API key) in Settings → Coach first."))
+            return
+        }
+        debriefStatus[rideID] = .reading
+        let day = Day(ride.startedAt)
+        let brief = RideDebrief.Brief(locale: coachLocale, ride: ride, ftp: workingFTP ?? 200,
+                                      athlete: .init(ftp: workingFTP ?? 200, weightKg: state.athlete?.weightKg ?? latestWellness?.weightKg,
+                                                     maxHR: state.athlete?.maxHR, lthr: state.athlete?.lthr),
+                                      readiness: state.today?.day == day ? state.today?.readiness : nil,
+                                      plan: state.plan, recentActivities: state.activities, analysis: analysis)
+        do {
+            let report = try await coach.debrief(brief)
+            guard var latest = self.ride(id: rideID) else { return }
+            latest.debrief = report
+            rideCache[rideID] = latest
+            try? store.save(latest, at: "rides/\(rideID.uuidString).json")
+            debriefStatus[rideID] = nil
+        } catch let error as LLMCoachError {
+            switch error {
+            case .usageLimitReached: coachIssue = .usageLimit
+            case .notEligible: coachIssue = .notEligible
+            case .unauthorized: coachIssue = .signInAgain
+            }
+            debriefStatus[rideID] = .failed(String(localized: "The coach could not be reached. Check the coach connection in Settings and try again."))
+        } catch let error as LLMCoach.CompletionError {
+            debriefStatus[rideID] = .failed(String(localized: "The coach could not be reached (\(error.description)). Try again."))
+        } catch {
+            debriefStatus[rideID] = .failed(String(localized: "The coach could not be reached (\(error.localizedDescription)). Try again."))
         }
     }
 

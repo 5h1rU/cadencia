@@ -29,9 +29,16 @@ public struct RideRecording: Codable, Equatable, Sendable, Identifiable {
     public var endedAt: Date?
     public var samples: [RideSample]
     public var feedback: SubjectiveFeedback?
+    /// What Intervals computed once the upload was processed. Nil until fetched.
+    public var analysis: ActivityDetail?
+    /// The coach's reading of the session, written from `analysis` and the recording. Nil until asked.
+    public var debrief: RideDebrief.Report?
 
     public init(id: UUID = UUID(), athleteID: String, workout: Workout, plannedSessionID: UUID? = nil, intervalsEventID: Int? = nil,
-                startedAt: Date, endedAt: Date? = nil, samples: [RideSample] = [], feedback: SubjectiveFeedback? = nil) {
+                startedAt: Date, endedAt: Date? = nil, samples: [RideSample] = [], feedback: SubjectiveFeedback? = nil,
+                analysis: ActivityDetail? = nil, debrief: RideDebrief.Report? = nil) {
+        self.analysis = analysis
+        self.debrief = debrief
         self.id = id
         self.athleteID = athleteID
         self.workout = workout

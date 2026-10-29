@@ -207,6 +207,101 @@ public struct ActivitySummary: Codable, Equatable, Sendable, Identifiable {
     public var isCycling: Bool { ["Ride", "VirtualRide", "GravelRide", "MountainBikeRide", "EBikeRide", "TrackRide"].contains(type) }
 }
 
+/// Intervals.icu's full analysis of one activity (`GET /api/v1/activity/{id}?intervals=true`): the
+/// numbers it computes once the file is processed, which the coach reads for the post-ride debrief.
+/// `analyzed` is false while Intervals is still working on the upload; the load, zone and HR fields
+/// are only trustworthy once it is true.
+public struct ActivityDetail: Codable, Equatable, Sendable {
+    public struct ZoneTime: Codable, Equatable, Sendable {
+        public var zone: String      // "Z1"…"Z7" as Intervals names them
+        public var seconds: Int
+        public init(zone: String, seconds: Int) { self.zone = zone; self.seconds = seconds }
+    }
+
+    /// Heart-rate recovery: the drop in the first minute after the hardest sustained effort.
+    public struct HRRecovery: Codable, Equatable, Sendable {
+        public var startBPM: Int
+        public var endBPM: Int
+        public var drop: Int
+        public init(startBPM: Int, endBPM: Int, drop: Int) { self.startBPM = startBPM; self.endBPM = endBPM; self.drop = drop }
+    }
+
+    /// One interval Intervals detected (or took from the paired workout).
+    public struct Interval: Codable, Equatable, Sendable, Identifiable {
+        public var id: Int
+        public var label: String?
+        public var type: String?        // "WORK" or "RECOVERY"
+        public var startSeconds: Int
+        public var seconds: Int
+        public var averageWatts: Int?
+        public var normalizedWatts: Int?
+        public var intensity: Int?      // IF × 100 for the interval
+        public var averageHR: Int?
+        public var maxHR: Int?
+        public var averageCadence: Int?
+        public var decoupling: Double?
+        public var zone: Int?
+
+        public init(id: Int, label: String? = nil, type: String? = nil, startSeconds: Int, seconds: Int, averageWatts: Int? = nil,
+                    normalizedWatts: Int? = nil, intensity: Int? = nil, averageHR: Int? = nil, maxHR: Int? = nil,
+                    averageCadence: Int? = nil, decoupling: Double? = nil, zone: Int? = nil) {
+            self.id = id; self.label = label; self.type = type; self.startSeconds = startSeconds; self.seconds = seconds
+            self.averageWatts = averageWatts; self.normalizedWatts = normalizedWatts; self.intensity = intensity
+            self.averageHR = averageHR; self.maxHR = maxHR; self.averageCadence = averageCadence; self.decoupling = decoupling; self.zone = zone
+        }
+    }
+
+    public var id: String
+    public var name: String
+    public var analyzed: Bool
+    public var movingTime: TimeInterval
+    public var trainingLoad: Int?
+    public var intensity: Double?          // IF × 100
+    public var averageWatts: Int?
+    public var normalizedWatts: Int?
+    public var averageHR: Int?
+    public var maxHR: Int?
+    public var averageCadence: Int?
+    public var ftp: Int?                   // FTP Intervals used for this activity
+    public var estimatedFTP: Int?          // eFTP from this activity's power curve, when it produced one
+    public var kilojoules: Int?
+    public var kilojoulesAboveFTP: Int?
+    public var powerZoneTimes: [ZoneTime]
+    public var hrZoneTimes: [Int]          // seconds per HR zone, Z1 first
+    public var hrRecovery: HRRecovery?
+    public var decoupling: Double?         // % power:HR drift first half → second half
+    public var efficiencyFactor: Double?   // NP / average HR
+    public var variabilityIndex: Double?   // NP / average power
+    public var compliance: Double?         // % match to the paired planned workout, when Intervals computes one
+    public var trimp: Double?
+    public var ctl: Double?                // fitness after this activity
+    public var atl: Double?                // fatigue after this activity
+    public var rpe: Int?
+    public var feel: Int?
+    public var calories: Int?
+    public var intervals: [Interval]
+
+    public init(id: String, name: String, analyzed: Bool, movingTime: TimeInterval, trainingLoad: Int? = nil, intensity: Double? = nil,
+                averageWatts: Int? = nil, normalizedWatts: Int? = nil, averageHR: Int? = nil, maxHR: Int? = nil, averageCadence: Int? = nil,
+                ftp: Int? = nil, estimatedFTP: Int? = nil, kilojoules: Int? = nil, kilojoulesAboveFTP: Int? = nil,
+                powerZoneTimes: [ZoneTime] = [], hrZoneTimes: [Int] = [], hrRecovery: HRRecovery? = nil, decoupling: Double? = nil,
+                efficiencyFactor: Double? = nil, variabilityIndex: Double? = nil, compliance: Double? = nil, trimp: Double? = nil,
+                ctl: Double? = nil, atl: Double? = nil, rpe: Int? = nil, feel: Int? = nil, calories: Int? = nil, intervals: [Interval] = []) {
+        self.id = id; self.name = name; self.analyzed = analyzed; self.movingTime = movingTime; self.trainingLoad = trainingLoad
+        self.intensity = intensity; self.averageWatts = averageWatts; self.normalizedWatts = normalizedWatts; self.averageHR = averageHR
+        self.maxHR = maxHR; self.averageCadence = averageCadence; self.ftp = ftp; self.estimatedFTP = estimatedFTP
+        self.kilojoules = kilojoules; self.kilojoulesAboveFTP = kilojoulesAboveFTP; self.powerZoneTimes = powerZoneTimes
+        self.hrZoneTimes = hrZoneTimes; self.hrRecovery = hrRecovery; self.decoupling = decoupling; self.efficiencyFactor = efficiencyFactor
+        self.variabilityIndex = variabilityIndex; self.compliance = compliance; self.trimp = trimp; self.ctl = ctl; self.atl = atl
+        self.rpe = rpe; self.feel = feel; self.calories = calories; self.intervals = intervals
+    }
+
+    /// Intensity factor as a fraction (0.84), the way coaches quote it.
+    public var intensityFactor: Double? { intensity.map { $0 / 100 } }
+    /// Form after the ride: fitness minus fatigue.
+    public var tsb: Double? { if let ctl, let atl { return ctl - atl } else { return nil } }
+}
+
 // MARK: - Workouts (structured sessions)
 
 public enum SessionKind: String, Codable, Sendable, CaseIterable {

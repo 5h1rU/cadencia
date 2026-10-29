@@ -101,9 +101,40 @@ enum PreviewData {
         return ride
     }
 
+    /// The same ride once Intervals has processed it and the coach has written its debrief.
+    static var debriefedRide: RideRecording {
+        var r = ride
+        r.analysis = ActivityDetail(id: "i4521", name: r.workout.name, analyzed: true, movingTime: 3600, trainingLoad: 58, intensity: 76,
+                                    averageWatts: 176, normalizedWatts: 183, averageHR: 141, maxHR: 162, averageCadence: 89, ftp: 240, estimatedFTP: 244,
+                                    kilojoules: 634, kilojoulesAboveFTP: 0,
+                                    powerZoneTimes: [.init(zone: "Z1", seconds: 420), .init(zone: "Z2", seconds: 2520), .init(zone: "Z3", seconds: 600), .init(zone: "Z4", seconds: 60)],
+                                    hrZoneTimes: [600, 2400, 540, 60], hrRecovery: .init(startBPM: 160, endBPM: 128, drop: 32),
+                                    decoupling: 2.8, efficiencyFactor: 1.30, variabilityIndex: 1.04, compliance: 94, ctl: 52, atl: 61)
+        r.debrief = RideDebrief.Report(
+            headline: "Clean endurance hour: 42 minutes in Z2 at a steady heart rate.",
+            grade: .excellent,
+            benefit: "This was an aerobic-base session, and it delivered: 42 of 60 minutes sat in Z2 at 176 W average, the stimulus that builds mitochondrial density and fat oxidation. Load 58 is exactly the dose planned for a mid-week endurance day.",
+            execution: "Warm-up ramped cleanly from 110 to 165 W. The main block held 178–184 W against a 180 W target with 93 % of the time in zone; cadence stayed at 89 rpm throughout. Cool-down was ridden as prescribed.",
+            physiology: "Heart rate averaged 141 bpm for 183 W normalized, an efficiency factor of 1.30 — your best in three weeks. Decoupling of 2.8 % means the aerobic system coped with the full hour without drifting, and the 32 bpm recovery in the first minute after the block points to good freshness.",
+            next: "Fatigue is now 61 against a fitness of 52, so tomorrow's threshold session is on as planned; eat and sleep for it tonight.",
+            blocks: [.init(index: 0, verdict: .hit, note: "Ramped as prescribed"), .init(index: 1, verdict: .hit, note: "93 % in zone, cadence 89"), .init(index: 2, verdict: .hit, note: "Spun down cleanly")],
+            flags: ["eFTP 244 W: two more strong rides and the FTP review will fire"],
+            model: "gpt-6-astra")
+        return r
+    }
+
     @MainActor
-    static func model(signedIn: Bool = true) -> AppModel {
-        let m = AppModel(state: state, credential: signedIn ? .apiKey("preview") : nil, store: .temporary(), keychain: KeychainStore(service: "preview"), transport: URLSession.shared)
-        return m
+    /// `rides` are written to the model's store so `model.ride(id:)` finds them, and indexed as confirmed uploads.
+    static func model(signedIn: Bool = true, rides: [RideRecording] = []) -> AppModel {
+        let store = JSONStore.temporary()
+        var s = state
+        for ride in rides {
+            try? store.save(ride, at: "rides/\(ride.id.uuidString).json")
+            s.rideIndex.append(.init(id: ride.id, name: ride.workout.name, kind: ride.workout.kind, startedAt: ride.startedAt,
+                                     duration: ride.duration, averageWatts: ride.averageWatts, load: ride.trainingLoad(ftp: 240)))
+            s.ledger.enqueue(rideID: ride.id, athleteID: ride.athleteID)
+            s.ledger.markConfirmed(ride.id, activityID: ride.analysis?.id ?? "i4521", at: ride.endedAt ?? ride.startedAt)
+        }
+        return AppModel(state: s, credential: signedIn ? .apiKey("preview") : nil, store: store, keychain: KeychainStore(service: "preview"), transport: URLSession.shared)
     }
 }

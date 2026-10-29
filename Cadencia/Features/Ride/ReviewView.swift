@@ -17,14 +17,7 @@ struct ReviewView: View {
     var body: some View {
         List {
             Section {
-                HStack(spacing: 16) {
-                    stat("Time", Format.clock(ride.duration))
-                    stat("Avg", Format.watts(ride.averageWatts))
-                    stat("NP", Format.watts(ride.normalizedWatts))
-                    stat("Load", ride.trainingLoad(ftp: ftp).map { "\($0)" } ?? "–")
-                    stat("Avg HR", ride.averageHeartRate.map { "\($0)" } ?? "–")
-                }
-                .padding(.vertical, 4)
+                RideStatsRow(ride: ride, ftp: ftp)
                 if adherence < 0.9 {
                     Label("Power ran \(Format.percent(1 - adherence)) under target on average. Worth a word to the coach if it felt harder than it should.", systemImage: "info.circle")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -32,6 +25,8 @@ struct ReviewView: View {
             } header: {
                 Text(ride.workout.name)
             }
+
+            DebriefSections(ride: model.ride(id: ride.id) ?? ride)
 
             Section {
                 Picker("Effort (RPE)", selection: $rpe) {
@@ -107,14 +102,6 @@ struct ReviewView: View {
         case ..<0.9: return 7
         default: return 8
         }
-    }
-
-    private func stat(_ title: LocalizedStringKey, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.headline.monospacedDigit())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

@@ -106,6 +106,13 @@ public struct IntervalsClient: Sendable {
         return list.first { $0.externalID == externalID }
     }
 
+    /// Everything Intervals computed for one activity, intervals included. Right after an upload
+    /// `analyzed` may still be false; callers poll until it flips.
+    public func activityDetail(id: String) async throws -> ActivityDetail {
+        let dto: ActivityDetailDTO = try await get("/api/v1/activity/\(id)", query: ["intervals": "true"])
+        return dto.model
+    }
+
     public func updateActivityFeedback(activityID: String, rpe: Int?, feel: Int?) async throws {
         var body: [String: Any] = [:]
         if let rpe { body["icu_rpe"] = rpe }

@@ -52,6 +52,83 @@ struct WellnessDTO: Decodable {
     }
 }
 
+struct ActivityDetailDTO: Decodable {
+    struct ZoneTimeDTO: Decodable { let id: String?; let secs: Int? }
+    struct HRRDTO: Decodable { let start_bpm: Int?; let end_bpm: Int?; let hrr: Int? }
+    struct IntervalDTO: Decodable {
+        let id: Int?
+        let label: String?
+        let type: String?
+        let start_time: Int?
+        let end_time: Int?
+        let moving_time: Int?
+        let elapsed_time: Int?
+        let average_watts: Int?
+        let weighted_average_watts: Int?
+        let intensity: Int?
+        let average_heartrate: Int?
+        let max_heartrate: Int?
+        let average_cadence: Double?
+        let decoupling: Double?
+        let zone: Int?
+    }
+
+    let id: String
+    let name: String?
+    let analyzed: String?
+    let moving_time: Int?
+    let elapsed_time: Int?
+    let icu_training_load: Int?
+    let icu_intensity: Double?
+    let icu_average_watts: Int?
+    let icu_weighted_avg_watts: Int?
+    let average_heartrate: Int?
+    let max_heartrate: Int?
+    let average_cadence: Double?
+    let icu_ftp: Int?
+    let icu_pm_ftp: Int?
+    let icu_joules: Int?
+    let icu_joules_above_ftp: Int?
+    let icu_zone_times: [ZoneTimeDTO]?
+    let icu_hr_zone_times: [Int]?
+    let icu_hrr: HRRDTO?
+    let decoupling: Double?
+    let icu_efficiency_factor: Double?
+    let icu_variability_index: Double?
+    let compliance: Double?
+    let trimp: Double?
+    let icu_ctl: Double?
+    let icu_atl: Double?
+    let icu_rpe: Int?
+    let feel: Int?
+    let calories: Int?
+    let icu_intervals: [IntervalDTO]?
+
+    var model: ActivityDetail {
+        let hrr = icu_hrr.flatMap { h -> ActivityDetail.HRRecovery? in
+            guard let s = h.start_bpm, let e = h.end_bpm else { return nil }
+            return .init(startBPM: s, endBPM: e, drop: h.hrr ?? (s - e))
+        }
+        let intervals = (icu_intervals ?? []).enumerated().compactMap { i, d -> ActivityDetail.Interval? in
+            guard let start = d.start_time else { return nil }
+            let seconds = d.moving_time ?? d.elapsed_time ?? d.end_time.map { $0 - start } ?? 0
+            return .init(id: d.id ?? i, label: d.label, type: d.type, startSeconds: start, seconds: seconds,
+                         averageWatts: d.average_watts, normalizedWatts: d.weighted_average_watts, intensity: d.intensity,
+                         averageHR: d.average_heartrate, maxHR: d.max_heartrate, averageCadence: d.average_cadence.map { Int($0.rounded()) },
+                         decoupling: d.decoupling, zone: d.zone)
+        }
+        return ActivityDetail(id: id, name: name ?? "", analyzed: analyzed != nil, movingTime: TimeInterval(moving_time ?? elapsed_time ?? 0),
+                              trainingLoad: icu_training_load, intensity: icu_intensity, averageWatts: icu_average_watts,
+                              normalizedWatts: icu_weighted_avg_watts, averageHR: average_heartrate, maxHR: max_heartrate,
+                              averageCadence: average_cadence.map { Int($0.rounded()) }, ftp: icu_ftp, estimatedFTP: icu_pm_ftp,
+                              kilojoules: icu_joules.map { $0 / 1000 }, kilojoulesAboveFTP: icu_joules_above_ftp.map { $0 / 1000 },
+                              powerZoneTimes: (icu_zone_times ?? []).compactMap { z in z.id.map { .init(zone: $0, seconds: z.secs ?? 0) } },
+                              hrZoneTimes: icu_hr_zone_times ?? [], hrRecovery: hrr, decoupling: decoupling,
+                              efficiencyFactor: icu_efficiency_factor, variabilityIndex: icu_variability_index, compliance: compliance,
+                              trimp: trimp, ctl: icu_ctl, atl: icu_atl, rpe: icu_rpe, feel: feel, calories: calories, intervals: intervals)
+    }
+}
+
 struct ActivityDTO: Decodable {
     let id: String
     let name: String?
