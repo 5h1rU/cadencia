@@ -148,7 +148,7 @@ struct ConfigureGoalView: View {
                                                             priority: priority, objective: objective, isRace: isRace) : nil
         let end = isEvent ? Day(eventDate) : start.adding(days: weeks * 7 - 1)
         let request = PlanBuilder.Request(goal: goal, secondaryGoal: isEvent ? nil : secondaryGoal, startDay: start, endDay: end,
-                                          event: event, availability: availability, currentCTL: model.latestWellness?.ctl)
+                                          event: event, availability: availability, currentCTL: model.latestLoad?.ctl)
         await model.createPlan(request)
     }
 

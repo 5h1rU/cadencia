@@ -33,12 +33,22 @@ struct RecoveryView: View {
                 }
             }
 
-            Section("Training load") {
+            Section {
                 loadChart
-                if let w = model.latestWellness {
+                if let w = model.latestLoad {
                     LabeledContent("Fitness (CTL)", value: w.ctl.map { String(format: "%.0f", $0) } ?? "–")
                     LabeledContent("Fatigue (ATL)", value: w.atl.map { String(format: "%.0f", $0) } ?? "–")
                     LabeledContent("Form (TSB)", value: w.tsb.map { String(format: "%+.0f", $0) } ?? "–")
+                }
+            } header: {
+                Text("Training load")
+            } footer: {
+                if let w = model.latestLoad {
+                    if w.day == model.today {
+                        Text("As computed by Intervals.icu for today. It moves when a ride lands in Intervals.")
+                    } else {
+                        Text("Intervals.icu has not written today's load yet; these are from \(Format.shortDay(w.day)).")
+                    }
                 }
             }
 

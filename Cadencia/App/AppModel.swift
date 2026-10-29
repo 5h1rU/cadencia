@@ -84,6 +84,13 @@ final class AppModel {
     var todayWellness: WellnessDay? { state.wellness(on: today) }
     var latestWellness: WellnessDay? { state.wellness.last }
 
+    /// Fitness, fatigue and form exactly as Intervals.icu computed them, from one row shared by every screen:
+    /// today's row once Intervals has processed today, otherwise the newest earlier row that carries load.
+    /// `day` tells the UI which day the numbers belong to; the app never computes CTL/ATL itself.
+    var latestLoad: WellnessDay? {
+        state.wellness.last { $0.day <= today && $0.ctl != nil && $0.atl != nil }
+    }
+
     var upcomingEvent: TrainingEvent? {
         guard let e = state.plan?.event, e.day >= today else { return nil }
         return e
@@ -401,7 +408,13 @@ final class AppModel {
     /// Today's wellness against the athlete's own range: measurements for the model and for the Recovery row.
     private func measuredToday() -> Readiness {
         let day = today
-        let todayWellness = state.wellness(on: day) ?? WellnessDay(day: day)
+        var todayWellness = state.wellness(on: day) ?? WellnessDay(day: day)
+        // Intervals may not have written today's load yet. Yesterday's fatigue is a slight overestimate
+        // of today's (it only decays), so judging on it keeps the call conservative instead of blind.
+        if todayWellness.atl == nil, let load = latestLoad {
+            todayWellness.ctl = load.ctl
+            todayWellness.atl = load.atl
+        }
         return ReadinessEngine().evaluate(today: todayWellness, history: state.wellness, feedback: state.feedback(for: day))
     }
 

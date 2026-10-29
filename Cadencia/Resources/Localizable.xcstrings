@@ -3438,16 +3438,6 @@
         }
       }
     },
-    "Check-in": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Cómo estás?"
-          }
-        }
-      }
-    },
     "No HRV today": {
       "localizations": {
         "es": {
@@ -3498,16 +3488,6 @@
         }
       }
     },
-    "Change": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cambiar"
-          }
-        }
-      }
-    },
     "Review": {
       "localizations": {
         "es": {
@@ -3538,62 +3518,12 @@
         }
       }
     },
-    "Legs %@ · motivation %lld/5": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Piernas %@ · motivación %lld/5"
-          }
-        }
-      }
-    },
-    "Legs %@": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Piernas %@"
-          }
-        }
-      }
-    },
     "FTP estimate %lld W, working %lld W": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "FTP estimado %lld W, en uso %lld W"
-          }
-        }
-      }
-    },
-    "fresh": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "frescas"
-          }
-        }
-      }
-    },
-    "heavy": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "pesadas"
-          }
-        }
-      }
-    },
-    "Your own words are one more signal for the coach. They can soften today's session, never harden it.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lo que cuentas es una señal más para el coach. Puede suavizar la sesión de hoy, nunca endurecerla."
           }
         }
       }
@@ -4524,6 +4454,66 @@
           "stringUnit": {
             "state": "translated",
             "value": "No se pudo contactar al coach (%@). Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "Show": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar"
+          }
+        }
+      }
+    },
+    "Hide": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar"
+          }
+        }
+      }
+    },
+    "Show the coach's note": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar la nota del coach"
+          }
+        }
+      }
+    },
+    "As computed by Intervals.icu for today. It moves when a ride lands in Intervals.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tal como lo calcula Intervals.icu para hoy. Cambia cuando una salida llega a Intervals."
+          }
+        }
+      }
+    },
+    "Intervals.icu has not written today's load yet; these are from %@.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervals.icu aún no ha escrito la carga de hoy; estos datos son del %@."
+          }
+        }
+      }
+    },
+    "Fatigue and form are Intervals.icu's numbers from %@; it has not written today's yet.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fatiga y forma son los números de Intervals.icu del %@; aún no ha escrito los de hoy."
           }
         }
       }

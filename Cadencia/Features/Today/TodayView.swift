@@ -2,12 +2,13 @@ import SwiftUI
 import CadenciaCore
 
 /// The home screen, read top to bottom like a coach's morning note: what your body says today,
-/// the session block by block, the signals behind the verdict, a quick check-in, and only then housekeeping.
+/// the session block by block, the signals behind the verdict, and only then housekeeping.
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @State private var showDevices = false
     @State private var showFTPReview = false
-    @State private var editingCheckIn = false
+    /// The coach's note folds to its verdict and headline once read; it opens again on the next launch.
+    @State private var coachCollapsed = false
 
     var body: some View {
         NavigationStack {
@@ -26,7 +27,6 @@ struct TodayView: View {
                 if let last = model.lastRide { lastSessionSection(last) }
                 recoverySection
                 if let event = model.thisWeekEvent { eventSection(event) }
-                checkInSection
                 ftpSection
             }
             .listStyle(.insetGrouped)
@@ -63,6 +63,26 @@ struct TodayView: View {
                 NavigationLink { CoachSettingsView() } label: {
                     Label("Set up the coach", systemImage: "arrow.right.circle")
                 }
+            } else if ai != nil, let readiness = model.readiness, coachCollapsed {
+                Button {
+                    withAnimation(.snappy) { coachCollapsed = false }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: readiness.level.symbol).foregroundStyle(readiness.level.tint)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(readiness.level.title).font(.subheadline.weight(.semibold)).foregroundStyle(readiness.level.tint)
+                            if let headline = model.coachNote?.headline, !headline.isEmpty {
+                                Text(headline).font(.subheadline).foregroundStyle(.primary).lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                        if model.coachThinking { ProgressView().controlSize(.mini) }
+                        Image(systemName: "chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 2)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show the coach's note")
             } else if let ai, let readiness = model.readiness {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 6) {
@@ -115,9 +135,19 @@ struct TodayView: View {
                 Button("Ask the coach", systemImage: "sparkles") { Task { await model.askCoachForToday(force: true) } }
             }
         } header: {
-            Text("Your coach")
+            HStack {
+                Text("Your coach")
+                Spacer()
+                if ai != nil, model.readiness != nil {
+                    Button(coachCollapsed ? "Show" : "Hide") {
+                        withAnimation(.snappy) { coachCollapsed.toggle() }
+                    }
+                    .font(.footnote)
+                    .textCase(nil)
+                }
+            }
         } footer: {
-            if let ai {
+            if let ai, !coachCollapsed {
                 Text("Decided \(ai.generatedAt.formatted(date: .omitted, time: .shortened)) from your recovery, load, power and plan. Every number was range-checked before it reached the trainer.")
             }
         }
@@ -279,10 +309,13 @@ struct TodayView: View {
                         .padding(.vertical, 6)
                     }
                     Button { showDevices = true } label: {
-                        Label("Start on trainer", systemImage: "play.fill").frame(maxWidth: .infinity)
+                        Label("Start on trainer", systemImage: "play.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 32)
                     }
                     .buttonStyle(.borderedProminent)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .controlSize(.large)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
                     .listRowBackground(Color.clear)
                 }
             } header: {
@@ -343,17 +376,22 @@ struct TodayView: View {
                     signalRow("Resting HR", name: "restingHR", missing: "No resting HR",
                               value: model.todayWellness?.restingHR.map { "\($0) bpm" })
                     signalRow("Fatigue", name: "fatigue", missing: "No load data",
-                              value: model.todayWellness?.atl.map { String(format: "%.0f ATL", $0) })
+                              value: model.latestLoad?.atl.map { String(format: "%.0f ATL", $0) })
                     signalRow("Form", name: "form", missing: "No load data",
-                              value: model.todayWellness?.tsb.map { String(format: "%+.0f TSB", $0) })
+                              value: model.latestLoad?.tsb.map { String(format: "%+.0f TSB", $0) })
                 }
                 .padding(.vertical, 6)
             }
         } header: {
             Text("Recovery signals")
         } footer: {
-            if !model.measuredSignals.isSufficientlyInformed {
-                Text("Few recovery signals today, so the prescription is conservative. Connect Apple Health or wear your watch to sleep for a sharper call.")
+            VStack(alignment: .leading, spacing: 4) {
+                if let load = model.latestLoad, load.day != model.today {
+                    Text("Fatigue and form are Intervals.icu's numbers from \(Format.shortDay(load.day)); it has not written today's yet.")
+                }
+                if !model.measuredSignals.isSufficientlyInformed {
+                    Text("Few recovery signals today, so the prescription is conservative. Connect Apple Health or wear your watch to sleep for a sharper call.")
+                }
             }
         }
     }
@@ -395,64 +433,6 @@ struct TodayView: View {
         }
     }
 
-    // MARK: Check-in
-
-    private var feedback: SubjectiveFeedback? { model.state.feedback(for: model.today) }
-
-    @ViewBuilder private var checkInSection: some View {
-        Section {
-            if let legs = feedback?.legs, !editingCheckIn {
-                HStack {
-                    Label {
-                        if let m = feedback?.motivation {
-                            Text("Legs \(Text(legs.title)) · motivation \(m)/5")
-                        } else {
-                            Text("Legs \(Text(legs.title))")
-                        }
-                    } icon: {
-                        Image(systemName: "checkmark.circle").foregroundStyle(.green)
-                    }
-                    .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Change") { editingCheckIn = true }.font(.subheadline)
-                }
-            } else {
-                Picker("Legs", selection: Binding(
-                    get: { feedback?.legs },
-                    set: { model.recordFeeling($0, motivation: feedback?.motivation) }
-                )) {
-                    Text("Fresh").tag(SubjectiveFeedback.Legs?.some(.fresh))
-                    Text("OK").tag(SubjectiveFeedback.Legs?.some(.ok))
-                    Text("Heavy").tag(SubjectiveFeedback.Legs?.some(.heavy))
-                }
-                .pickerStyle(.segmented)
-                HStack {
-                    Text("Motivation")
-                    Spacer()
-                    HStack(spacing: 8) {
-                        ForEach(1...5, id: \.self) { n in
-                            Button {
-                                model.recordFeeling(feedback?.legs ?? .ok, motivation: n)
-                            } label: {
-                                Image(systemName: n <= (feedback?.motivation ?? 0) ? "circle.fill" : "circle")
-                                    .font(.title3)
-                                    .foregroundStyle(n <= (feedback?.motivation ?? 0) ? Color.accentColor : Color(.systemGray3))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-                if feedback?.legs != nil {
-                    Button("Done") { editingCheckIn = false }.frame(maxWidth: .infinity)
-                }
-            }
-        } header: {
-            Text("Check-in")
-        } footer: {
-            Text("Your own words are one more signal for the coach. They can soften today's session, never harden it.")
-        }
-    }
-
     // MARK: FTP
 
     @ViewBuilder private var ftpSection: some View {
@@ -490,16 +470,6 @@ struct TodayView: View {
             elapsed += step.duration
         }
         return best.offset
-    }
-}
-
-extension SubjectiveFeedback.Legs {
-    var title: LocalizedStringKey {
-        switch self {
-        case .fresh: return "fresh"
-        case .ok: return "OK"
-        case .heavy: return "heavy"
-        }
     }
 }
 
