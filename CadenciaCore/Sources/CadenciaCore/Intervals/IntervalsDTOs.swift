@@ -188,7 +188,25 @@ public struct IntervalsEvent: Decodable, Equatable, Sendable, Identifiable {
     public let icu_training_load: Int?
 
     public var day: Day? { start_date_local.flatMap { Day(iso: $0) } }
-    public var isCadenciaOwned: Bool { uid?.hasPrefix("cadencia-") == true }
+    public var isCadenciaOwned: Bool { uid?.hasPrefix(PlanMirror.uidPrefix) == true }
+}
+
+/// How Cadencia's plan is mirrored to the Intervals calendar and kept to exactly one event per session.
+///
+/// Intervals counts every planned workout dated today in today's fitness, fatigue and form until midnight.
+/// A reinstall or a rebuilt plan gives sessions new ids, so without cleanup each push would add another
+/// planned workout on top of the old one and today's load would climb with every install.
+public enum PlanMirror {
+    public static let uidPrefix = "cadencia-"
+
+    public static func uid(for session: PlannedSession) -> String { uidPrefix + session.id.uuidString.lowercased() }
+
+    /// Cadencia-owned events that no session in the current plan accounts for. Other apps' and the
+    /// athlete's own events are never touched.
+    public static func staleEvents(_ events: [IntervalsEvent], sessions: [PlannedSession]) -> [IntervalsEvent] {
+        let live = Set(sessions.map(uid(for:)))
+        return events.filter { $0.isCadenciaOwned && !live.contains($0.uid ?? "") }
+    }
 }
 
 enum IntervalsDates {

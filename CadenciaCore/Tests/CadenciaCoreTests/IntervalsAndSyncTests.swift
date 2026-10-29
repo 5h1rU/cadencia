@@ -126,6 +126,20 @@ final class IntervalsClientTests: XCTestCase {
         XCTAssertTrue(description.contains("- 10m ramp 45-60%"))
         XCTAssertTrue(description.contains("- 45m 65% 88rpm"))
     }
+
+    /// A reinstall gives the plan new session ids; the old mirrored workouts must go, and only those.
+    func testStaleEventsAreCadenciaLeftoversNotInThePlan() throws {
+        let kept = PlannedSession(day: Day(year: 2026, month: 10, day: 29), kind: .endurance, title: "Endurance", targetMinutes: 60)
+        let json = """
+        [{"id": 1, "uid": "\(PlanMirror.uid(for: kept))", "category": "WORKOUT"},
+         {"id": 2, "uid": "cadencia-0b9f1c2e-0000-4000-8000-000000000002", "category": "WORKOUT"},
+         {"id": 3, "uid": "garmin-abc", "category": "WORKOUT"},
+         {"id": 4, "category": "NOTE"}]
+        """
+        let events = try JSONDecoder().decode([IntervalsEvent].self, from: Data(json.utf8))
+        XCTAssertEqual(PlanMirror.staleEvents(events, sessions: [kept]).map(\.id), [2])
+        XCTAssertEqual(PlanMirror.staleEvents(events, sessions: []).map(\.id), [1, 2])
+    }
 }
 
 final class WorkoutTextTests: XCTestCase {

@@ -84,11 +84,12 @@ final class AppModel {
     var todayWellness: WellnessDay? { state.wellness(on: today) }
     var latestWellness: WellnessDay? { state.wellness.last }
 
-    /// Fitness, fatigue and form exactly as Intervals.icu computed them, from one row shared by every screen:
-    /// today's row once Intervals has processed today, otherwise the newest earlier row that carries load.
-    /// `day` tells the UI which day the numbers belong to; the app never computes CTL/ATL itself.
+    /// Fitness, fatigue and form as the athlete starts the day: Intervals.icu's own numbers through yesterday,
+    /// one row shared by every screen. Intervals' row for today already counts today's *planned* workout
+    /// (until midnight), so reading it would make the coach's own prescription look like fatigue and the
+    /// numbers would change every time the plan was mirrored. The app never computes CTL/ATL itself.
     var latestLoad: WellnessDay? {
-        state.wellness.last { $0.day <= today && $0.ctl != nil && $0.atl != nil }
+        state.wellness.last { $0.day < today && $0.ctl != nil && $0.atl != nil }
     }
 
     var upcomingEvent: TrainingEvent? {
@@ -409,12 +410,9 @@ final class AppModel {
     private func measuredToday() -> Readiness {
         let day = today
         var todayWellness = state.wellness(on: day) ?? WellnessDay(day: day)
-        // Intervals may not have written today's load yet. Yesterday's fatigue is a slight overestimate
-        // of today's (it only decays), so judging on it keeps the call conservative instead of blind.
-        if todayWellness.atl == nil, let load = latestLoad {
-            todayWellness.ctl = load.ctl
-            todayWellness.atl = load.atl
-        }
+        // Judge on the load before today's session (see `latestLoad`), not on Intervals' planned-inclusive row.
+        todayWellness.ctl = latestLoad?.ctl
+        todayWellness.atl = latestLoad?.atl
         return ReadinessEngine().evaluate(today: todayWellness, history: state.wellness, feedback: state.feedback(for: day))
     }
 
@@ -425,9 +423,21 @@ final class AppModel {
                           athlete: .init(ftp: workingFTP ?? 200, weightKg: state.athlete?.weightKg ?? latestWellness?.weightKg,
                                          maxHR: state.athlete?.maxHR, lthr: state.athlete?.lthr),
                           ftpEstimate: state.ftpEstimate, powerCurve: state.powerCurve,
-                          wellness: state.wellness, feedback: feedbackIndex, activities: state.activities,
+                          wellness: wellnessForCoaching, feedback: feedbackIndex, activities: state.activities,
                           plan: state.plan, upcomingEvent: upcomingEvent, availableMinutes: nil, recentCoachNotes: Array(recentNotes),
                           measured: measuredToday())
+    }
+
+    /// The brief's rows, with today's load replaced by the pre-session numbers the rest of the app uses,
+    /// so the coach never quotes a fatigue that includes the workout it is about to prescribe.
+    private var wellnessForCoaching: [WellnessDay] {
+        state.wellness.map { row in
+            guard row.day == today else { return row }
+            var r = row
+            r.ctl = latestLoad?.ctl
+            r.atl = latestLoad?.atl
+            return r
+        }
     }
 
     private var feedbackIndex: [Day: SubjectiveFeedback] {
@@ -597,9 +607,18 @@ final class AppModel {
     }
 
     /// Mirrors the next seven days to the Intervals calendar so other tools (and the athlete's watch) see them.
+    /// Mirrors the next week of the plan to the Intervals calendar, exactly one event per session.
+    /// Leftover Cadencia events (from a reinstall or an earlier plan) are deleted first, because Intervals
+    /// counts every planned workout dated today in today's fitness and fatigue.
     func pushWeekToIntervals() async {
-        guard let client, let plan = state.plan, let ftp = workingFTP else { return }
+        guard let client else { return }
         let horizon = today.adding(days: 7)
+        if let events = try? await client.events(oldest: today, newest: today.adding(days: 14)) {
+            for stale in PlanMirror.staleEvents(events, sessions: state.plan?.sessions ?? []) {
+                try? await client.deleteEvent(id: stale.id)
+            }
+        }
+        guard let plan = state.plan, let ftp = workingFTP else { return }
         for session in plan.sessions where session.day >= today && session.day <= horizon && session.status != .completed {
             if let event = try? await client.upsertPlannedWorkout(session, ftp: ftp) {
                 mutate {

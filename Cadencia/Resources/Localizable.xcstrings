@@ -4488,32 +4488,22 @@
         }
       }
     },
-    "As computed by Intervals.icu for today. It moves when a ride lands in Intervals.": {
+    "Intervals.icu's numbers through yesterday, before today's session. Intervals' own Fitness page already counts today's planned workout, so it reads a little higher until the ride is done.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tal como lo calcula Intervals.icu para hoy. Cambia cuando una salida llega a Intervals."
+            "value": "Los números de Intervals.icu hasta ayer, antes de la sesión de hoy. La página Fitness de Intervals ya cuenta el entrenamiento planificado de hoy, por eso marca algo más alto hasta que termines la salida."
           }
         }
       }
     },
-    "Intervals.icu has not written today's load yet; these are from %@.": {
+    "Fatigue and form: where you start the day, before today's session.": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Intervals.icu aún no ha escrito la carga de hoy; estos datos son del %@."
-          }
-        }
-      }
-    },
-    "Fatigue and form are Intervals.icu's numbers from %@; it has not written today's yet.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fatiga y forma son los números de Intervals.icu del %@; aún no ha escrito los de hoy."
+            "value": "Fatiga y forma: cómo empiezas el día, antes de la sesión de hoy."
           }
         }
       }

@@ -386,8 +386,8 @@ struct TodayView: View {
             Text("Recovery signals")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
-                if let load = model.latestLoad, load.day != model.today {
-                    Text("Fatigue and form are Intervals.icu's numbers from \(Format.shortDay(load.day)); it has not written today's yet.")
+                if model.latestLoad != nil {
+                    Text("Fatigue and form: where you start the day, before today's session.")
                 }
                 if !model.measuredSignals.isSufficientlyInformed {
                     Text("Few recovery signals today, so the prescription is conservative. Connect Apple Health or wear your watch to sleep for a sharper call.")

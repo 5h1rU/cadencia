@@ -136,7 +136,7 @@ public struct IntervalsClient: Sendable {
             "start_date_local": "\(session.day.iso)T00:00:00",
             "type": "Ride",
             "name": session.title,
-            "uid": "cadencia-\(session.id.uuidString.lowercased())",
+            "uid": PlanMirror.uid(for: session),
             "external_id": session.id.uuidString.lowercased(),
             "indoor": true,
         ]
