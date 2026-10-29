@@ -6,6 +6,9 @@ import CadenciaCore
 /// The coach's voice during a ride. Watches the engine once a second, asks the AI for one line at each
 /// moment `RideCommentary.Scheduler` allows, shows it as a caption and reads it aloud over whatever
 /// else is playing. One request in flight at a time; a line that arrives after its block ended is dropped.
+///
+/// Speech comes from OpenAI text-to-speech when an API key is configured (`OpenAISpeech`); otherwise, and
+/// whenever that call fails, from the best voice installed on the phone for the athlete's language.
 @MainActor
 @Observable
 final class RideCommentator {
@@ -15,28 +18,43 @@ final class RideCommentator {
         var at: Date
     }
 
+    /// OpenAI text-to-speech credentials. The ChatGPT plan sign-in cannot reach `/v1/audio/speech`.
+    struct OpenAISpeech: Sendable {
+        var transport: any HTTPTransport
+        var endpoint: URL
+        var apiKey: String
+        var voice: String
+    }
+
     private(set) var caption: Caption?
     private(set) var thinking = false
-    var voiceEnabled: Bool { didSet { if !voiceEnabled { synthesizer.stopSpeaking(at: .immediate) } } }
+    var voiceEnabled: Bool { didSet { if !voiceEnabled { silence() } } }
     var captionsEnabled: Bool
 
     private let coach: LLMCoach
     private let locale: String
+    private let openAISpeech: OpenAISpeech?
     private var scheduler = RideCommentary.Scheduler()
     private var inFlight: Task<Void, Never>?
+    private var speaking: Task<Void, Never>?
     /// The block the ride is in as of the last tick, so a late block-start line for a block that already ended is dropped.
     private var lastSeenStep: Int?
     private let synthesizer = AVSpeechSynthesizer()
-    /// Hands the audio session back (un-ducks the music) once a line has been spoken.
-    private let speechEnd = SpeechEnd()
+    private var player: AVAudioPlayer?
+    /// Hands the audio session back (un-ducks the music) once a line has been played.
+    private let playbackEnd = PlaybackEnd()
 
-    init(coach: LLMCoach, locale: String, voiceEnabled: Bool, captionsEnabled: Bool) {
+    init(coach: LLMCoach, locale: String, openAISpeech: OpenAISpeech?, voiceEnabled: Bool, captionsEnabled: Bool) {
         self.coach = coach
         self.locale = locale
+        self.openAISpeech = openAISpeech
         self.voiceEnabled = voiceEnabled
         self.captionsEnabled = captionsEnabled
-        synthesizer.delegate = speechEnd
+        synthesizer.delegate = playbackEnd
     }
+
+    /// Which engine will speak: the OpenAI voice name, or nil for the phone's voice.
+    var openAIVoice: String? { openAISpeech?.voice }
 
     /// Called by `RideSession` after every tick and once on finish.
     func observe(_ engine: RideEngine, live: BluetoothManager.Live) {
@@ -65,32 +83,77 @@ final class RideCommentator {
     func stop() {
         inFlight?.cancel()
         inFlight = nil
-        synthesizer.stopSpeaking(at: .immediate)
-        deactivateAudio()
+        silence()
     }
 
     private func deliver(_ line: RideCommentary.Line, moment: RideCommentary.Moment) {
         if captionsEnabled { caption = Caption(line: line, moment: moment, at: Date()) }
         guard voiceEnabled else { return }
-        speak(line.caption)
+        speaking?.cancel()
+        speaking = Task { [weak self] in
+            guard let self else { return }
+            if let openAISpeech, let data = await fetchSpeech(line.caption, with: openAISpeech), !Task.isCancelled {
+                play(data)
+            } else if !Task.isCancelled {
+                speakOnDevice(line.caption)
+            }
+        }
     }
 
-    private func speak(_ text: String) {
+    private func silence() {
+        speaking?.cancel()
+        speaking = nil
+        synthesizer.stopSpeaking(at: .immediate)
+        player?.stop()
+        player = nil
+        deactivateCoachAudio()
+    }
+
+    // MARK: OpenAI voice
+
+    private func fetchSpeech(_ text: String, with speech: OpenAISpeech) async -> Data? {
+        guard let request = CoachVoice.request(text: text, voice: speech.voice, locale: locale, endpoint: speech.endpoint, apiKey: speech.apiKey) else { return nil }
+        guard let response = try? await speech.transport.send(request), response.isSuccess, !response.body.isEmpty else { return nil }
+        return response.body
+    }
+
+    private func play(_ data: Data) {
+        guard activateAudio(), let player = try? AVAudioPlayer(data: data) else { speakOnDevice(nil); return }
+        player.delegate = playbackEnd
+        self.player = player
+        player.play()
+    }
+
+    // MARK: On-device voice
+
+    private func speakOnDevice(_ text: String?) {
+        guard let text, activateAudio() else { return }
         if synthesizer.isSpeaking { synthesizer.stopSpeaking(at: .word) }
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
-            try session.setActive(true)
-        } catch { return }
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: Self.voiceLanguage(for: locale))
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        utterance.voice = Self.bestVoice(for: locale)
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.06
+        utterance.pitchMultiplier = 1.05
         utterance.postUtteranceDelay = 0.2
         synthesizer.speak(utterance)
     }
 
-    private func deactivateAudio() {
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    /// The highest-quality installed voice for the language (premium > enhanced > compact), preferring the
+    /// region the phone is set to.
+    static func bestVoice(for code: String) -> AVSpeechSynthesisVoice? {
+        let language = voiceLanguage(for: code)
+        let prefix = String(language.prefix(2))
+        let candidates = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix(prefix) }
+        func rank(_ v: AVSpeechSynthesisVoice) -> Int {
+            var r = 0
+            switch v.quality {
+            case .premium: r += 20
+            case .enhanced: r += 10
+            default: break
+            }
+            if v.language == language { r += 5 }
+            return r
+        }
+        return candidates.max { rank($0) < rank($1) } ?? AVSpeechSynthesisVoice(language: language)
     }
 
     /// The system voice closest to the athlete's language; falls back to the current locale's identifier.
@@ -101,14 +164,28 @@ final class RideCommentator {
         default: return Locale.current.identifier
         }
     }
+
+    // MARK: Audio session
+
+    private func activateAudio() -> Bool {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
+            try session.setActive(true)
+            return true
+        } catch { return false }
+    }
+
 }
 
-/// Not main-actor bound: the synthesizer calls back on its own queue.
-private final class SpeechEnd: NSObject, AVSpeechSynthesizerDelegate {
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    }
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    }
+/// Hands the audio session back so the athlete's music comes up again.
+private func deactivateCoachAudio() {
+    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+}
+
+/// Not main-actor bound: the synthesizer and player call back on their own queues.
+private final class PlaybackEnd: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) { deactivateCoachAudio() }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) { deactivateCoachAudio() }
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) { deactivateCoachAudio() }
 }

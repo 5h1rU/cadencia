@@ -442,10 +442,28 @@ struct RidePreferencesView: View {
             Section {
                 Toggle("Coach voice", isOn: Binding(get: { model.state.settings.rideVoice }, set: { on in model.updateSettings { $0.rideVoice = on } }))
                 Toggle("Captions", isOn: Binding(get: { model.state.settings.rideCaptions }, set: { on in model.updateSettings { $0.rideCaptions = on } }))
+                if model.openAISpeech != nil {
+                    Picker("Voice", selection: Binding(get: { model.state.settings.coachVoice }, set: { v in model.updateSettings { $0.coachVoice = v } })) {
+                        ForEach(CoachVoice.options) { option in
+                            VStack(alignment: .leading) {
+                                Text(option.name)
+                                Text(LocalizedStringKey(option.note)).font(.caption).foregroundStyle(.secondary)
+                            }
+                            .tag(option.id)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                } else {
+                    LabeledContent("Voice", value: String(localized: "iPhone voice"))
+                }
             } header: {
                 Text("Coach during rides")
             } footer: {
-                Text("At the start of each block, halfway through long ones and at the finish, the coach reads your numbers and says what they mean. Spoken over your music; you can mute it from the ride screen.")
+                if model.openAISpeech != nil {
+                    Text("At the start of each block, halfway through long ones and at the finish, the coach reads your numbers and says what they mean. Spoken with an OpenAI voice over your music; you can mute it from the ride screen.")
+                } else {
+                    Text("At the start of each block, halfway through long ones and at the finish, the coach reads your numbers and says what they mean. The ChatGPT sign-in covers text only, so the phone's own voice speaks; add an OpenAI API key under Coach to unlock the OpenAI coach voices. For a better iPhone voice, download an enhanced one in Settings › Accessibility › Spoken Content › Voices.")
+                }
             }
             Section("Devices") {
                 ForEach(BluetoothManager.Role.allCases) { role in

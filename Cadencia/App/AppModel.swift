@@ -141,7 +141,16 @@ final class AppModel {
     func rideCommentator() async -> RideCommentator? {
         let settings = state.settings
         guard settings.rideVoice || settings.rideCaptions, let coach = await coachEngine() else { return nil }
-        return RideCommentator(coach: coach, locale: coachLocale, voiceEnabled: settings.rideVoice, captionsEnabled: settings.rideCaptions)
+        return RideCommentator(coach: coach, locale: coachLocale, openAISpeech: openAISpeech,
+                               voiceEnabled: settings.rideVoice, captionsEnabled: settings.rideCaptions)
+    }
+
+    /// OpenAI text-to-speech for the ride coach. Needs an API key: the ChatGPT plan sign-in only covers
+    /// `/v1/responses`, so without a key the phone's own voice speaks.
+    var openAISpeech: RideCommentator.OpenAISpeech? {
+        guard let key = keychain.readString(Self.llmKeyAccount), !key.isEmpty,
+              CoachVoice.speechURL(nextTo: state.settings.llmEndpoint) != nil else { return nil }
+        return RideCommentator.OpenAISpeech(transport: transport, endpoint: state.settings.llmEndpoint, apiKey: key, voice: state.settings.coachVoice)
     }
 
     // MARK: Lifecycle

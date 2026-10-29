@@ -239,4 +239,21 @@ final class RideCommentaryTests: XCTestCase {
         XCTAssertTrue((body["instructions"] as! String).contains("loudspeaker"))
         XCTAssertTrue(((body["input"] as! [[String: Any]])[0]["content"] as! String).contains("\"moment\":\"block_start\""))
     }
+
+    func testCoachVoiceSpeechURLSitsNextToTheChatEndpoint() throws {
+        XCTAssertEqual(CoachVoice.speechURL(nextTo: URL(string: "https://api.openai.com/v1/chat/completions")!)?.absoluteString,
+                       "https://api.openai.com/v1/audio/speech")
+        XCTAssertEqual(CoachVoice.speechURL(nextTo: URL(string: "https://proxy.example.com/openai/v1/chat/completions?x=1")!)?.absoluteString,
+                       "https://proxy.example.com/openai/v1/audio/speech")
+        XCTAssertNil(CoachVoice.speechURL(nextTo: URL(string: "https://llm.local/chat")!), "no /v1 → no TTS")
+
+        let r = try XCTUnwrap(CoachVoice.request(text: "Vamos, última serie.", voice: "ash", locale: "es",
+                                                 endpoint: URL(string: "https://api.openai.com/v1/chat/completions")!, apiKey: "k"))
+        XCTAssertEqual(r.headers["Authorization"], "Bearer k")
+        let body = try JSONSerialization.jsonObject(with: XCTUnwrap(r.body)) as! [String: Any]
+        XCTAssertEqual(body["model"] as? String, "gpt-4o-mini-tts")
+        XCTAssertEqual(body["voice"] as? String, "ash")
+        XCTAssertEqual(body["response_format"] as? String, "mp3")
+        XCTAssertTrue((body["instructions"] as! String).contains("Spanish"))
+    }
 }

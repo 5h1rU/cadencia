@@ -11,8 +11,6 @@ struct RideView: View {
 
     @State private var confirmEnd = false
     @State private var showProfile = false
-    @State private var captionShown = false
-    @State private var captionHide: Task<Void, Never>?
 
     private var engine: RideEngine { session.engine }
     private var live: BluetoothManager.Live { session.live }
@@ -28,7 +26,8 @@ struct RideView: View {
             blockCountdown
             upNext.padding(.top, 8)
             sparkline.padding(.top, 8)
-            controls.padding(.top, 12)
+            coachLine.padding(.top, 8)
+            controls.padding(.top, 10)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 4)
@@ -45,16 +44,6 @@ struct RideView: View {
         .onAppear { if engine.state == .ready { session.start() } }
         .onChange(of: engine.state) { _, state in
             if state == .finished { onFinish(session.finish()) }
-        }
-        .onChange(of: session.commentator?.caption) { _, caption in
-            guard caption != nil else { return }
-            captionHide?.cancel()
-            withAnimation(.spring(duration: 0.4)) { captionShown = true }
-            captionHide = Task {
-                try? await Task.sleep(for: .seconds(20))
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: 0.6)) { captionShown = false }
-            }
         }
         .sheet(isPresented: $showProfile) {
             NavigationStack {
@@ -123,12 +112,12 @@ struct RideView: View {
         let intensity: Double
     }
 
-    /// The workout cut into ~1-minute cells (20 s inside ramps so the slope shows), coloured by zone.
+    /// The workout cut into one-minute cells (two past 90 min), coloured by zone; ramps show as stairs.
     private var cells: [Cell] {
         var out: [Cell] = []
         var offset: TimeInterval = 0
+        let size: TimeInterval = engine.workout.totalDuration > 90 * 60 ? 120 : 60
         for (i, step) in engine.workout.steps.enumerated() {
-            let size: TimeInterval = step.isRamp ? 20 : 60
             let n = max(1, Int((step.duration / size).rounded(.up)))
             let d = step.duration / Double(n)
             for k in 0..<n {
@@ -170,7 +159,7 @@ struct RideView: View {
                 Spacer()
                 Text("\(Format.clock(engine.remainingTotal)) left")
             }
-            .font(.subheadline).foregroundStyle(.secondary)
+            .font(.footnote).foregroundStyle(.secondary)
         }
         .contentShape(Rectangle())
         .onTapGesture { showProfile = true }
@@ -182,16 +171,36 @@ struct RideView: View {
 
     // MARK: Target
 
+    /// The target with the intensity buttons either side of it, so changing the effort happens where you
+    /// read it. The band below shows where the live power sits against the zone.
     private var targetHero: some View {
         VStack(spacing: 0) {
-            Text("Target").font(.footnote.weight(.medium)).textCase(.uppercase).foregroundStyle(.secondary).tracking(1)
-            Text(engine.targetWatts.map { "\($0)" } ?? "–")
-                .font(.system(size: 92, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundStyle(.white)
-                .shadow(color: .white.opacity(0.25), radius: 12)
-                .contentTransition(.numericText())
-                .padding(.vertical, -10)
-            Text("W").font(.title3.weight(.semibold)).foregroundStyle(.secondary)
+            HStack(alignment: .center, spacing: 0) {
+                intensityButton("Easier", symbol: "minus", delta: -0.05, disabled: engine.intensityScale <= 0.8)
+                VStack(spacing: 0) {
+                    Text("Target").font(.footnote.weight(.medium)).textCase(.uppercase).foregroundStyle(.secondary).tracking(1)
+                    Text(engine.targetWatts.map { "\($0)" } ?? "–")
+                        .font(.system(size: 92, weight: .bold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .contentTransition(.numericText())
+                        .padding(.vertical, -10)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    HStack(spacing: 6) {
+                        Text("W").font(.title3.weight(.semibold)).foregroundStyle(.secondary)
+                        if engine.intensityScale != 1 {
+                            Text(String(format: "%+.0f %%", (engine.intensityScale - 1) * 100))
+                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                                .foregroundStyle(.orange)
+                                .padding(.horizontal, 8).padding(.vertical, 2)
+                                .background(Color.orange.opacity(0.18), in: Capsule())
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                intensityButton("Harder", symbol: "plus", delta: 0.05, disabled: engine.intensityScale >= 1.2)
+            }
+            .animation(.default, value: engine.intensityScale)
             toleranceBand.padding(.top, 10)
             HStack(spacing: 6) {
                 Text(zoneText).foregroundStyle(powerTint).fontWeight(.semibold)
@@ -214,13 +223,29 @@ struct RideView: View {
         .animation(.default, value: engine.targetWatts)
     }
 
+    private func intensityButton(_ title: LocalizedStringKey, symbol: String, delta: Double, disabled: Bool) -> some View {
+        VStack(spacing: 4) {
+            Button { session.adjustIntensity(by: delta) } label: {
+                Image(systemName: symbol)
+                    .font(.title2.weight(.semibold))
+                    .frame(width: 56, height: 56)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.circle)
+            .disabled(disabled)
+            Text(title).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(width: 72)
+    }
+
     private var tolerance: Double { RideCommentary.zoneTolerance }
 
     /// The band covers ±25 % of target; the green zone is ±10 %. The live marker is clamped to the band
-    /// so a wildly off number is still shown pinned at the edge. Under the band: the zone edges and the live value.
+    /// so a wildly off number is still shown pinned at the edge. Under the band: the zone edges in gray and
+    /// the live value in white under its marker.
     private var toleranceBand: some View {
         GeometryReader { geo in
-            // Precompute values as locals; avoid declaring functions inside ViewBuilder
+            // Locals only: a nested func inside a ViewBuilder does not compile.
             let target = Double(engine.targetWatts ?? 0)
             let lo = target * 0.75
             let hi = target * 1.25
@@ -228,40 +253,23 @@ struct RideView: View {
             let zoneHi = target * (1 + tolerance)
             let w = geo.size.width
             let bandH: CGFloat = 36
-            // Inline mapping from watts to x position
-            let xLo = hi > lo ? w * CGFloat((min(max(zoneLo, lo), hi) - lo) / (hi - lo)) : w / 2
-            let xHi = hi > lo ? w * CGFloat((min(max(zoneHi, lo), hi) - lo) / (hi - lo)) : w / 2
+            let span = hi - lo
+            let xLo: CGFloat = span > 0 ? w * CGFloat((zoneLo - lo) / span) : w / 2
+            let xHi: CGFloat = span > 0 ? w * CGFloat((zoneHi - lo) / span) : w / 2
             let liveWatts = live.watts
-            let xLive: CGFloat = {
-                guard let watts = liveWatts else { return hi > lo ? w * 0.5 : w / 2 }
-                if hi > lo {
-                    let clamped = min(max(Double(watts), lo), hi)
-                    return w * CGFloat((clamped - lo) / (hi - lo))
-                } else {
-                    return w / 2
-                }
-            }()
-
+            let xLive: CGFloat = span > 0 ? w * CGFloat((min(max(Double(liveWatts ?? 0), lo), hi) - lo) / span) : w / 2
             ZStack(alignment: .topLeading) {
                 Capsule().fill(Color(.secondarySystemBackground)).frame(height: bandH)
                 RoundedRectangle(cornerRadius: 4)
                     .fill(LinearGradient(colors: [.green.opacity(0.95), .green.opacity(0.7)], startPoint: .leading, endPoint: .trailing))
                     .frame(width: max(xHi - xLo, 6), height: bandH)
                     .offset(x: xLo)
-                HStack {
-                    Text("< \(Int(zoneLo.rounded()))").padding(.leading, 14)
-                    Spacer()
-                    Text("> \(Int(zoneHi.rounded()))").padding(.trailing, 14)
-                }
-                .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
-                .frame(height: bandH)
-                if let watts = liveWatts {
+                if liveWatts != nil {
                     Capsule().fill(.white)
                         .frame(width: 5, height: bandH + 10)
                         .shadow(color: .white.opacity(0.8), radius: 4)
                         .offset(x: xLive - 2.5, y: -5)
                 }
-                // Scale under the band: zone edges in gray, the live value in white under its marker.
                 ZStack(alignment: .topLeading) {
                     Text("\(Int(zoneLo.rounded()))").foregroundStyle(.secondary)
                         .frame(width: 60).offset(x: xLo - 30)
@@ -270,7 +278,7 @@ struct RideView: View {
                     if let watts = liveWatts {
                         Text("\(watts)").foregroundStyle(.white).fontWeight(.semibold)
                             .padding(.horizontal, 4).background(Color.black)
-                            .frame(width: 60).offset(x: xLive - 30)
+                            .frame(width: 60).offset(x: min(max(xLive - 30, -4), w - 56))
                     }
                 }
                 .font(.subheadline.monospacedDigit())
@@ -327,20 +335,24 @@ struct RideView: View {
             HStack(spacing: 12) {
                 Image(systemName: "chart.bar.fill").foregroundStyle(Color.accentColor).font(.title3)
                 Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 24)
-                if let i = engine.currentStepIndex, i + 1 < engine.workout.steps.count {
-                    let next = engine.workout.steps[i + 1]
-                    Text("Up next:").foregroundStyle(.secondary)
-                    Text(next.name).fontWeight(.semibold).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7).layoutPriority(1)
-                    Text("· \(stepWatts(next)) · \(Format.clock(next.duration))").foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
-                } else {
-                    Text("Last block").foregroundStyle(.secondary)
-                    Text("Finish strong").fontWeight(.semibold).foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 1) {
+                    if let i = engine.currentStepIndex, i + 1 < engine.workout.steps.count {
+                        let next = engine.workout.steps[i + 1]
+                        Text("Up next").font(.caption).foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            Text(next.name).fontWeight(.semibold).foregroundStyle(.white).lineLimit(1).layoutPriority(1)
+                            Text("· \(stepWatts(next)) · \(Format.clock(next.duration))").foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
+                        }
+                    } else {
+                        Text("Last block").font(.caption).foregroundStyle(.secondary)
+                        Text("Finish strong").fontWeight(.semibold).foregroundStyle(.white)
+                    }
                 }
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
             }
             .font(.subheadline)
-            .padding(.horizontal, 14).padding(.vertical, 12)
+            .padding(.horizontal, 14).padding(.vertical, 10)
             .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
         }
         .buttonStyle(.plain)
@@ -379,13 +391,7 @@ struct RideView: View {
                 Spacer()
                 Text(live.watts.map { "\($0) W" } ?? "–").font(.callout.weight(.semibold).monospacedDigit()).foregroundStyle(powerTint)
             }
-            ZStack(alignment: .bottom) {
-                powerChart
-                if captionShown, let caption = session.commentator?.caption, session.commentator?.captionsEnabled == true {
-                    coachSubtitle(caption)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-            }
+            powerChart
         }
     }
 
@@ -421,51 +427,48 @@ struct RideView: View {
         }
         .chartXScale(domain: -120...0)
         .chartYScale(domain: 0...yMax)
-        .chartXAxis {
-            AxisMarks(values: [-120, 0]) { value in
-                AxisValueLabel {
-                    if let v = value.as(Int.self) { Text(Format.clock(TimeInterval(-v))).font(.caption2).foregroundStyle(.secondary) }
-                }
-            }
-        }
+        .chartXAxis(.hidden)
         .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3])).foregroundStyle(.white.opacity(0.15))
-                AxisValueLabel().font(.caption2).foregroundStyle(.secondary)
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3])).foregroundStyle(.white.opacity(0.12))
+                AxisValueLabel().font(.caption2).foregroundStyle(.tertiary)
             }
         }
-        .frame(height: 80)
+        .frame(height: 72)
     }
 
     // MARK: Coach
 
-    /// Game-style subtitle: the coach's line over the chart, with its mood as icon and tint.
-    private func coachSubtitle(_ caption: RideCommentator.Caption) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: moodSymbol(caption.line.mood))
-                .foregroundStyle(moodTint(caption.line.mood))
-                .font(.title3)
-            Text(caption.line.caption)
-                .font(.callout.weight(.medium))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+    /// The coach's last line, in its own row so it never covers anything. Two lines at most.
+    @ViewBuilder private var coachLine: some View {
+        if let commentator = session.commentator, commentator.captionsEnabled {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: commentator.caption.map { moodSymbol($0.line.mood) } ?? "waveform")
+                    .foregroundStyle(commentator.caption.map { moodTint($0.line.mood) } ?? .secondary)
+                    .font(.title3)
+                    .frame(width: 24)
+                    .symbolEffect(.variableColor.iterative, isActive: commentator.thinking)
+                if let caption = commentator.caption {
+                    Text(caption.line.caption)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(2).minimumScaleFactor(0.85)
+                } else {
+                    Text("Coach").font(.subheadline).foregroundStyle(.tertiary)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(minHeight: 40)
+            .padding(.horizontal, 14).padding(.vertical, 6)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+            .animation(.default, value: commentator.caption)
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(moodTint(caption.line.mood).opacity(0.5), lineWidth: 1))
-        .padding(.bottom, 18)
-        .onTapGesture { withAnimation { captionShown = false } }
     }
 
     private func coachMenu(_ commentator: RideCommentator) -> some View {
         Menu {
             Toggle(isOn: Binding(get: { commentator.voiceEnabled }, set: { commentator.voiceEnabled = $0 })) { Label("Voice", systemImage: "speaker.wave.2") }
             Toggle(isOn: Binding(get: { commentator.captionsEnabled }, set: { commentator.captionsEnabled = $0 })) { Label("Captions", systemImage: "captions.bubble") }
-            if let caption = commentator.caption {
-                Divider()
-                Button { withAnimation { captionShown = true } } label: { Label(caption.line.caption, systemImage: "quote.bubble") }
-            }
         } label: {
             Image(systemName: commentator.thinking ? "waveform" : (commentator.voiceEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill"))
                 .symbolEffect(.variableColor.iterative, isActive: commentator.thinking)
@@ -494,32 +497,9 @@ struct RideView: View {
 
     // MARK: Controls
 
-    /// Two rows of equal pills like the concept, but each says what it does: Easier · intensity · Harder,
-    /// then Pause/Resume and End ride (asks first).
+    /// Pause/Resume and End ride (asks first). Intensity lives next to the target.
     private var controls: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                Button { session.adjustIntensity(by: -0.05) } label: {
-                    Label("Easier", systemImage: "minus").frame(maxWidth: .infinity)
-                }
-                .disabled(engine.intensityScale <= 0.8)
-                VStack(spacing: 0) {
-                    Text(String(format: "%.0f %%", engine.intensityScale * 100))
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(engine.intensityScale == 1 ? Color.white : .orange)
-                        .contentTransition(.numericText())
-                    Text("Intensity").font(.caption2).foregroundStyle(.secondary)
-                }
-                .frame(width: 76)
-                Button { session.adjustIntensity(by: 0.05) } label: {
-                    Label("Harder", systemImage: "plus").frame(maxWidth: .infinity)
-                }
-                .disabled(engine.intensityScale >= 1.2)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.large)
-            .animation(.default, value: engine.intensityScale)
-
             HStack(spacing: 12) {
                 if engine.state == .riding {
                     Button { session.pause() } label: { Label("Pause", systemImage: "pause.fill").frame(maxWidth: .infinity) }

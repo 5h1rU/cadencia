@@ -16,6 +16,8 @@ struct AppState: Codable, Equatable {
         var rideVoice = true
         /// The same lines shown as captions on the ride screen.
         var rideCaptions = true
+        /// OpenAI voice for the ride coach when an API key is configured; the ChatGPT plan path uses the phone's voice.
+        var coachVoice = CoachVoice.defaultVoice
 
         init() {}
 
@@ -33,6 +35,7 @@ struct AppState: Codable, Equatable {
             unitsMetric = try c.decodeIfPresent(Bool.self, forKey: .unitsMetric) ?? unitsMetric
             rideVoice = try c.decodeIfPresent(Bool.self, forKey: .rideVoice) ?? rideVoice
             rideCaptions = try c.decodeIfPresent(Bool.self, forKey: .rideCaptions) ?? rideCaptions
+            coachVoice = try c.decodeIfPresent(String.self, forKey: .coachVoice) ?? coachVoice
         }
     }
 

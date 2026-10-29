@@ -7,7 +7,7 @@ Native iOS cycling-training app that keeps **Intervals.icu as the system of reco
 - lets you plan around a goal or an event, but only keeps the coming week concrete; later weeks are intentions,
 - takes voice or text notes to the coach ("Saturday I have a 120 km group ride, Thursday only 45 minutes") and revises the week,
 - runs structured workouts on a smart trainer over Bluetooth (FTMS, ERG) with a heart-rate band and optional power meter, on a game-style HUD (live numbers, workout timeline with playhead, target band with the live marker, block countdown, what's next),
-- has the coach talk during the ride: at each block start, halfway through long blocks and at the finish, the live numbers (power vs target, HR, cadence, time in zone) go to the AI and its one-line verdict comes back as a caption and spoken aloud over your music (`RideCommentary` + `RideCommentator`; mutable per ride or in Settings),
+- has the coach talk during the ride: at each block start, halfway through long blocks and at the finish, the live numbers (power vs target, HR, cadence, time in zone) go to the AI and its one-line verdict comes back as a caption and spoken aloud over your music. With an OpenAI API key the voice is OpenAI TTS (`gpt-4o-mini-tts`, coach-style delivery, voice selectable in Settings); the ChatGPT plan sign-in only covers `/v1/responses`, so on that path the best installed iPhone voice speaks (`RideCommentary`, `CoachVoice`, `RideCommentator`),
 - saves the ride locally, uploads it to Intervals.icu exactly once, writes it to Apple Health, and pushes RPE/feel back,
 - estimates FTP from sustained efforts and asks before changing zones.
 

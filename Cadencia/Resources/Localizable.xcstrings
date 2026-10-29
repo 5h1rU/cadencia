@@ -3922,16 +3922,6 @@
         }
       }
     },
-    "Intensity": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Intensidad"
-          }
-        }
-      }
-    },
     "Coach voice": {
       "localizations": {
         "es": {
@@ -3948,26 +3938,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Coach durante el rodaje"
-          }
-        }
-      }
-    },
-    "At the start of each block, halfway through long ones and at the finish, the coach reads your numbers and says what they mean. Spoken over your music; you can mute it from the ride screen.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Al empezar cada bloque, a mitad de los largos y al terminar, el coach lee tus números y te dice qué significan. Se escucha sobre tu música; puedes silenciarlo desde la pantalla del rodaje."
-          }
-        }
-      }
-    },
-    "Up next:": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Siguiente:"
           }
         }
       }
@@ -3998,6 +3968,126 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ restante"
+          }
+        }
+      }
+    },
+    "Up next": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siguiente"
+          }
+        }
+      }
+    },
+    "iPhone voice": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voz del iPhone"
+          }
+        }
+      }
+    },
+    "Confident, warm, energetic": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Segura, cálida, enérgica"
+          }
+        }
+      }
+    },
+    "Natural, grounded": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Natural, serena"
+          }
+        }
+      }
+    },
+    "Natural, bright": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Natural, luminosa"
+          }
+        }
+      }
+    },
+    "Dynamic, expressive": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dinámica, expresiva"
+          }
+        }
+      }
+    },
+    "Warm, clear": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cálida, clara"
+          }
+        }
+      }
+    },
+    "Steady, direct": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Firme, directa"
+          }
+        }
+      }
+    },
+    "Calm, composed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tranquila, pausada"
+          }
+        }
+      }
+    },
+    "Deep, authoritative": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grave, con autoridad"
+          }
+        }
+      }
+    },
+    "At the start of each block, halfway through long ones and at the finish, the coach reads your numbers and says what they mean. Spoken with an OpenAI voice over your music; you can mute it from the ride screen.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al empezar cada bloque, a mitad de los largos y al terminar, el coach lee tus números y te dice qué significan. Habla con una voz de OpenAI sobre tu música; puedes silenciarlo desde la pantalla del rodaje."
+          }
+        }
+      }
+    },
+    "At the start of each block, halfway through long ones and at the finish, the coach reads your numbers and says what they mean. The ChatGPT sign-in covers text only, so the phone's own voice speaks; add an OpenAI API key under Coach to unlock the OpenAI coach voices. For a better iPhone voice, download an enhanced one in Settings › Accessibility › Spoken Content › Voices.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al empezar cada bloque, a mitad de los largos y al terminar, el coach lee tus números y te dice qué significan. El inicio de sesión con ChatGPT solo cubre texto, así que habla la voz del propio teléfono; añade una clave de API de OpenAI en Coach para desbloquear las voces de OpenAI. Para una mejor voz del iPhone, descarga una mejorada en Ajustes › Accesibilidad › Contenido hablado › Voces."
           }
         }
       }
