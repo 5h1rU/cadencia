@@ -99,7 +99,8 @@ public struct LLMCoach: Sendable {
     public enum CompletionError: Error, Equatable, Sendable {
         case transport(String)
         case httpStatus(Int)
-        case emptyResponse
+        /// The HTTP call succeeded but no usable text came back; the payload says what the stream ended with.
+        case emptyResponse(String)
         case unusableAnswer
     }
 
@@ -117,11 +118,15 @@ public struct LLMCoach: Sendable {
 
         let content: String?
         switch backend {
-        case .apiKey: content = Self.chatCompletionText(response.body)
+        case .apiKey:
+            content = Self.chatCompletionText(response.body)
+            if content == nil { throw CompletionError.emptyResponse("no choices in \(Self.excerpt(response.body))") }
         case .chatGPTPlan:
-            do { content = try Self.responsesText(sse: response.body) } catch let error as LLMCoachError { throw error } catch { content = nil }
+            do { content = try Self.responsesText(sse: response.body) }
+            catch let error as LLMCoachError { throw error }
+            catch let failure as ResponsesFailure { throw CompletionError.emptyResponse(failure.code) }
         }
-        guard let content, !content.isEmpty else { throw CompletionError.emptyResponse }
+        guard let content, !content.isEmpty else { throw CompletionError.emptyResponse("response.completed carried no text") }
         return content
     }
 
@@ -181,30 +186,64 @@ public struct LLMCoach: Sendable {
 
     /// Reassembles the model's text from a Responses SSE body. The body is read whole (the transport
     /// is not streaming); only `response.completed` counts as success, as the plan-usage docs require.
+    /// Every other ending is reported with what the stream actually said, so the athlete's "could not be
+    /// reached" notice names the cause instead of a bare "empty response".
     static func responsesText(sse data: Data) throws -> String {
         var deltas = ""
         var completedText: String?
+        var events = 0
+        var lastType = "none"
         for line in String(decoding: data, as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: true) {
             guard line.hasPrefix("data:") else { continue }
-            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespacesAndNewlines)
             guard payload != "[DONE]", let json = try? JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any] else { continue }
-            switch json["type"] as? String {
+            events += 1
+            let type = json["type"] as? String ?? "?"
+            lastType = type
+            switch type {
             case "response.output_text.delta":
                 deltas += json["delta"] as? String ?? ""
             case "response.completed":
-                let output = ((json["response"] as? [String: Any])?["output"] as? [[String: Any]]) ?? []
-                let texts = output.flatMap { ($0["content"] as? [[String: Any]]) ?? [] }.compactMap { $0["text"] as? String }
-                completedText = texts.isEmpty ? deltas : texts.joined()
+                completedText = outputText(json["response"] as? [String: Any]) ?? deltas
+            case "response.incomplete":
+                let details = (json["response"] as? [String: Any])?["incomplete_details"] as? [String: Any]
+                throw ResponsesFailure(code: "response.incomplete: \(details?["reason"] as? String ?? "unknown reason")")
             case "response.failed", "error":
                 let error = (json["response"] as? [String: Any])?["error"] as? [String: Any] ?? json["error"] as? [String: Any] ?? json
                 let code = error["code"] as? String
                 if let mapped = planError(code: code) { throw mapped }
-                throw ResponsesFailure(code: code ?? "unknown")
+                throw ResponsesFailure(code: [code, error["message"] as? String].compactMap { $0 }.joined(separator: ": ").nonEmpty ?? "unknown error")
             default: break
             }
         }
-        guard let completedText else { throw ResponsesFailure(code: "incomplete") }
-        return completedText
+        if let completedText { return completedText }
+        if events == 0 {
+            // Not a stream at all: a plain Responses object (stream ignored) or an error envelope.
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let text = outputText(json) { return text }
+                if let error = json["error"] as? [String: Any] {
+                    if let mapped = planError(code: error["code"] as? String) { throw mapped }
+                    throw ResponsesFailure(code: [error["code"] as? String, error["message"] as? String].compactMap { $0 }.joined(separator: ": "))
+                }
+            }
+            throw ResponsesFailure(code: "no stream events in \(excerpt(data))")
+        }
+        throw ResponsesFailure(code: "stream ended without response.completed after \(events) events (last: \(lastType))")
+    }
+
+    /// The assistant text of a Responses object: `output[].content[].text` of message items only.
+    static func outputText(_ response: [String: Any]?) -> String? {
+        let output = response?["output"] as? [[String: Any]] ?? []
+        let texts = output.filter { ($0["type"] as? String ?? "message") == "message" }
+            .flatMap { ($0["content"] as? [[String: Any]]) ?? [] }
+            .filter { ($0["type"] as? String ?? "output_text") == "output_text" }
+            .compactMap { $0["text"] as? String }
+        return texts.isEmpty ? nil : texts.joined()
+    }
+
+    static func excerpt(_ data: Data) -> String {
+        let text = String(decoding: data.prefix(160), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? "an empty body" : "“\(text)”"
     }
 
     struct ResponsesFailure: Error { var code: String }
@@ -270,4 +309,19 @@ public struct LLMCoach: Sendable {
         intent.goal = w.goal.flatMap(GoalKind.init(rawValue:))
         return intent
     }
+}
+
+extension LLMCoach.CompletionError: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .transport(let message): return message
+        case .httpStatus(let status): return "HTTP \(status)"
+        case .emptyResponse(let detail): return detail
+        case .unusableAnswer: return "the answer was not valid JSON"
+        }
+    }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
 }

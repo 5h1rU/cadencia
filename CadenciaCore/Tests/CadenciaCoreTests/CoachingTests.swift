@@ -378,7 +378,7 @@ final class ChatGPTPlanCoachTests: XCTestCase {
         XCTAssertEqual(intent.feeling, .heavy)
     }
 
-    func testUsageLimitSurfacesInsteadOfSilentFallback() async {
+    func testUsageLimitSurfacesInsteadOfSilentFallback() async throws {
         let failed = "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"subscription_sharing_usage_limit_exceeded\"}}}\n"
         let streamed = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(failed.utf8))])
         do {
@@ -397,7 +397,21 @@ final class ChatGPTPlanCoachTests: XCTestCase {
         do {
             _ = try await LLMCoach(transport: partial, backend: .chatGPTPlan(accessToken: "tok")).interpret("me siento fresco", context: context)
             XCTFail("expected an error")
-        } catch { XCTAssertEqual(error as? LLMCoach.CompletionError, .emptyResponse) }
+        } catch {
+            guard case .emptyResponse(let detail)? = error as? LLMCoach.CompletionError else { return XCTFail("\(error)") }
+            XCTAssertTrue(detail.contains("without response.completed"), detail)
+        }
+
+        // A stream cut short by the model reports the reason, and an error envelope its code.
+        let cut = FakeTransport(responses: [HTTPResponse(status: 200, body: Data("data: {\"type\":\"response.incomplete\",\"response\":{\"incomplete_details\":{\"reason\":\"max_output_tokens\"}}}\n".utf8))])
+        do {
+            _ = try await LLMCoach(transport: cut, backend: .chatGPTPlan(accessToken: "tok")).interpret("x", context: context)
+            XCTFail("expected an error")
+        } catch { XCTAssertEqual((error as? LLMCoach.CompletionError)?.description, "response.incomplete: max_output_tokens") }
+
+        // A plain (non-streamed) Responses object still yields its message text.
+        let plain = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"output":[{"type":"reasoning","summary":[]},{"type":"message","content":[{"type":"output_text","text":"{\"reply\":\"ok\",\"feeling\":\"fresh\"}"}]}]}"#.utf8))])
+        _ = try await LLMCoach(transport: plain, backend: .chatGPTPlan(accessToken: "tok")).interpret("x", context: context)
     }
 
     func testModelCatalogShapes() async throws {

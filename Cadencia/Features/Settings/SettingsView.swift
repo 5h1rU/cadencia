@@ -298,15 +298,17 @@ struct CoachSettingsView: View {
         } label: {
             HStack {
                 Spacer()
-                if signingIn { ProgressView().tint(.white) } else { Image(systemName: "bubble.left.and.text.bubble.right.fill") }
+                if signingIn { ProgressView().tint(Color(.systemBackground)) } else { Image(systemName: "bubble.left.and.text.bubble.right.fill") }
                 Text(title).fontWeight(.semibold)
                 Spacer()
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(Color(.systemBackground))
             .padding(.vertical, 6)
         }
+        // Black on white in light mode, white on black in dark: `.primary` flips with the appearance,
+        // so the button never disappears into a dark list background.
         .buttonStyle(.borderedProminent)
-        .tint(.black)
+        .tint(.primary)
         .disabled(signingIn)
         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
         .listRowBackground(Color.clear)

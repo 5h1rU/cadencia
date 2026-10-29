@@ -445,7 +445,7 @@ final class AppModel {
         } catch let error as DailyPrescription.ValidationError {
             coachNotice = String(localized: "The coach's answer failed a safety check (\(String(describing: error))). Ask again.")
         } catch let error as LLMCoach.CompletionError {
-            coachNotice = String(localized: "The coach could not be reached (\(String(describing: error))). Ask again.")
+            coachNotice = String(localized: "The coach could not be reached (\(error.description)). Ask again.")
         } catch {
             coachNotice = String(localized: "The coach could not be reached (\(error.localizedDescription)). Ask again.")
         }
