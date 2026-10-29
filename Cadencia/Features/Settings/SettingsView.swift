@@ -212,39 +212,17 @@ struct CoachSettingsView: View {
     @State private var key = ""
     @State private var endpoint = ""
     @State private var modelName = ""
+    @State private var signingIn = false
+    @State private var signInError: String?
+    @State private var planModels: [LLMCoach.Model] = []
+    @State private var confirmSignOut = false
 
     var body: some View {
+        @Bindable var model = model
         Form {
-            Section {
-                SecureField("API key", text: $key)
-                    .textContentType(.password)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                Picker("Model", selection: $modelName) {
-                    ForEach(AppConfig.llmModelPresets, id: \.id) { preset in
-                        VStack(alignment: .leading) {
-                            Text(preset.id)
-                            Text(preset.note).font(.caption).foregroundStyle(.secondary)
-                        }
-                        .tag(preset.id)
-                    }
-                    if !AppConfig.llmModelPresets.contains(where: { $0.id == modelName }) {
-                        Text(modelName).tag(modelName)
-                    }
-                }
-                .pickerStyle(.navigationLink)
-                TextField("Custom model id", text: $modelName)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                TextField("Endpoint", text: $endpoint)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-            } header: {
-                Text("Language model")
-            } footer: {
-                Text("Any OpenAI-compatible chat completions endpoint. The key is stored in the Keychain and only ever sent to this endpoint, together with today's readiness, your plan and your words. Leave the key empty to interpret on the phone only.")
-            }
+            chatGPTSection
+            modelSection
+            apiKeySection
             Section {
                 Button("Save") {
                     if key != Self.maskedKey { model.setLLMKey(key) }
@@ -254,7 +232,7 @@ struct CoachSettingsView: View {
                     }
                 }
             } footer: {
-                Text(model.state.settings.llmEnabled ? "Currently: \(model.state.settings.llmModel)" : "Currently: on-device interpretation")
+                Text(currentSource)
             }
         }
         .navigationTitle("Coach")
@@ -264,9 +242,180 @@ struct CoachSettingsView: View {
             modelName = model.state.settings.llmModel
             key = model.hasLLMKey ? Self.maskedKey : ""
         }
+        .task(id: model.chatGPT?.accessToken) { await loadPlanModels() }
+        .alert("Could not sign in", isPresented: Binding(get: { signInError != nil }, set: { if !$0 { signInError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(signInError ?? "") }
+        .sheet(isPresented: $model.showChatGPTWelcome) { ChatGPTWelcomeView() }
+        .confirmationDialog("Sign out of ChatGPT?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+            Button("Sign out", role: .destructive) { Task { await model.signOutChatGPT() } }
+        } message: {
+            Text("The coach goes back to your API key, or to on-device rules if there is none.")
+        }
+    }
+
+    // MARK: ChatGPT plan
+
+    @ViewBuilder private var chatGPTSection: some View {
+        if let account = model.chatGPT {
+            Section {
+                LabeledContent("Account", value: account.email ?? account.subject)
+                if account.planUsageEnabled {
+                    Label("Using ChatGPT plan", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                    Link(destination: ChatGPTAuth.usageSettingsURL) {
+                        Label("Manage usage", systemImage: "arrow.up.right.square")
+                    }
+                } else {
+                    Label("Plan usage not enabled", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                    signInButton("Enable ChatGPT plan usage", requestPlanUsage: true)
+                }
+                Button("Sign out of ChatGPT", role: .destructive) { confirmSignOut = true }
+            } header: {
+                Text("ChatGPT")
+            } footer: {
+                Text("Eligible coach requests count against your ChatGPT plan. Tokens live only in this phone's Keychain; nothing goes through a Cadencia server.")
+            }
+        } else {
+            Section {
+                signInButton("Continue with ChatGPT", requestPlanUsage: false)
+            } header: {
+                Text("Use your ChatGPT plan")
+            } footer: {
+                Text("Run the coach with usage included in your ChatGPT plan instead of paying per request with an API key. You sign in with OpenAI in a browser sheet; Cadencia never sees your password.")
+            }
+        }
+    }
+
+    private func signInButton(_ title: LocalizedStringKey, requestPlanUsage: Bool) -> some View {
+        Button {
+            signingIn = true
+            Task {
+                defer { signingIn = false }
+                do { try await model.signInWithChatGPT(requestPlanUsage: requestPlanUsage) }
+                catch ChatGPTSignIn.Failure.cancelled {}
+                catch { signInError = error.localizedDescription }
+            }
+        } label: {
+            HStack {
+                Spacer()
+                if signingIn { ProgressView().tint(.white) } else { Image(systemName: "bubble.left.and.text.bubble.right.fill") }
+                Text(title).fontWeight(.semibold)
+                Spacer()
+            }
+            .foregroundStyle(.white)
+            .padding(.vertical, 6)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.black)
+        .disabled(signingIn)
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .listRowBackground(Color.clear)
+    }
+
+    // MARK: Model
+
+    private var modelSection: some View {
+        Section {
+            Picker("Model", selection: $modelName) {
+                if model.coachSource == .chatGPTPlan, !planModels.isEmpty {
+                    ForEach(planModels) { m in
+                        VStack(alignment: .leading) {
+                            Text(m.name)
+                            Text(m.id).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .tag(m.id)
+                    }
+                    if !planModels.contains(where: { $0.id == modelName }) { Text(modelName).tag(modelName) }
+                } else {
+                    ForEach(AppConfig.llmModelPresets, id: \.id) { preset in
+                        VStack(alignment: .leading) {
+                            Text(preset.id)
+                            Text(preset.note).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .tag(preset.id)
+                    }
+                    if !AppConfig.llmModelPresets.contains(where: { $0.id == modelName }) { Text(modelName).tag(modelName) }
+                }
+            }
+            .pickerStyle(.navigationLink)
+            TextField("Custom model id", text: $modelName)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        } header: {
+            Text("Model")
+        } footer: {
+            if model.coachSource == .chatGPTPlan {
+                Text("Models listed here are the ones your ChatGPT plan can use.")
+            }
+        }
+    }
+
+    private func loadPlanModels() async {
+        guard model.coachSource == .chatGPTPlan else { planModels = []; return }
+        planModels = (try? await model.listCoachModels()) ?? []
+    }
+
+    // MARK: API key
+
+    private var apiKeySection: some View {
+        Section {
+            SecureField("API key", text: $key)
+                .textContentType(.password)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            TextField("Endpoint", text: $endpoint)
+                .keyboardType(.URL)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        } header: {
+            Text("API key (alternative)")
+        } footer: {
+            Text(model.chatGPT?.planUsageEnabled == true
+                 ? "Used only if you sign out of ChatGPT. Any OpenAI-compatible chat completions endpoint."
+                 : "Any OpenAI-compatible chat completions endpoint. The key is stored in the Keychain and only ever sent to this endpoint, together with today's readiness, your plan and your words. Leave it empty to interpret on the phone only.")
+        }
+    }
+
+    private var currentSource: String {
+        switch model.coachSource {
+        case .chatGPTPlan: return String(localized: "Currently: ChatGPT plan · \(model.state.settings.llmModel)")
+        case .apiKey: return String(localized: "Currently: API key · \(model.state.settings.llmModel)")
+        case .onDevice: return String(localized: "Currently: on-device interpretation")
+        }
     }
 
     private static let maskedKey = "••••••••"
+}
+
+/// Shown once after the first sign-in with plan usage, as OpenAI's guidelines ask.
+struct ChatGPTWelcomeView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(.primary)
+            Text("You're using your ChatGPT plan")
+                .font(.title2.bold())
+                .multilineTextAlignment(.center)
+            Text("Eligible coach requests in Cadencia use your ChatGPT plan. You can review and manage usage in ChatGPT settings at any time.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+            Link("Manage usage", destination: ChatGPTAuth.usageSettingsURL)
+                .font(.subheadline)
+            Spacer()
+            Button { dismiss() } label: {
+                Text("Got it").fontWeight(.semibold).frame(maxWidth: .infinity).padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .padding(24)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+    }
 }
 
 struct RidePreferencesView: View {

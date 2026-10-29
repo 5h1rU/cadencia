@@ -256,3 +256,347 @@ final class HeuristicCoachTests: XCTestCase {
         XCTAssertEqual(intent.goal, .climbing)
     }
 }
+
+final class ChatGPTPlanCoachTests: XCTestCase {
+    let context = CoachContext(today: Day(year: 2026, month: 10, day: 28))
+
+    func query(_ url: URL) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: (URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+    }
+
+    func testFirstRegistrationUsesDynamicClientAndAgentName() {
+        let a = ChatGPTAuth.Attempt(clientID: nil, hostID: "urn:uuid:h1", redirectURI: ChatGPTAuth.redirectURI(port: 1455))
+        let q = query(ChatGPTAuth().authorizationURL(a))
+        XCTAssertEqual(q["client_id"], "dynamic_agent_client")
+        XCTAssertEqual(q["agent_name_hint"], "Cadencia")
+        XCTAssertEqual(q["ext_agent_host_id"], "urn:uuid:h1")
+        XCTAssertEqual(q["redirect_uri"], "http://127.0.0.1:1455/auth/callback")
+        XCTAssertEqual(q["scope"], "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct")
+        XCTAssertEqual(q["resource"], "https://api.openai.com/v1")
+        XCTAssertEqual(q["code_challenge_method"], "S256")
+        XCTAssertEqual(q["code_challenge"], a.pkce.challenge)
+        XCTAssertNil(q["id_token_hint"])
+    }
+
+    func testReauthorizationUsesIssuedClientWithoutAgentName() {
+        let a = ChatGPTAuth.Attempt(clientID: "oaiapp_1", hostID: "urn:uuid:h1", redirectURI: ChatGPTAuth.redirectURI(port: 50000), idTokenHint: "x.y.z", loginHint: "a@b.c")
+        let q = query(ChatGPTAuth().authorizationURL(a))
+        XCTAssertEqual(q["client_id"], "oaiapp_1")
+        XCTAssertNil(q["agent_name_hint"])
+        XCTAssertEqual(q["id_token_hint"], "x.y.z")
+        XCTAssertEqual(q["login_hint"], "a@b.c")
+    }
+
+    func testCallbackRequiresIssuedClientIDOnRegistrationAndRejectsMismatch() throws {
+        let auth = ChatGPTAuth()
+        let fresh = ChatGPTAuth.Attempt(clientID: nil, hostID: "h", redirectURI: ChatGPTAuth.redirectURI(port: 1), state: "s1")
+        let ok = try auth.parseCallback(URL(string: "http://127.0.0.1:1/auth/callback?code=c&state=s1&client_id=oaiapp_9")!, for: fresh)
+        XCTAssertEqual(ok, .init(code: "c", clientID: "oaiapp_9"))
+        XCTAssertThrowsError(try auth.parseCallback(URL(string: "http://127.0.0.1:1/auth/callback?code=c&state=s1")!, for: fresh)) {
+            XCTAssertEqual($0 as? ChatGPTAuth.Failure, .missingClientID)
+        }
+        XCTAssertThrowsError(try auth.parseCallback(URL(string: "http://127.0.0.1:1/auth/callback?code=c&state=other&client_id=oaiapp_9")!, for: fresh)) {
+            XCTAssertEqual($0 as? ChatGPTAuth.Failure, .stateMismatch)
+        }
+        XCTAssertThrowsError(try auth.parseCallback(URL(string: "http://127.0.0.1:1/auth/callback?error=access_denied&state=s1")!, for: fresh)) {
+            XCTAssertEqual($0 as? ChatGPTAuth.Failure, .accessDenied)
+        }
+        let saved = ChatGPTAuth.Attempt(clientID: "oaiapp_1", hostID: "h", redirectURI: ChatGPTAuth.redirectURI(port: 1), state: "s2")
+        XCTAssertEqual(try auth.parseCallback(URL(string: "http://127.0.0.1:1/auth/callback?code=c&state=s2")!, for: saved).clientID, "oaiapp_1")
+        XCTAssertThrowsError(try auth.parseCallback(URL(string: "http://127.0.0.1:1/auth/callback?code=c&state=s2&client_id=oaiapp_2")!, for: saved)) {
+            XCTAssertEqual($0 as? ChatGPTAuth.Failure, .clientIDMismatch)
+        }
+    }
+
+    func jwt(_ claims: [String: Any]) -> String {
+        func b64(_ d: Data) -> String { d.base64EncodedString().replacingOccurrences(of: "=", with: "").replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_") }
+        return b64(Data(#"{"alg":"RS256"}"#.utf8)) + "." + b64(try! JSONSerialization.data(withJSONObject: claims)) + ".sig"
+    }
+
+    func testExchangeSendsPKCEAndResourceAndValidatesNonce() async throws {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let id = jwt(["iss": "https://auth.openai.com", "aud": "oaiapp_9", "sub": "user-1", "email": "f@x.io", "nonce": "n1", "exp": now.timeIntervalSince1970 + 600])
+        let body = #"{"access_token":"at","refresh_token":"rt","id_token":"\#(id)","token_type":"Bearer","expires_in":3600,"scope":"openid profile email offline_access resource.invoke chatgpt.tokens.use.direct"}"#
+        let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(body.utf8))])
+        let auth = ChatGPTAuth()
+        let attempt = ChatGPTAuth.Attempt(clientID: nil, hostID: "urn:uuid:h", redirectURI: ChatGPTAuth.redirectURI(port: 1455), state: "s", nonce: "n1")
+        let callback = ChatGPTAuth.Callback(code: "code1", clientID: "oaiapp_9")
+        let token = try await auth.exchange(callback, attempt: attempt, transport: t)
+        let form = String(decoding: t.requests[0].body!, as: UTF8.self)
+        XCTAssertEqual(t.requests[0].url, ChatGPTAuth.tokenURL)
+        XCTAssertTrue(form.contains("grant_type=authorization_code"))
+        XCTAssertTrue(form.contains("client_id=oaiapp_9"), "the issued id, never dynamic_agent_client")
+        XCTAssertTrue(form.contains("code_verifier=\(attempt.pkce.verifier)"))
+        XCTAssertTrue(form.contains("redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fauth%2Fcallback"))
+        XCTAssertTrue(form.contains("resource=https%3A%2F%2Fapi.openai.com%2Fv1"))
+        XCTAssertFalse(form.contains("client_secret"))
+
+        let credential = try auth.credential(from: token, callback: callback, attempt: attempt, now: now)
+        XCTAssertEqual(credential.subject, "user-1")
+        XCTAssertEqual(credential.email, "f@x.io")
+        XCTAssertTrue(credential.planUsageEnabled)
+        XCTAssertEqual(credential.expiresAt, now.addingTimeInterval(3600))
+
+        var wrongNonce = attempt; wrongNonce.nonce = "n2"
+        XCTAssertThrowsError(try auth.credential(from: token, callback: callback, attempt: wrongNonce, now: now))
+        XCTAssertThrowsError(try auth.credential(from: token, callback: .init(code: "c", clientID: "oaiapp_other"), attempt: attempt, now: now))
+    }
+
+    func testIdentityWithoutPlanScopeIsNotPlanUsage() {
+        let c = ChatGPTCredential(clientID: "x", hostID: "h", subject: "s", email: nil, idToken: "", accessToken: "a", refreshToken: nil,
+                                  expiresAt: Date(), scopes: ["openid", "email", "profile"])
+        XCTAssertFalse(c.planUsageEnabled)
+    }
+
+    func testRefreshRotatesTokensAndTerminalErrorsAreTyped() async throws {
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        let c = ChatGPTCredential(clientID: "oaiapp_9", hostID: "h", subject: "s", email: nil, idToken: "id", accessToken: "old", refreshToken: "r1",
+                                  expiresAt: now, scopes: ["chatgpt.tokens.use.direct"])
+        let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"access_token":"new","refresh_token":"r2","expires_in":3600}"#.utf8))])
+        let next = try await ChatGPTAuth().refresh(c, transport: t, now: now)
+        let form = String(decoding: t.requests[0].body!, as: UTF8.self)
+        XCTAssertTrue(form.contains("grant_type=refresh_token") && form.contains("refresh_token=r1") && form.contains("client_id=oaiapp_9"))
+        XCTAssertFalse(form.contains("scope="), "omit scope to retain the grant")
+        XCTAssertEqual(next.accessToken, "new")
+        XCTAssertEqual(next.refreshToken, "r2")
+        XCTAssertEqual(next.scopes, ["chatgpt.tokens.use.direct"], "scopes kept when the reply omits them")
+        XCTAssertFalse(next.needsRefresh(now: now))
+        XCTAssertTrue(next.needsRefresh(now: now.addingTimeInterval(3541)))
+
+        let dead = FakeTransport(responses: [HTTPResponse(status: 400, body: Data(#"{"error":"refresh_token_reused"}"#.utf8))])
+        do {
+            _ = try await ChatGPTAuth().refresh(c, transport: dead, now: now)
+            XCTFail("expected a terminal refresh error")
+        } catch ChatGPTAuth.Failure.refreshTokenUnusable {
+        }
+    }
+
+    func testPlanRequestUsesResponsesAPIContract() throws {
+        let coach = LLMCoach(transport: FakeTransport(), backend: .chatGPTPlan(accessToken: "tok"), model: "gpt-5.6-sol")
+        let req = try coach.request(utterance: "hola", context: context)
+        XCTAssertEqual(req.url, LLMCoach.responsesURL)
+        XCTAssertEqual(req.headers["Authorization"], "Bearer tok")
+        let body = try JSONSerialization.jsonObject(with: req.body!) as! [String: Any]
+        XCTAssertEqual(body["store"] as? Bool, false)
+        XCTAssertEqual(body["stream"] as? Bool, true)
+        XCTAssertNotNil(body["instructions"])
+        XCTAssertNil(body["temperature"])
+        XCTAssertNil(body["messages"], "chat-completions shape must not leak into the Responses route")
+        let input = body["input"] as! [[String: Any]]
+        XCTAssertEqual(input.map { $0["role"] as? String }, ["user"], "no system items: the route rejects them")
+    }
+
+    func testResponsesStreamIsParsedThroughCompletion() async throws {
+        let sse = """
+        event: response.created
+        data: {"type":"response.created","response":{"id":"r1"}}
+
+        event: response.output_text.delta
+        data: {"type":"response.output_text.delta","delta":"{\\"reply\\":\\"Vale\\","}
+
+        event: response.output_text.delta
+        data: {"type":"response.output_text.delta","delta":"\\"feeling\\":\\"heavy\\"}"}
+
+        event: response.completed
+        data: {"type":"response.completed","response":{"id":"r1","output":[{"type":"message","content":[{"type":"output_text","text":"{\\"reply\\":\\"Vale\\",\\"feeling\\":\\"heavy\\"}"}]}]}}
+
+        """
+        let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(sse.utf8))])
+        let coach = LLMCoach(transport: t, backend: .chatGPTPlan(accessToken: "tok"))
+        let intent = try await coach.interpret("piernas pesadas", context: context)
+        XCTAssertEqual(intent.reply, "Vale")
+        XCTAssertEqual(intent.feeling, .heavy)
+    }
+
+    func testUsageLimitSurfacesInsteadOfSilentFallback() async {
+        let failed = "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"subscription_sharing_usage_limit_exceeded\"}}}\n"
+        let streamed = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(failed.utf8))])
+        do {
+            _ = try await LLMCoach(transport: streamed, backend: .chatGPTPlan(accessToken: "tok")).interpret("x", context: context)
+            XCTFail("expected usage limit")
+        } catch { XCTAssertEqual(error as? LLMCoachError, .usageLimitReached) }
+
+        let rejected = FakeTransport(responses: [HTTPResponse(status: 429, body: Data(#"{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}"#.utf8))])
+        do {
+            _ = try await LLMCoach(transport: rejected, backend: .chatGPTPlan(accessToken: "tok")).interpret("x", context: context)
+            XCTFail("expected usage limit")
+        } catch { XCTAssertEqual(error as? LLMCoachError, .usageLimitReached) }
+
+        // An incomplete stream (no response.completed) is not an athlete-facing error: fall back.
+        let partial = FakeTransport(responses: [HTTPResponse(status: 200, body: Data("data: {\"type\":\"response.output_text.delta\",\"delta\":\"{\"}\n".utf8))])
+        let intent = try? await LLMCoach(transport: partial, backend: .chatGPTPlan(accessToken: "tok")).interpret("me siento fresco", context: context)
+        XCTAssertNotNil(intent)
+    }
+
+    func testModelCatalogShapes() async throws {
+        let plan = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"models":[{"slug":"gpt-6-astra","display_name":"GPT-6 Astra","visibility":"list"},{"slug":"hidden","display_name":"H","visibility":"hidden"}]}"#.utf8))])
+        let a = try await LLMCoach(transport: plan, backend: .chatGPTPlan(accessToken: "t")).listModels()
+        XCTAssertEqual(a.map(\.id), ["gpt-6-astra"])
+        XCTAssertEqual(a.first?.name, "GPT-6 Astra")
+        let api = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"data":[{"id":"gpt-5.6-sol"}]}"#.utf8))])
+        let b = try await LLMCoach(transport: api, backend: .apiKey(endpoint: URL(string: "https://x")!, key: "k")).listModels()
+        XCTAssertEqual(b.map(\.id), ["gpt-5.6-sol"])
+    }
+}
+
+final class AICoachTests: XCTestCase {
+    let today = Day(year: 2026, month: 10, day: 29)
+    let baseline = Readiness(level: .normal, score: 58,
+                             signals: [.init(name: "hrv", verdict: .typical, value: 61, baseline: 55...68, weight: 0)],
+                             missingData: ["sleep"], summary: "Within usual range.")
+
+    func parse(_ json: String, available: Int? = nil) throws -> DailyPrescription {
+        try DailyPrescription.parse(Data(json.utf8), baseline: baseline, today: today, availableMinutes: available, model: "m", now: Date(timeIntervalSince1970: 0))
+    }
+
+    func testValidAnswerBecomesTrainerReadyWorkoutAndKeepsBaselineSignals() throws {
+        let p = try parse("""
+        {"readiness":{"level":"strong","score":81,"headline":"Día para apretar","rationale":"HRV 66 ms, dormiste 8 h."},
+         "workout":{"name":"2×20 umbral","kind":"threshold","ceiling":1.05,"rationale":"Estás fresco.",
+                    "steps":[{"name":"Calentamiento","minutes":10,"from":0.5,"to":0.75},
+                             {"name":"Umbral","minutes":20,"intensity":0.98,"cadence":90},
+                             {"name":"Recuperación","minutes":5,"intensity":0.55},
+                             {"name":"Umbral","minutes":20,"intensity":0.98},
+                             {"name":"Vuelta a la calma","minutes":5,"from":0.6,"to":0.4}]},
+         "week":[{"day":"2026-10-29","kind":"threshold","minutes":60,"title":"2×20","note":"hoy"},
+                 {"day":"2026-10-30","kind":"recovery","minutes":45,"title":"Suave"},
+                 {"day":"2026-11-05","kind":"endurance","minutes":90,"title":"Z2"},
+                 {"day":"2026-11-06","kind":"rest","minutes":0,"title":"Fuera de la semana"},
+                 {"day":"2026-10-20","kind":"rest","minutes":0,"title":"Pasado"}],
+         "coachNote":"Buen momento para construir.","flags":["ftp_review"]}
+        """)
+        XCTAssertEqual(p.readiness.level, .strong)
+        XCTAssertEqual(p.readiness.score, 81)
+        XCTAssertEqual(p.readiness.summary, "Día para apretar HRV 66 ms, dormiste 8 h.")
+        XCTAssertEqual(p.readiness.signals, baseline.signals, "the model does not rewrite the measured signals")
+        XCTAssertEqual(p.readiness.missingData, ["sleep"])
+        XCTAssertEqual(p.workout.kind, .threshold)
+        XCTAssertEqual(p.workout.steps.count, 5)
+        XCTAssertEqual(p.workout.steps[0].startIntensity, 0.5)
+        XCTAssertEqual(p.workout.steps[0].endIntensity, 0.75)
+        XCTAssertTrue(p.workout.steps[0].isRamp)
+        XCTAssertEqual(p.workout.steps[1].duration, 1200)
+        XCTAssertEqual(p.workout.steps[1].cadenceRPM, 90)
+        XCTAssertEqual(p.workout.totalDuration, 3600)
+        XCTAssertEqual(p.workout.intensityCeiling, 1.05)
+        XCTAssertEqual(p.week.map(\.day.iso), ["2026-10-29", "2026-10-30", "2026-11-05"], "outlook is clipped to today…+7 days")
+        XCTAssertEqual(p.coachNote, "Buen momento para construir.")
+        XCTAssertEqual(p.flags, ["ftp_review"])
+        XCTAssertEqual(p.model, "m")
+    }
+
+    func testRestDayHasNoStepsAndZeroCeiling() throws {
+        let p = try parse(#"{"readiness":{"level":"rest"},"workout":{"name":"Descanso","kind":"rest","ceiling":0.6,"steps":[]},"coachNote":"Para."}"#)
+        XCTAssertEqual(p.readiness.score, 20, "a missing score takes the level's default")
+        XCTAssertEqual(p.readiness.summary, "Within usual range.", "no words from the model → keep the baseline's")
+        XCTAssertTrue(p.workout.steps.isEmpty)
+        XCTAssertEqual(p.workout.intensityCeiling, 0)
+    }
+
+    func testCeilingIsRaisedToTheHardestStepNeverBelowIt() throws {
+        let p = try parse(#"{"readiness":{"level":"normal"},"workout":{"name":"x","kind":"vo2max","ceiling":0.9,"steps":[{"name":"w","minutes":10,"intensity":0.6},{"name":"on","minutes":3,"intensity":1.2}]}}"#)
+        XCTAssertEqual(p.workout.intensityCeiling, 1.2)
+    }
+
+    func testUnsafeAnswersAreRejected() {
+        XCTAssertThrowsError(try parse(#"{"readiness":{"level":"meh"},"workout":{"name":"x","kind":"endurance","steps":[{"name":"a","minutes":10,"intensity":0.6}]}}"#)) {
+            XCTAssertEqual($0 as? DailyPrescription.ValidationError, .unknownReadiness("meh"))
+        }
+        XCTAssertThrowsError(try parse(#"{"readiness":{"level":"normal"},"workout":{"name":"x","kind":"yoga","steps":[{"name":"a","minutes":10,"intensity":0.6}]}}"#)) {
+            XCTAssertEqual($0 as? DailyPrescription.ValidationError, .unknownKind("yoga"))
+        }
+        XCTAssertThrowsError(try parse(#"{"readiness":{"level":"normal"},"workout":{"name":"x","kind":"endurance","steps":[]}}"#)) {
+            XCTAssertEqual($0 as? DailyPrescription.ValidationError, .noSteps)
+        }
+        // 2.0 × FTP in ERG mode is never something the trainer should receive; 20 % FTP on a work block is a mistake too.
+        XCTAssertThrowsError(try parse(#"{"readiness":{"level":"normal"},"workout":{"name":"x","kind":"vo2max","steps":[{"name":"a","minutes":3,"intensity":2.0}]}}"#))
+        XCTAssertThrowsError(try parse(#"{"readiness":{"level":"normal"},"workout":{"name":"x","kind":"recovery","steps":[{"name":"a","minutes":30,"intensity":0.2}]}}"#))
+        // The time limit is enforced with a small tolerance: 60 available → cap 71: 72 min fails, 71 passes.
+        XCTAssertThrowsError(try parse(#"{"readiness":{"level":"normal"},"workout":{"name":"x","kind":"endurance","steps":[{"name":"a","minutes":72,"intensity":0.65}]}}"#, available: 60)) {
+            XCTAssertEqual($0 as? DailyPrescription.ValidationError, .tooLong(72))
+        }
+        XCTAssertNoThrow(try parse(#"{"readiness":{"level":"normal"},"workout":{"name":"x","kind":"endurance","steps":[{"name":"a","minutes":71,"intensity":0.65}]}}"#, available: 60))
+        XCTAssertThrowsError(try parse(#"{"readiness":{"level":"normal"},"workout":{"name":"x","kind":"endurance","steps":[{"name":"a","minutes":10,"intensity":0.6}]},"week":[{"day":"next tuesday","kind":"rest"}]}"#)) {
+            XCTAssertEqual($0 as? DailyPrescription.ValidationError, .badDay("next tuesday"))
+        }
+    }
+
+    func brief(legs: SubjectiveFeedback.Legs? = nil, hrv: Double = 60, available: Int? = 75) -> CoachBrief {
+        let wellness = (0..<30).map { i in WellnessDay(day: today.adding(days: -i), hrvMs: i == 0 ? hrv : 58, restingHR: 48, sleepSeconds: 7 * 3600 + 1800, ctl: 60, atl: 70) }
+        let rides = (1...3).map { i in ActivitySummary(id: "a\(i)", name: "Ride \(i)", type: "Ride", startDateLocal: today.adding(days: -i).date(), movingTime: 3600, trainingLoad: 60, intensity: 72, isTrainer: true) }
+        let old = ActivitySummary(id: "old", name: "Old", type: "Ride", startDateLocal: today.adding(days: -40).date(), movingTime: 3600, isTrainer: false)
+        let plan = PlanBuilder().build(.init(goal: .ftp, startDay: today.adding(days: -14), endDay: today.adding(days: 42), availability: .typical))
+        let feedback: [Day: SubjectiveFeedback] = legs.map { [today: SubjectiveFeedback(day: today, legs: $0)] } ?? [:]
+        return CoachBrief(today: today, locale: "es", athlete: .init(ftp: 198, weightKg: 72),
+                          ftpEstimate: FTPEstimate(watts: 179, confidence: .moderate, sustainedEfforts: 0, basis: "20 min × 0.95", windowDays: 42),
+                          powerCurve: [.init(seconds: 300, watts: 240), .init(seconds: 1200, watts: 188), .init(seconds: 7, watts: 800)],
+                          wellness: wellness, feedback: feedback, activities: rides + [old], plan: plan, upcomingEvent: nil,
+                          availableMinutes: available, recentCoachNotes: [], baselineReadiness: baseline,
+                          baselineWorkout: Workout(name: "Endurance", kind: .endurance, steps: [WorkoutStep(name: "z2", duration: 3600, intensity: 0.65)]))
+    }
+
+    func testBriefIsWindowedCompactAndCarriesTheBaseline() throws {
+        let b = brief(legs: .heavy)
+        XCTAssertEqual(b.wellness.count, 29, "28 days back through today")
+        XCTAssertEqual(b.wellness.last?.day, today.iso)
+        XCTAssertEqual(b.wellness.last?.legs, "heavy")
+        XCTAssertEqual(b.wellness.last?.sleepH, 7.5)
+        XCTAssertEqual(b.wellness.last?.tsb, -10)
+        XCTAssertEqual(b.activities.map(\.name), ["Ride 3", "Ride 2", "Ride 1"], "oldest first, 40-day-old ride excluded")
+        XCTAssertEqual(b.activities.last?.ifx, 0.72)
+        XCTAssertEqual(b.powerCurve, ["5m": 240, "20m": 188], "only the standard durations")
+        XCTAssertEqual(b.ftpEstimate, "179 W (moderate confidence, 20 min × 0.95, 0 sustained efforts in 42 d)")
+        XCTAssertEqual(b.baseline.readinessLevel, "normal")
+        XCTAssertEqual(b.baseline.signals, ["hrv: typical (61.0, usual 55.0–68.0)"])
+        XCTAssertEqual(b.baseline.workoutMinutes, 60)
+        XCTAssertNotNil(b.plan?.phase)
+        XCTAssertFalse(b.plan!.next7Days.isEmpty)
+        XCTAssertTrue(b.plan!.next7Days.allSatisfy { Day(iso: $0.day)! >= today && Day(iso: $0.day)! <= today.adding(days: 7) })
+        let json = try AICoachPrompt.userMessage(b)
+        XCTAssertTrue(json.contains("\"ftp\":198"))
+        XCTAssertLessThan(json.count, 12_000, "the brief stays small enough to send on every refresh")
+    }
+
+    func testFingerprintChangesWithWhatShouldTriggerANewDecision() {
+        let base = brief()
+        XCTAssertEqual(base.fingerprint, brief().fingerprint, "same inputs → same key, no new call")
+        XCTAssertNotEqual(base.fingerprint, brief(legs: .heavy).fingerprint)
+        XCTAssertNotEqual(base.fingerprint, brief(hrv: 40).fingerprint)
+        XCTAssertNotEqual(base.fingerprint, brief(available: 45).fingerprint)
+    }
+
+    func testPrescribeSendsTheExpertPromptOnThePlanRouteAndRejectsUnsafeOutput() async throws {
+        let answer = #"{"readiness":{"level":"easy","score":40,"headline":"Suave hoy","rationale":"HRV 60 vs 58 habitual, piernas pesadas."},"workout":{"name":"Z2 corto","kind":"endurance","ceiling":0.7,"rationale":"Mantén el volumen.","steps":[{"name":"Calentamiento","minutes":10,"from":0.45,"to":0.6},{"name":"Z2","minutes":45,"intensity":0.65},{"name":"Vuelta a la calma","minutes":5,"from":0.55,"to":0.4}]},"week":[],"coachNote":"Mañana vemos.","flags":[]}"#
+        let sse = "data: {\"type\":\"response.output_text.delta\",\"delta\":\(try String(decoding: JSONEncoder().encode(answer), as: UTF8.self))}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"r\"}}\n\n"
+        let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(sse.utf8))])
+        let coach = LLMCoach(transport: t, backend: .chatGPTPlan(accessToken: "tok"), model: "gpt-6-astra")
+        let p = try await coach.prescribe(brief: brief(legs: .heavy), baseline: baseline)
+        XCTAssertEqual(p.readiness.level, .easy)
+        XCTAssertEqual(p.workout.totalDuration, 3600)
+        XCTAssertEqual(p.model, "gpt-6-astra")
+
+        let body = try JSONSerialization.jsonObject(with: t.requests[0].body!) as! [String: Any]
+        XCTAssertEqual(body["model"] as? String, "gpt-6-astra")
+        XCTAssertEqual(body["store"] as? Bool, false)
+        let instructions = body["instructions"] as! String
+        XCTAssertTrue(instructions.contains("expert road-cycling coach"))
+        XCTAssertTrue(instructions.contains("(es)"))
+        let input = body["input"] as! [[String: Any]]
+        XCTAssertTrue((input[0]["content"] as! String).contains("\"legs\":\"heavy\""))
+
+        // A 3-hour session when the athlete has 75 min is thrown away, not softened.
+        let long = #"{"readiness":{"level":"strong"},"workout":{"name":"x","kind":"longRide","steps":[{"name":"a","minutes":180,"intensity":0.65}]}}"#
+        let t2 = FakeTransport(responses: [HTTPResponse(status: 200, body: Data("data: {\"type\":\"response.output_text.delta\",\"delta\":\(try String(decoding: JSONEncoder().encode(long), as: UTF8.self))}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{}}\n\n".utf8))])
+        do {
+            _ = try await LLMCoach(transport: t2, backend: .chatGPTPlan(accessToken: "tok")).prescribe(brief: brief(), baseline: baseline)
+            XCTFail("expected rejection")
+        } catch { XCTAssertEqual(error as? DailyPrescription.ValidationError, .tooLong(180)) }
+
+        // Plan errors still surface as such so the UI can show "manage usage".
+        let t3 = FakeTransport(responses: [HTTPResponse(status: 429, body: Data(#"{"error":{"code":"subscription_sharing_usage_limit_exceeded"}}"#.utf8))])
+        do {
+            _ = try await LLMCoach(transport: t3, backend: .chatGPTPlan(accessToken: "tok")).prescribe(brief: brief(), baseline: baseline)
+            XCTFail("expected usage limit")
+        } catch { XCTAssertEqual(error as? LLMCoachError, .usageLimitReached) }
+    }
+}

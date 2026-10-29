@@ -637,7 +637,16 @@
     },
     "CTL": {},
     "Currently: %@": {},
-    "Currently: on-device interpretation": {},
+    "Currently: on-device interpretation": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora: interpretación en el dispositivo"
+          }
+        }
+      }
+    },
     "Data": {
       "localizations": {
         "es": {
@@ -2935,6 +2944,566 @@
           "stringUnit": {
             "state": "translated",
             "value": "Las rampas muestran vatios inicio→fin; el rodillo ajusta el objetivo cada segundo entre ambos."
+          }
+        }
+      }
+    },
+    "Could not sign in": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo iniciar sesión"
+          }
+        }
+      }
+    },
+    "Sign out of ChatGPT?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cerrar sesión de ChatGPT?"
+          }
+        }
+      }
+    },
+    "The coach goes back to your API key, or to on-device rules if there is none.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El coach vuelve a tu clave de API o, si no hay ninguna, a las reglas en el dispositivo."
+          }
+        }
+      }
+    },
+    "Using ChatGPT plan": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usando el plan de ChatGPT"
+          }
+        }
+      }
+    },
+    "Manage usage": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestionar uso"
+          }
+        }
+      }
+    },
+    "Plan usage not enabled": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uso del plan no activado"
+          }
+        }
+      }
+    },
+    "Enable ChatGPT plan usage": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar el uso del plan de ChatGPT"
+          }
+        }
+      }
+    },
+    "Sign out of ChatGPT": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar sesión de ChatGPT"
+          }
+        }
+      }
+    },
+    "ChatGPT": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ChatGPT"
+          }
+        }
+      }
+    },
+    "Eligible coach requests count against your ChatGPT plan. Tokens live only in this phone's Keychain; nothing goes through a Cadencia server.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las consultas al coach que cumplen los requisitos se descuentan de tu plan de ChatGPT. Los tokens viven solo en el llavero de este teléfono; nada pasa por un servidor de Cadencia."
+          }
+        }
+      }
+    },
+    "Continue with ChatGPT": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar con ChatGPT"
+          }
+        }
+      }
+    },
+    "Use your ChatGPT plan": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa tu plan de ChatGPT"
+          }
+        }
+      }
+    },
+    "Run the coach with usage included in your ChatGPT plan instead of paying per request with an API key. You sign in with OpenAI in a browser sheet; Cadencia never sees your password.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa el coach con el consumo incluido en tu plan de ChatGPT en vez de pagar por consulta con una clave de API. Inicias sesión con OpenAI en una hoja del navegador; Cadencia nunca ve tu contraseña."
+          }
+        }
+      }
+    },
+    "Models listed here are the ones your ChatGPT plan can use.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los modelos listados aquí son los que puede usar tu plan de ChatGPT."
+          }
+        }
+      }
+    },
+    "API key (alternative)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clave de API (alternativa)"
+          }
+        }
+      }
+    },
+    "Used only if you sign out of ChatGPT. Any OpenAI-compatible chat completions endpoint.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo se usa si cierras sesión de ChatGPT. Cualquier endpoint de chat completions compatible con OpenAI."
+          }
+        }
+      }
+    },
+    "Any OpenAI-compatible chat completions endpoint. The key is stored in the Keychain and only ever sent to this endpoint, together with today's readiness, your plan and your words. Leave it empty to interpret on the phone only.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cualquier endpoint de chat completions compatible con OpenAI. La clave se guarda en el llavero y solo se envía a este endpoint, junto con la disposición de hoy, tu plan y tus palabras. Déjala vacía para interpretar solo en el teléfono."
+          }
+        }
+      }
+    },
+    "Currently: ChatGPT plan · %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora: plan de ChatGPT · %@"
+          }
+        }
+      }
+    },
+    "Currently: API key · %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora: clave de API · %@"
+          }
+        }
+      }
+    },
+    "You're using your ChatGPT plan": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estás usando tu plan de ChatGPT"
+          }
+        }
+      }
+    },
+    "Eligible coach requests in Cadencia use your ChatGPT plan. You can review and manage usage in ChatGPT settings at any time.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las consultas al coach en Cadencia que cumplen los requisitos usan tu plan de ChatGPT. Puedes revisar y gestionar el uso en los ajustes de ChatGPT cuando quieras."
+          }
+        }
+      }
+    },
+    "Got it": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entendido"
+          }
+        }
+      }
+    },
+    "Using ChatGPT plan · %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usando el plan de ChatGPT · %@"
+          }
+        }
+      }
+    },
+    "Usage limit reached": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Límite de uso alcanzado"
+          }
+        }
+      }
+    },
+    "Sign in to ChatGPT again": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vuelve a iniciar sesión en ChatGPT"
+          }
+        }
+      }
+    },
+    "ChatGPT plan not available": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plan de ChatGPT no disponible"
+          }
+        }
+      }
+    },
+    "Your ChatGPT plan or this app's limit is used up for now. Review it in ChatGPT settings; meanwhile the coach answers without ChatGPT.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu plan de ChatGPT o el límite de esta app se ha agotado por ahora. Revísalo en los ajustes de ChatGPT; mientras tanto el coach responde sin ChatGPT."
+          }
+        }
+      }
+    },
+    "The saved sign-in no longer works. Until you sign in again the coach answers without ChatGPT.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sesión guardada ya no funciona. Hasta que vuelvas a iniciar sesión, el coach responde sin ChatGPT."
+          }
+        }
+      }
+    },
+    "This ChatGPT account can't share its plan with apps. Add an API key in Settings → Coach to keep using the language model.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta cuenta de ChatGPT no puede compartir su plan con apps. Añade una clave de API en Ajustes → Coach para seguir usando el modelo de lenguaje."
+          }
+        }
+      }
+    },
+    "Dismiss": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar"
+          }
+        }
+      }
+    },
+    "You've reached the usage limit of your ChatGPT plan for now. Check it under Manage usage, or wait for it to reset.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Has alcanzado por ahora el límite de uso de tu plan de ChatGPT. Revísalo en Gestionar uso o espera a que se reinicie."
+          }
+        }
+      }
+    },
+    "Your ChatGPT account can't share its plan with apps. You can use an API key instead in Settings → Coach.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu cuenta de ChatGPT no puede compartir su plan con apps. Puedes usar una clave de API en Ajustes → Coach."
+          }
+        }
+      }
+    },
+    "ChatGPT no longer accepts this sign-in. Sign in again in Settings → Coach.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ChatGPT ya no acepta esta sesión. Vuelve a iniciar sesión en Ajustes → Coach."
+          }
+        }
+      }
+    },
+    "Could not open the local sign-in callback.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo abrir la respuesta local de inicio de sesión."
+          }
+        }
+      }
+    },
+    "ChatGPT did not finish signing in. Try again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ChatGPT no terminó de iniciar sesión. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "Signed in to Cadencia": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión iniciada en Cadencia"
+          }
+        }
+      }
+    },
+    "Not found": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No encontrado"
+          }
+        }
+      }
+    },
+    "You can close this window and return to the app.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes cerrar esta ventana y volver a la app."
+          }
+        }
+      }
+    },
+    "You declined the ChatGPT sign-in.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechazaste el inicio de sesión de ChatGPT."
+          }
+        }
+      }
+    },
+    "The sign-in response did not match this request. Try again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La respuesta del inicio de sesión no coincide con esta solicitud. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "ChatGPT returned an identity token this app could not verify.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ChatGPT devolvió un token de identidad que esta app no pudo verificar."
+          }
+        }
+      }
+    },
+    "OpenAI rejected the sign-in (HTTP %lld).": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenAI rechazó el inicio de sesión (HTTP %lld)."
+          }
+        }
+      }
+    },
+    "The saved ChatGPT sign-in has expired. Sign in again.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sesión guardada de ChatGPT ha caducado. Vuelve a iniciar sesión."
+          }
+        }
+      }
+    },
+    "Coach is deciding…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El coach está decidiendo…"
+          }
+        }
+      }
+    },
+    "AI coach · %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coach IA · %@"
+          }
+        }
+      }
+    },
+    "On-device rules": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reglas en el dispositivo"
+          }
+        }
+      }
+    },
+    "Sign in with ChatGPT in Settings → Coach to have the AI coach decide your days.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicia sesión con ChatGPT en Ajustes → Coach para que el coach IA decida tus días."
+          }
+        }
+      }
+    },
+    "Ask the coach again": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preguntar al coach de nuevo"
+          }
+        }
+      }
+    },
+    "Decided %@ from your recovery, load, power and plan. The on-device rules checked every number before it reached the trainer.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decidido a las %@ a partir de tu recuperación, carga, potencia y plan. Las reglas del dispositivo comprobaron cada número antes de llegar al rodillo."
+          }
+        }
+      }
+    },
+    "The week ahead": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La semana que viene"
+          }
+        }
+      }
+    },
+    "Mirrored to your Intervals.icu calendar. Tell the coach about changes and it re-shapes the week.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reflejado en tu calendario de Intervals.icu. Cuéntale los cambios al coach y reorganiza la semana."
+          }
+        }
+      }
+    },
+    "The coach thinks your FTP needs a review.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El coach cree que tu FTP necesita una revisión."
+          }
+        }
+      }
+    },
+    "Signs of illness: the coach is holding back intensity.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Señales de enfermedad: el coach está frenando la intensidad."
+          }
+        }
+      }
+    },
+    "Load has ramped quickly: the coach is protecting recovery.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La carga ha subido rápido: el coach está protegiendo la recuperación."
+          }
+        }
+      }
+    },
+    "The coach's answer failed a safety check (%@). Showing the on-device plan instead.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La respuesta del coach no pasó una comprobación de seguridad (%@). Se muestra el plan del dispositivo."
+          }
+        }
+      }
+    },
+    "The coach could not be reached. Showing the on-device plan instead.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo contactar con el coach. Se muestra el plan del dispositivo."
           }
         }
       }

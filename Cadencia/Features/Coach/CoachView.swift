@@ -50,9 +50,13 @@ struct CoachView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Clear conversation", systemImage: "trash", role: .destructive) { model.clearCoachHistory() }
-                        if model.state.settings.llmEnabled {
+                        switch model.coachSource {
+                        case .chatGPTPlan:
+                            Label("Using ChatGPT plan · \(model.state.settings.llmModel)", systemImage: "sparkles")
+                            Link(destination: ChatGPTAuth.usageSettingsURL) { Label("Manage usage", systemImage: "arrow.up.right.square") }
+                        case .apiKey:
                             Label("Using \(model.state.settings.llmModel)", systemImage: "sparkles")
-                        } else {
+                        case .onDevice:
                             Label("On-device interpretation", systemImage: "iphone")
                         }
                     } label: { Image(systemName: "ellipsis.circle") }
@@ -64,6 +68,11 @@ struct CoachView: View {
 
     private var composer: some View {
         VStack(spacing: 8) {
+            if let issue = model.coachIssue {
+                CoachIssueBanner(issue: issue) { model.dismissCoachIssue() }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+            }
             if speech.isListening {
                 HStack(spacing: 8) {
                     Image(systemName: "waveform").symbolEffect(.variableColor.iterative, isActive: true).foregroundStyle(.red)
@@ -106,6 +115,69 @@ struct CoachView: View {
         draft = ""
         if speech.isListening { speech.stop() }
         Task { await model.sendToCoach(text) }
+    }
+}
+
+/// ChatGPT-plan states the athlete must act on. "Manage usage" is the primary action on a usage limit,
+/// as OpenAI's guidelines ask; a dead sign-in points to Settings → Coach.
+struct CoachIssueBanner: View {
+    @Environment(AppModel.self) private var model
+    let issue: AppModel.CoachIssue
+    let dismiss: () -> Void
+    @State private var signingIn = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbol).foregroundStyle(.orange).padding(.top, 2)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(detail).font(.footnote).foregroundStyle(.secondary)
+                HStack {
+                    switch issue {
+                    case .usageLimit:
+                        Link("Manage usage", destination: ChatGPTAuth.usageSettingsURL).buttonStyle(.borderedProminent).controlSize(.small)
+                    case .signInAgain:
+                        Button {
+                            signingIn = true
+                            Task { defer { signingIn = false }; try? await model.signInWithChatGPT() }
+                        } label: {
+                            if signingIn { ProgressView() } else { Text("Continue with ChatGPT") }
+                        }
+                        .buttonStyle(.borderedProminent).controlSize(.small).disabled(signingIn)
+                    case .notEligible:
+                        EmptyView()
+                    }
+                    Button("Dismiss", action: dismiss).controlSize(.small)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var symbol: String {
+        switch issue {
+        case .usageLimit: return "gauge.with.needle"
+        case .signInAgain: return "person.crop.circle.badge.exclamationmark"
+        case .notEligible: return "exclamationmark.triangle"
+        }
+    }
+
+    private var title: LocalizedStringKey {
+        switch issue {
+        case .usageLimit: return "Usage limit reached"
+        case .signInAgain: return "Sign in to ChatGPT again"
+        case .notEligible: return "ChatGPT plan not available"
+        }
+    }
+
+    private var detail: LocalizedStringKey {
+        switch issue {
+        case .usageLimit: return "Your ChatGPT plan or this app's limit is used up for now. Review it in ChatGPT settings; meanwhile the coach answers without ChatGPT."
+        case .signInAgain: return "The saved sign-in no longer works. Until you sign in again the coach answers without ChatGPT."
+        case .notEligible: return "This ChatGPT account can't share its plan with apps. Add an API key in Settings → Coach to keep using the language model."
+        }
     }
 }
 

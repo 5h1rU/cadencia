@@ -136,7 +136,7 @@ public struct DailyPrescriber: Sendable {
         }
     }
 
-    static func name(for kind: SessionKind) -> String {
+    public static func name(for kind: SessionKind) -> String {
         switch kind {
         case .rest: return "Rest day"
         case .recovery: return "Recovery spin"

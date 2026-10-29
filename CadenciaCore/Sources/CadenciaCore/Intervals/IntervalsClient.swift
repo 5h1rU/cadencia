@@ -216,23 +216,9 @@ public struct IntervalsOAuth: Sendable {
         self.scopes = scopes
     }
 
-    public struct PKCE: Sendable, Equatable {
-        public let verifier: String
-        public let challenge: String
-    }
+    public typealias PKCE = CadenciaCore.PKCE
 
-    /// Generates a 64-char verifier from the unreserved alphabet and its S256 challenge.
-    public static func makePKCE(randomBytes: [UInt8]? = nil) -> PKCE {
-        let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
-        let bytes = randomBytes ?? (0..<64).map { _ in UInt8.random(in: 0...255) }
-        let verifier = String(bytes.prefix(64).map { alphabet[Int($0) % alphabet.count] })
-        let digest = SHA256.hash(Array(verifier.utf8))
-        let challenge = Data(digest).base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-        return PKCE(verifier: verifier, challenge: challenge)
-    }
+    public static func makePKCE(randomBytes: [UInt8]? = nil) -> PKCE { PKCE.make(randomBytes: randomBytes) }
 
     public func authorizationURL(pkce: PKCE, state: String) -> URL {
         var c = URLComponents(url: Self.authorizeURL, resolvingAgainstBaseURL: false)!
