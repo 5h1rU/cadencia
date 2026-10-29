@@ -220,18 +220,34 @@ struct RideView: View {
     /// so a wildly off number is still shown pinned at the edge. Under the band: the zone edges and the live value.
     private var toleranceBand: some View {
         GeometryReader { geo in
+            // Precompute values as locals; avoid declaring functions inside ViewBuilder
             let target = Double(engine.targetWatts ?? 0)
-            let lo = target * 0.75, hi = target * 1.25
-            let zoneLo = target * (1 - tolerance), zoneHi = target * (1 + tolerance)
+            let lo = target * 0.75
+            let hi = target * 1.25
+            let zoneLo = target * (1 - tolerance)
+            let zoneHi = target * (1 + tolerance)
             let w = geo.size.width
-            func x(_ v: Double) -> CGFloat { hi > lo ? w * CGFloat((min(max(v, lo), hi) - lo) / (hi - lo)) : w / 2 }
             let bandH: CGFloat = 36
+            // Inline mapping from watts to x position
+            let xLo = hi > lo ? w * CGFloat((min(max(zoneLo, lo), hi) - lo) / (hi - lo)) : w / 2
+            let xHi = hi > lo ? w * CGFloat((min(max(zoneHi, lo), hi) - lo) / (hi - lo)) : w / 2
+            let liveWatts = live.watts
+            let xLive: CGFloat = {
+                guard let watts = liveWatts else { return hi > lo ? w * 0.5 : w / 2 }
+                if hi > lo {
+                    let clamped = min(max(Double(watts), lo), hi)
+                    return w * CGFloat((clamped - lo) / (hi - lo))
+                } else {
+                    return w / 2
+                }
+            }()
+
             ZStack(alignment: .topLeading) {
                 Capsule().fill(Color(.secondarySystemBackground)).frame(height: bandH)
                 RoundedRectangle(cornerRadius: 4)
                     .fill(LinearGradient(colors: [.green.opacity(0.95), .green.opacity(0.7)], startPoint: .leading, endPoint: .trailing))
-                    .frame(width: max(x(zoneHi) - x(zoneLo), 6), height: bandH)
-                    .offset(x: x(zoneLo))
+                    .frame(width: max(xHi - xLo, 6), height: bandH)
+                    .offset(x: xLo)
                 HStack {
                     Text("< \(Int(zoneLo.rounded()))").padding(.leading, 14)
                     Spacer()
@@ -239,22 +255,22 @@ struct RideView: View {
                 }
                 .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
                 .frame(height: bandH)
-                if let watts = live.watts {
+                if let watts = liveWatts {
                     Capsule().fill(.white)
                         .frame(width: 5, height: bandH + 10)
                         .shadow(color: .white.opacity(0.8), radius: 4)
-                        .offset(x: x(Double(watts)) - 2.5, y: -5)
+                        .offset(x: xLive - 2.5, y: -5)
                 }
                 // Scale under the band: zone edges in gray, the live value in white under its marker.
                 ZStack(alignment: .topLeading) {
                     Text("\(Int(zoneLo.rounded()))").foregroundStyle(.secondary)
-                        .frame(width: 60).offset(x: x(zoneLo) - 30)
+                        .frame(width: 60).offset(x: xLo - 30)
                     Text("\(Int(zoneHi.rounded()))").foregroundStyle(.secondary)
-                        .frame(width: 60).offset(x: x(zoneHi) - 30)
-                    if let watts = live.watts {
+                        .frame(width: 60).offset(x: xHi - 30)
+                    if let watts = liveWatts {
                         Text("\(watts)").foregroundStyle(.white).fontWeight(.semibold)
                             .padding(.horizontal, 4).background(Color.black)
-                            .frame(width: 60).offset(x: x(Double(watts)) - 30)
+                            .frame(width: 60).offset(x: xLive - 30)
                     }
                 }
                 .font(.subheadline.monospacedDigit())
