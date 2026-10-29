@@ -86,8 +86,26 @@ final class AppModel {
 
     var ftpProposal: Int? {
         guard let current = workingFTP, let estimate = state.ftpEstimate else { return nil }
-        guard let proposal = FTPEstimator().proposal(current: current, estimate: estimate) else { return nil }
+        let since = today.adding(days: -estimate.windowDays)
+        let recentEFTP = state.activities.filter { $0.isCycling && $0.day >= since }.compactMap(\.estimatedFTP).max()
+        guard let proposal = FTPEstimator().proposal(current: current, estimate: estimate, recentEFTP: recentEFTP) else { return nil }
         return proposal == state.dismissedFTPProposal ? nil : proposal
+    }
+
+    /// The coach's note at the top of Today: what the body says and why the session is what it is.
+    /// The AI coach's own words when it decided the day; otherwise the rules write it from the same facts.
+    var coachNote: String? {
+        guard let t = state.today, t.day == today else { return nil }
+        if let ai = t.ai {
+            return [ai.readiness.summary, ai.coachNote].filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        let since = today.adding(days: -7)
+        let facts = BriefingInput(today: today, locale: coachLocale, athleteName: state.athlete?.name,
+                                  readiness: t.readiness, feedback: state.feedback(for: today), workout: t.workout,
+                                  ftp: workingFTP ?? 200, planned: plannedToday,
+                                  recentActivities: state.activities.filter { $0.day >= since && $0.day < today },
+                                  phase: state.plan?.phase(for: today), event: upcomingEvent)
+        return RuleBriefing.compose(facts)
     }
 
     var pendingUploads: [UploadEntry] { state.ledger.pending(for: athleteID) }

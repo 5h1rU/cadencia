@@ -1,10 +1,13 @@
 import SwiftUI
 import CadenciaCore
 
+/// The home screen, read top to bottom like a coach's morning note: what your body says today,
+/// the session block by block, the signals behind the verdict, a quick check-in, and only then housekeeping.
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @State private var showDevices = false
     @State private var showFTPReview = false
+    @State private var editingCheckIn = false
 
     var body: some View {
         NavigationStack {
@@ -17,25 +20,13 @@ struct TodayView: View {
                     }
                 }
 
-                if let proposal = model.ftpProposal, let current = model.workingFTP {
-                    Section {
-                        Button { showFTPReview = true } label: {
-                            Label {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("FTP looks like \(proposal) W, not \(current) W")
-                                    Text("Review the evidence before zones change.").font(.footnote).foregroundStyle(.secondary)
-                                }
-                            } icon: { Image(systemName: "chart.line.uptrend.xyaxis") }
-                        }
-                    }
-                }
-
-                prescriptionSection
-                coachSection
-                if let week = model.state.today?.ai?.week, !week.isEmpty, model.todayWorkout != nil { weekSection(week) }
+                briefingSection
+                workoutSection
+                if let week = ai?.week, !week.isEmpty, model.todayWorkout != nil { weekSection(week) }
                 recoverySection
                 if let event = model.thisWeekEvent { eventSection(event) }
-                feelSection
+                checkInSection
+                ftpSection
             }
             .listStyle(.insetGrouped)
             .navigationTitle(Format.day(model.today))
@@ -55,94 +46,31 @@ struct TodayView: View {
         }
     }
 
-    // MARK: Sections
+    // MARK: Coach briefing
 
-    @ViewBuilder private var prescriptionSection: some View {
-        if let workout = model.todayWorkout, let readiness = model.readiness, let ftp = model.workingFTP {
-            Section {
-                NavigationLink { WorkoutDetailView(workout: workout, ftp: ftp) } label: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Label(readiness.level.title, systemImage: readiness.level.symbol)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(readiness.level.tint)
-                            Spacer()
-                            Text(Format.minutes(workout.totalDuration)).foregroundStyle(.secondary).font(.subheadline)
-                        }
-                        Text(workout.name).font(.title2.weight(.semibold))
-                        Text(workout.rationale).font(.subheadline).foregroundStyle(.secondary)
-                        WorkoutProfileView(workout: workout, ftp: ftp, compact: true).frame(height: 64).padding(.top, 4)
-                        HStack(spacing: 12) {
-                            ForEach(legend, id: \.0) { item in
-                                HStack(spacing: 4) {
-                                    Circle().fill(item.1).frame(width: 7, height: 7)
-                                    Text(item.0).font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        HStack(spacing: 16) {
-                            metric("Target", value: Format.watts(workout.targetWatts(ftp: ftp, at: mainBlockOffset(workout))))
-                            if let ceiling = workout.intensityCeiling {
-                                metric("Ceiling", value: Format.watts(Int((ceiling * Double(ftp)).rounded())))
-                            }
-                            metric("Load", value: "\(workout.estimatedLoad)")
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                if workout.kind != .rest {
-                    Button { showDevices = true } label: {
-                        Label("Start on trainer", systemImage: "play.fill").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                    .listRowBackground(Color.clear)
-                }
-            } header: {
-                HStack {
-                    Text("Today's session")
-                    Spacer()
-                    coachBadge
-                }
-            } footer: {
-                if !readiness.isSufficientlyInformed {
-                    Text("Few recovery signals today, so the prescription is conservative. Connect Apple Health or wear your watch to sleep for a sharper call.")
-                }
-            }
-        } else {
-            Section("Today's session") {
-                if model.workingFTP == nil {
-                    Label("Set an FTP in Intervals.icu to get prescriptions.", systemImage: "exclamationmark.circle")
-                } else {
-                    ProgressView("Preparing your day…")
-                }
-            }
-        }
-    }
+    private var ai: DailyPrescription? { model.state.today?.day == model.today ? model.state.today?.ai : nil }
 
-    /// Who decided today, shown in the session header: the model, or the on-device rules while it thinks or when it is off.
-    @ViewBuilder private var coachBadge: some View {
-        if model.coachThinking {
-            HStack(spacing: 4) { ProgressView().controlSize(.mini); Text("Coach is deciding…") }
-        } else if let ai = model.state.today?.ai, model.state.today?.day == model.today {
-            Label("AI coach · \(ai.model)", systemImage: "sparkles").labelStyle(.titleAndIcon)
-        } else {
-            Label("On-device rules", systemImage: "cpu")
-        }
-    }
-
-    /// The coach's words for today: the full note, any flags, and a way to ask again.
-    @ViewBuilder private var coachSection: some View {
-        if model.todayWorkout != nil, model.aiCoachAvailable || model.state.today?.ai != nil {
-            Section {
-                if let ai = model.state.today?.ai, model.state.today?.day == model.today {
-                    if !ai.coachNote.isEmpty {
-                        Label { Text(ai.coachNote) } icon: { Image(systemName: "quote.opening") }
+    @ViewBuilder private var briefingSection: some View {
+        Section {
+            if let readiness = model.readiness, let note = model.coachNote {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 6) {
+                        Image(systemName: readiness.level.symbol)
+                        Text(readiness.level.title)
+                        Spacer()
+                        coachBadge
                     }
-                    ForEach(ai.flags, id: \.self) { flag in
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(readiness.level.tint)
+                    Text(note)
+                        .font(.body)
+                        .lineSpacing(2)
+                    ForEach(ai?.flags ?? [], id: \.self) { flag in
                         Label(flagText(flag), systemImage: "flag").font(.footnote).foregroundStyle(.secondary)
                     }
-                } else if let notice = model.coachNotice {
+                }
+                .padding(.vertical, 6)
+                if let notice = model.coachNotice {
                     Label(notice, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.secondary)
                 } else if !model.aiCoachAvailable {
                     Label("Sign in with ChatGPT in Settings → Coach to have the AI coach decide your days.", systemImage: "sparkles")
@@ -156,13 +84,41 @@ struct TodayView: View {
                     }
                     .disabled(model.coachThinking)
                 }
-            } header: {
-                Text("Coach")
-            } footer: {
-                if let ai = model.state.today?.ai, model.state.today?.day == model.today {
-                    Text("Decided \(ai.generatedAt.formatted(date: .omitted, time: .shortened)) from your recovery, load, power and plan. The on-device rules checked every number before it reached the trainer.")
-                }
+            } else if model.workingFTP == nil {
+                Label("Set an FTP in Intervals.icu to get prescriptions.", systemImage: "exclamationmark.circle")
+            } else {
+                ProgressView("Preparing your day…")
             }
+        } header: {
+            Text("Your coach")
+        } footer: {
+            if let ai {
+                Text("Decided \(ai.generatedAt.formatted(date: .omitted, time: .shortened)) from your recovery, load, power and plan. The on-device rules checked every number before it reached the trainer.")
+            }
+        }
+    }
+
+    /// Who wrote the note: the model, or the on-device rules while it thinks or when it is off.
+    @ViewBuilder private var coachBadge: some View {
+        Group {
+            if model.coachThinking {
+                HStack(spacing: 4) { ProgressView().controlSize(.mini); Text("Coach is deciding…") }
+            } else if let ai {
+                Label("AI coach · \(ai.model)", systemImage: "sparkles")
+            } else {
+                Label("On-device rules", systemImage: "cpu")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+
+    private func flagText(_ flag: String) -> LocalizedStringKey {
+        switch flag {
+        case "ftp_review": return "The coach thinks your FTP needs a review."
+        case "illness", "sick": return "Signs of illness: the coach is holding back intensity."
+        case "overreaching": return "Load has ramped quickly: the coach is protecting recovery."
+        default: return LocalizedStringKey(flag.replacingOccurrences(of: "_", with: " "))
         }
     }
 
@@ -200,32 +156,142 @@ struct TodayView: View {
         }
     }
 
-    private func flagText(_ flag: String) -> LocalizedStringKey {
-        switch flag {
-        case "ftp_review": return "The coach thinks your FTP needs a review."
-        case "illness", "sick": return "Signs of illness: the coach is holding back intensity."
-        case "overreaching": return "Load has ramped quickly: the coach is protecting recovery."
-        default: return LocalizedStringKey(flag.replacingOccurrences(of: "_", with: " "))
+    // MARK: Workout
+
+    @ViewBuilder private var workoutSection: some View {
+        if let workout = model.todayWorkout, let ftp = model.workingFTP {
+            Section {
+                if workout.kind == .rest || workout.steps.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(workout.name).font(.title3.weight(.semibold))
+                        Text("No ride today.").foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 6)
+                } else {
+                    NavigationLink { WorkoutDetailView(workout: workout, ftp: ftp) } label: {
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(workout.name).font(.title3.weight(.semibold))
+                                Spacer()
+                                Text(Format.minutes(workout.totalDuration)).font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            VStack(spacing: 10) {
+                                ForEach(workout.outline) { row in outlineRow(row, workout: workout, ftp: ftp) }
+                            }
+                            Divider()
+                            HStack(spacing: 20) {
+                                metric("Target", value: Format.watts(workout.targetWatts(ftp: ftp, at: mainBlockOffset(workout))))
+                                if let ceiling = workout.intensityCeiling {
+                                    metric("Ceiling", value: Format.watts(Int((ceiling * Double(ftp)).rounded())))
+                                }
+                                metric("Load", value: "\(workout.estimatedLoad)")
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                    Button { showDevices = true } label: {
+                        Label("Start on trainer", systemImage: "play.fill").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                }
+            } header: {
+                Text("Today's workout")
+            }
         }
     }
+
+    private func outlineRow(_ row: Workout.OutlineRow, workout: Workout, ftp: Int) -> some View {
+        let mean = (row.work.startIntensity + row.work.endIntensity) / 2
+        return HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Zone.color(for: mean))
+                .frame(width: 4, height: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                if row.isSet {
+                    Text("\(row.repeats) × \(row.title)")
+                } else {
+                    Text(row.title)
+                }
+                HStack(spacing: 4) {
+                    Text(wattsText(row.work, workout: workout, ftp: ftp))
+                    Text("·")
+                    if let rest = row.rest {
+                        Text("\(Format.minutes(row.work.duration)) on, \(Format.minutes(rest.duration)) easy")
+                    } else {
+                        Text(Zone.name(for: mean))
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(Format.minutes(row.totalDuration))
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func wattsText(_ step: WorkoutStep, workout: Workout, ftp: Int) -> String {
+        func watts(_ i: Double) -> Int {
+            let capped = workout.intensityCeiling.map { min(i, $0) } ?? i
+            return Int((capped * Double(ftp)).rounded())
+        }
+        return step.isRamp ? "\(watts(step.startIntensity))→\(watts(step.endIntensity)) W" : "\(watts(step.startIntensity)) W"
+    }
+
+    // MARK: Recovery signals
 
     private var recoverySection: some View {
         Section {
             NavigationLink { RecoveryView() } label: {
-                HStack(spacing: 16) {
-                    recoveryMetric("HRV", value: model.todayWellness?.hrvMs.map { String(format: "%.0f", $0) } ?? "–", unit: "ms", signal: signal("hrv"))
-                    recoveryMetric("Sleep", value: model.todayWellness?.sleepSeconds.map { Format.hours($0) } ?? "–", unit: "", signal: signal("sleep"))
-                    recoveryMetric("Fatigue", value: model.todayWellness?.atl.map { String(format: "%.0f", $0) } ?? "–", unit: "ATL", signal: signal("fatigue"))
-                    recoveryMetric("Form", value: model.todayWellness?.tsb.map { String(format: "%+.0f", $0) } ?? "–", unit: "TSB", signal: signal("form"))
+                VStack(spacing: 12) {
+                    signalRow("HRV", name: "hrv", missing: "No HRV today",
+                              value: model.todayWellness?.hrvMs.map { String(format: "%.0f ms", $0) })
+                    signalRow("Sleep", name: "sleep", missing: "No sleep data",
+                              value: model.todayWellness?.sleepSeconds.map { Format.hours($0) })
+                    signalRow("Resting HR", name: "restingHR", missing: "No resting HR",
+                              value: model.todayWellness?.restingHR.map { "\($0) bpm" })
+                    signalRow("Fatigue", name: "fatigue", missing: "No load data",
+                              value: model.todayWellness?.atl.map { String(format: "%.0f ATL", $0) })
+                    signalRow("Form", name: "form", missing: "No load data",
+                              value: model.todayWellness?.tsb.map { String(format: "%+.0f TSB", $0) })
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 6)
             }
         } header: {
-            Text("Recovery")
+            Text("Recovery signals")
         } footer: {
-            if let r = model.readiness { Text(r.summary) }
+            if let r = model.readiness, !r.isSufficientlyInformed {
+                Text("Few recovery signals today, so the prescription is conservative. Connect Apple Health or wear your watch to sleep for a sharper call.")
+            }
         }
     }
+
+    private func signalRow(_ title: LocalizedStringKey, name: String, missing: LocalizedStringKey, value: String?) -> some View {
+        let signal = model.readiness?.signals.first { $0.name == name }
+        let informed = value != nil && signal?.verdict != .missing
+        let tint: Color = informed ? (signal?.verdictTint ?? .secondary) : Color(.systemGray4)
+        return HStack(spacing: 10) {
+            Circle().fill(tint).frame(width: 8, height: 8)
+            Text(title)
+            Spacer()
+            if let value {
+                Text(value).font(.subheadline.monospacedDigit())
+                if let signal, signal.verdict != .missing {
+                    Text(signal.verdictText)
+                        .font(.caption)
+                        .foregroundStyle(signal.verdictTint)
+                        .frame(width: 86, alignment: .trailing)
+                }
+            } else {
+                Text(missing).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    // MARK: Event
 
     private func eventSection(_ event: TrainingEvent) -> some View {
         Section("This week") {
@@ -240,59 +306,89 @@ struct TodayView: View {
         }
     }
 
-    private var feelSection: some View {
+    // MARK: Check-in
+
+    private var feedback: SubjectiveFeedback? { model.state.feedback(for: model.today) }
+
+    @ViewBuilder private var checkInSection: some View {
         Section {
-            Picker("Legs", selection: Binding(
-                get: { model.state.feedback(for: model.today)?.legs },
-                set: { model.recordFeeling($0) }
-            )) {
-                Text("Fresh").tag(SubjectiveFeedback.Legs?.some(.fresh))
-                Text("OK").tag(SubjectiveFeedback.Legs?.some(.ok))
-                Text("Heavy").tag(SubjectiveFeedback.Legs?.some(.heavy))
+            if let legs = feedback?.legs, !editingCheckIn {
+                HStack {
+                    Label {
+                        if let m = feedback?.motivation {
+                            Text("Legs \(Text(legs.title)) · motivation \(m)/5")
+                        } else {
+                            Text("Legs \(Text(legs.title))")
+                        }
+                    } icon: {
+                        Image(systemName: "checkmark.circle").foregroundStyle(.green)
+                    }
+                    .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Change") { editingCheckIn = true }.font(.subheadline)
+                }
+            } else {
+                Picker("Legs", selection: Binding(
+                    get: { feedback?.legs },
+                    set: { model.recordFeeling($0, motivation: feedback?.motivation) }
+                )) {
+                    Text("Fresh").tag(SubjectiveFeedback.Legs?.some(.fresh))
+                    Text("OK").tag(SubjectiveFeedback.Legs?.some(.ok))
+                    Text("Heavy").tag(SubjectiveFeedback.Legs?.some(.heavy))
+                }
+                .pickerStyle(.segmented)
+                HStack {
+                    Text("Motivation")
+                    Spacer()
+                    HStack(spacing: 8) {
+                        ForEach(1...5, id: \.self) { n in
+                            Button {
+                                model.recordFeeling(feedback?.legs ?? .ok, motivation: n)
+                            } label: {
+                                Image(systemName: n <= (feedback?.motivation ?? 0) ? "circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(n <= (feedback?.motivation ?? 0) ? Color.accentColor : Color(.systemGray3))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                if feedback?.legs != nil {
+                    Button("Done") { editingCheckIn = false }.frame(maxWidth: .infinity)
+                }
             }
-            .pickerStyle(.segmented)
         } header: {
-            Text("How do you feel?")
+            Text("Check-in")
         } footer: {
-            Text("Your answer counts as one more signal. It can soften today's session, never harden it.")
+            Text("Your own words are one more signal for the coach. They can soften today's session, never harden it.")
+        }
+    }
+
+    // MARK: FTP
+
+    @ViewBuilder private var ftpSection: some View {
+        if let proposal = model.ftpProposal, let current = model.workingFTP {
+            Section {
+                Button { showFTPReview = true } label: {
+                    HStack {
+                        Label("FTP estimate \(proposal) W, working \(current) W", systemImage: "chart.line.uptrend.xyaxis")
+                        Spacer()
+                        Text("Review")
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
     // MARK: Helpers
-
-    private func signal(_ name: String) -> Readiness.Signal? { model.readiness?.signals.first { $0.name == name } }
-
-    /// Zones present in today's workout, for the small legend under the profile.
-    private var legend: [(String, Color)] {
-        guard let workout = model.todayWorkout else { return [] }
-        var seen: [(String, Color)] = []
-        for step in workout.steps {
-            let i = (step.startIntensity + step.endIntensity) / 2
-            let name = Zone.shortName(for: i)
-            if !seen.contains(where: { $0.0 == name }) { seen.append((name, Zone.color(for: i))) }
-        }
-        return seen
-    }
 
     private func metric(_ title: LocalizedStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption).foregroundStyle(.secondary)
             Text(value).font(.headline.monospacedDigit())
         }
-    }
-
-    private func recoveryMetric(_ title: LocalizedStringKey, value: String, unit: String, signal: Readiness.Signal?) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(value).font(.headline.monospacedDigit())
-                if !unit.isEmpty { Text(unit).font(.caption2).foregroundStyle(.secondary) }
-            }
-            if let signal, signal.verdict != .missing {
-                Text(signal.verdictText).font(.caption2).foregroundStyle(signal.verdictTint)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The elapsed offset of the longest non-warmup block, used to show "the" target of the session.
@@ -305,6 +401,16 @@ struct TodayView: View {
             elapsed += step.duration
         }
         return best.offset
+    }
+}
+
+extension SubjectiveFeedback.Legs {
+    var title: LocalizedStringKey {
+        switch self {
+        case .fresh: return "fresh"
+        case .ok: return "OK"
+        case .heavy: return "heavy"
+        }
     }
 }
 

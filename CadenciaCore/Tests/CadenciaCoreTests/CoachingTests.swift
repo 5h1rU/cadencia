@@ -135,8 +135,100 @@ final class FTPEstimatorTests: XCTestCase {
         XCTAssertNil(e.proposal(current: 240, estimate: FTPEstimate(watts: 243, confidence: .high, sustainedEfforts: 5, basis: "", windowDays: 42)))
         XCTAssertEqual(e.proposal(current: 240, estimate: FTPEstimate(watts: 248, confidence: .moderate, sustainedEfforts: 3, basis: "", windowDays: 42)), 248)
         XCTAssertNil(e.proposal(current: 240, estimate: FTPEstimate(watts: 260, confidence: .low, sustainedEfforts: 1, basis: "", windowDays: 42)))
-        XCTAssertNil(e.proposal(current: 240, estimate: FTPEstimate(watts: 232, confidence: .high, sustainedEfforts: 5, basis: "", windowDays: 42)), "−3 % is inside the hysteresis")
-        XCTAssertEqual(e.proposal(current: 240, estimate: FTPEstimate(watts: 226, confidence: .high, sustainedEfforts: 5, basis: "", windowDays: 42)), 226)
+        XCTAssertNil(e.proposal(current: 240, estimate: FTPEstimate(watts: 232, confidence: .high, sustainedEfforts: 5, basis: "", windowDays: 42), recentEFTP: 220), "−3 % is inside the hysteresis")
+    }
+
+    func testDecreaseNeedsIntervalsEFTPToAgree() {
+        let low = FTPEstimate(watts: 226, confidence: .high, sustainedEfforts: 5, basis: "", windowDays: 42)
+        XCTAssertNil(e.proposal(current: 240, estimate: low), "a quiet six weeks is not evidence of a lower FTP")
+        XCTAssertNil(e.proposal(current: 240, estimate: low, recentEFTP: 236), "eFTP within 5 % keeps the working value")
+        XCTAssertEqual(e.proposal(current: 240, estimate: low, recentEFTP: 225), 226)
+    }
+}
+
+final class WorkoutOutlineTests: XCTestCase {
+    func testIntervalsCollapseIntoOneSetRow() {
+        let w = Workout(name: "Threshold", kind: .threshold, steps: DailyPrescriber.steps(kind: .threshold, minutes: 75))
+        let rows = w.outline
+        XCTAssertEqual(rows.map(\.title), ["Warm-up", "Threshold", "Cool-down"])
+        let set = rows[1]
+        XCTAssertEqual(set.repeats, 4)
+        XCTAssertEqual(set.rest?.name, "Recovery")
+        XCTAssertEqual(set.totalDuration, w.totalDuration - 25 * 60, accuracy: 1, "the set row owns every work and recovery step between warm-up and cool-down")
+        XCTAssertEqual(rows.reduce(0) { $0 + $1.totalDuration }, w.totalDuration, accuracy: 1)
+    }
+
+    func testSteadySessionKeepsThreeRows() {
+        let w = Workout(name: "Easy endurance", kind: .endurance, steps: DailyPrescriber.steps(kind: .endurance, minutes: 60))
+        XCTAssertEqual(w.outline.map(\.repeats), [1, 1, 1])
+        XCTAssertEqual(w.outline[1].title, "Steady endurance")
+    }
+
+    func testOpenersWithTrailingEasyAreOneSet() {
+        let w = Workout(name: "Opener", kind: .openerActivation, steps: DailyPrescriber.steps(kind: .openerActivation, minutes: 30))
+        // Warm-up, (Opener, Easy) × 3, Cool-down → the trailing Easy belongs to the set.
+        XCTAssertEqual(w.outline.map(\.title), ["Warm-up", "Opener", "Cool-down"])
+        XCTAssertEqual(w.outline[1].repeats, 3)
+        XCTAssertEqual(w.outline[1].totalDuration, 9 * 60, accuracy: 1)
+    }
+}
+
+final class RuleBriefingTests: XCTestCase {
+    let today = Day(year: 2026, month: 10, day: 29)
+
+    func history() -> [WellnessDay] {
+        (1...28).map { i in
+            let wobble = Double(i % 5) - 2
+            return WellnessDay(day: today.adding(days: -i), hrvMs: 50 + wobble * 2, restingHR: 48 + Int(wobble), sleepSeconds: 7 * 3600 + Int(wobble) * 600, ctl: 64, atl: 64)
+        }
+    }
+
+    func input(wellness: WellnessDay, feedback: SubjectiveFeedback? = nil, planned: PlannedSession? = nil) -> BriefingInput {
+        let readiness = ReadinessEngine().evaluate(today: wellness, history: history(), feedback: feedback)
+        let workout = DailyPrescriber().prescribe(.init(day: today, planned: planned, readiness: readiness, ftp: 198))
+        return BriefingInput(today: today, readiness: readiness, feedback: feedback, workout: workout, ftp: 198, planned: planned)
+    }
+
+    func testNormalDayWithoutHRVNamesTheGapAndTheSession() {
+        let text = RuleBriefing.compose(input(wellness: WellnessDay(day: today, sleepSeconds: Int(7.7 * 3600), ctl: 64, atl: 66)))
+        XCTAssertTrue(text.hasPrefix("Your body is in its normal range today:"), text)
+        XCTAssertTrue(text.contains("you slept 7.7 h"), text)
+        XCTAssertTrue(text.contains("form is neutral at −2"), text)
+        XCTAssertTrue(text.contains("No HRV or resting HR came in today, so I am leaning on sleep, form, and fatigue."), text)
+        XCTAssertTrue(text.contains("That makes today a normal training day: 1 h easy endurance at 129 W, never above 150 W."), text)
+        XCTAssertFalse(text.contains("usual 6.0–8.1 h, form"), "no run-on numbers list from the old summary")
+    }
+
+    func testEasyDayExplainsWhatMovedAndWhy() {
+        let planned = PlannedSession(day: today, kind: .threshold, title: "Threshold 4×8", targetMinutes: 75)
+        let text = RuleBriefing.compose(input(wellness: WellnessDay(day: today, hrvMs: 38, sleepSeconds: 5 * 3600, ctl: 64, atl: 66), planned: planned))
+        XCTAssertTrue(text.hasPrefix("Today asks for restraint: HRV is down at 38 ms against your usual"), text)
+        XCTAssertTrue(text.contains("you slept only 5.0 h, short of your usual"), text)
+        XCTAssertTrue(text.contains("So today stays easy:"), text)
+        XCTAssertTrue(text.contains("The week asked for threshold 4×8; I moved it rather than dropping it."), text)
+    }
+
+    func testHeavyLegsUseTheAthletesOwnWords() {
+        let fb = SubjectiveFeedback(day: today, legs: .heavy)
+        let text = RuleBriefing.compose(input(wellness: WellnessDay(day: today, hrvMs: 50, sleepSeconds: 7 * 3600, ctl: 64, atl: 64), feedback: fb))
+        XCTAssertTrue(text.contains("you told me your legs are heavy, and that counts more than any sensor"), text)
+        XCTAssertFalse(text.contains("your legs feel heavy"), text)
+    }
+
+    func testFactsSheetAndCacheKeyCoverWhatTheCoachMayCite() {
+        let planned = PlannedSession(day: today, kind: .endurance, title: "Endurance", targetMinutes: 60)
+        var i = input(wellness: WellnessDay(day: today, hrvMs: 50, sleepSeconds: 7 * 3600, ctl: 64, atl: 66), planned: planned)
+        i.event = TrainingEvent(name: "Gran Fondo Andes", day: today.adding(days: 47), priority: .a)
+        i.recentActivities = [ActivitySummary(id: "x", name: "Sweet spot", type: "VirtualRide", startDateLocal: today.adding(days: -2).date(), movingTime: 3600, trainingLoad: 70, intensity: 88)]
+        let sheet = i.factsSheet()
+        for expected in ["Working FTP: 198 W", "Signal HRV: HRV 50 ms (usual", "Today's session: Easy endurance, 60 min", "main block 129 W", "ceiling 150 W",
+                         "Blocks: Warm-up 10 min", "kept as planned", "Last 7 days: 1 rides, 70 TSS", "Last hard ride: Sweet spot, 2 days ago, IF 0.88",
+                         "Next event: Gran Fondo Andes on \(today.adding(days: 47).iso), in 47 days, priority A"] {
+            XCTAssertTrue(sheet.contains(expected), "missing '\(expected)' in:\n\(sheet)")
+        }
+        let before = i.cacheKey
+        i.feedback = SubjectiveFeedback(day: today, legs: .heavy)
+        XCTAssertNotEqual(before, i.cacheKey, "the athlete's check-in must force a new briefing")
     }
 }
 

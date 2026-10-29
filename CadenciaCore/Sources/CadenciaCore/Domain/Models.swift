@@ -310,6 +310,53 @@ public struct Workout: Codable, Equatable, Sendable, Identifiable {
         }
         return nil
     }
+
+    /// One row per block as a rider reads a session: "Warm-up 10 min", "4 × Threshold 8 min, 4 min recovery".
+    /// Consecutive identical steps, with or without an identical recovery step between them, collapse into one row.
+    public struct OutlineRow: Equatable, Sendable, Identifiable {
+        public var id: UUID
+        public var title: String
+        public var repeats: Int
+        public var work: WorkoutStep
+        public var rest: WorkoutStep?
+        public var totalDuration: TimeInterval
+
+        public var isSet: Bool { repeats > 1 }
+    }
+
+    public var outline: [OutlineRow] {
+        func base(_ name: String) -> String {
+            var s = Substring(name)
+            while let last = s.last, last.isNumber { s = s.dropLast() }
+            return s.trimmingCharacters(in: .whitespaces)
+        }
+        func same(_ a: WorkoutStep, _ b: WorkoutStep) -> Bool {
+            base(a.name) == base(b.name) && abs(a.duration - b.duration) < 1
+                && abs(a.startIntensity - b.startIntensity) < 0.005 && abs(a.endIntensity - b.endIntensity) < 0.005
+        }
+        var rows: [OutlineRow] = []
+        var i = 0
+        while i < steps.count {
+            let work = steps[i]
+            // Work / rest / work … pattern.
+            if i + 2 < steps.count, same(steps[i + 2], work), steps[i + 1].startIntensity < work.startIntensity {
+                let rest = steps[i + 1]
+                var last = i
+                while last + 2 < steps.count, same(steps[last + 1], rest), same(steps[last + 2], work) { last += 2 }
+                var end = last
+                if end + 1 < steps.count, same(steps[end + 1], rest) { end += 1 }
+                let total = steps[i...end].reduce(0) { $0 + $1.duration }
+                rows.append(OutlineRow(id: work.id, title: base(work.name), repeats: (last - i) / 2 + 1, work: work, rest: rest, totalDuration: total))
+                i = end + 1
+                continue
+            }
+            var reps = 1
+            while i + reps < steps.count, same(steps[i + reps], work) { reps += 1 }
+            rows.append(OutlineRow(id: work.id, title: base(work.name), repeats: reps, work: work, rest: nil, totalDuration: work.duration * Double(reps)))
+            i += reps
+        }
+        return rows
+    }
 }
 
 // MARK: - Plan

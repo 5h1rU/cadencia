@@ -64,10 +64,15 @@ public struct FTPEstimator: Sendable {
 
     /// Decide whether to propose a working-FTP change. Only propose increases ≥ 2 % or decreases ≥ 5 %
     /// with at least moderate confidence; tiny changes just churn zones.
-    public func proposal(current: Int, estimate: FTPEstimate) -> Int? {
+    ///
+    /// A higher best effort is real evidence, so increases need nothing else. A lower curve only shows the
+    /// athlete has not gone all out lately (normal in a base block), so a decrease is proposed only when
+    /// Intervals' own per-ride eFTP over the same window (`recentEFTP`, the best of them) is also ≥ 5 % below.
+    public func proposal(current: Int, estimate: FTPEstimate, recentEFTP: Int? = nil) -> Int? {
         guard estimate.confidence != .low else { return nil }
-        let delta = Double(estimate.watts - current) / Double(max(current, 1))
-        if delta >= 0.02 || delta <= -0.05 { return estimate.watts }
+        func delta(_ watts: Int) -> Double { Double(watts - current) / Double(max(current, 1)) }
+        if delta(estimate.watts) >= 0.02 { return estimate.watts }
+        if delta(estimate.watts) <= -0.05, let recentEFTP, delta(recentEFTP) <= -0.05 { return estimate.watts }
         return nil
     }
 }

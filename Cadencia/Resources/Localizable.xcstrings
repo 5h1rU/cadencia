@@ -979,16 +979,6 @@
         }
       }
     },
-    "FTP looks like %lld W, not %lld W": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El FTP parece %1$lld W, no %2$lld W"
-          }
-        }
-      }
-    },
     "FTP review": {},
     "Get ready": {
       "localizations": {
@@ -1116,16 +1106,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sostener potencia al final de rodadas largas"
-          }
-        }
-      }
-    },
-    "How do you feel?": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Cómo te sientes?"
           }
         }
       }
@@ -1968,16 +1948,6 @@
         }
       }
     },
-    "Review the evidence before zones change.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Revisa la evidencia antes de que cambien las zonas."
-          }
-        }
-      }
-    },
     "Ride": {
       "localizations": {
         "es": {
@@ -2411,16 +2381,6 @@
         }
       }
     },
-    "Today's session": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sesión de hoy"
-          }
-        }
-      }
-    },
     "Today's verdict: %@ · %lld/100": {
       "localizations": {
         "es": {
@@ -2754,16 +2714,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Puedes apagar ERG antes de cada rodada."
-          }
-        }
-      }
-    },
-    "Your answer counts as one more signal. It can soften today's session, never harden it.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tu respuesta cuenta como una señal más. Puede suavizar la sesión de hoy, nunca endurecerla."
           }
         }
       }
@@ -3504,6 +3454,196 @@
           "stringUnit": {
             "state": "translated",
             "value": "No se pudo contactar con el coach. Se muestra el plan del dispositivo."
+          }
+        }
+      }
+    },
+    "Your coach": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu coach"
+          }
+        }
+      }
+    },
+    "Today's workout": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión de hoy"
+          }
+        }
+      }
+    },
+    "Recovery signals": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Señales de recuperación"
+          }
+        }
+      }
+    },
+    "Check-in": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo estás?"
+          }
+        }
+      }
+    },
+    "No HRV today": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin HRV hoy"
+          }
+        }
+      }
+    },
+    "No sleep data": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin datos de sueño"
+          }
+        }
+      }
+    },
+    "No resting HR": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin FC en reposo"
+          }
+        }
+      }
+    },
+    "No load data": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin datos de carga"
+          }
+        }
+      }
+    },
+    "No ride today.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoy no hay salida."
+          }
+        }
+      }
+    },
+    "Change": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar"
+          }
+        }
+      }
+    },
+    "Review": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisar"
+          }
+        }
+      }
+    },
+    "%lld × %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld × %@"
+          }
+        }
+      }
+    },
+    "%@ on, %@ easy": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ de trabajo, %@ suave"
+          }
+        }
+      }
+    },
+    "Legs %@ · motivation %lld/5": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piernas %@ · motivación %lld/5"
+          }
+        }
+      }
+    },
+    "Legs %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piernas %@"
+          }
+        }
+      }
+    },
+    "FTP estimate %lld W, working %lld W": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FTP estimado %lld W, en uso %lld W"
+          }
+        }
+      }
+    },
+    "fresh": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "frescas"
+          }
+        }
+      }
+    },
+    "heavy": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pesadas"
+          }
+        }
+      }
+    },
+    "Your own words are one more signal for the coach. They can soften today's session, never harden it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que cuentas es una señal más para el coach. Puede suavizar la sesión de hoy, nunca endurecerla."
           }
         }
       }
