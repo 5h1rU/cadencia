@@ -167,8 +167,8 @@ final class RideCommentaryTests: XCTestCase {
         XCTAssertEqual(warmUp.avgWatts, 100)
         XCTAssertEqual(warmUp.avgHeartRate, 110)
         XCTAssertEqual(warmUp.targetWatts, 115, "midpoint of the 0.5→0.65 ramp at FTP 200")
-        // 100 W is within 5 % of the target only while the ramp target is ≤ 105 W: the first 60 samples.
-        XCTAssertEqual(warmUp.inZonePercent, 20)
+        // 100 W is within 10 % of the target only while the ramp target is ≤ 111 W: the first 120 samples.
+        XCTAssertEqual(warmUp.inZonePercent, 40)
 
         let threshold = RideCommentary.BlockStats.compute(index: 1, workout: workout, ftp: 200, samples: samples, upTo: 360)
         XCTAssertEqual(threshold.seconds, 60)

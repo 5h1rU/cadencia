@@ -42,6 +42,9 @@ public enum RideCommentary {
         }
     }
 
+    /// How far from the target a second still counts as "in zone": ±10 % (72–88 W on an 80 W target).
+    public static let zoneTolerance = 0.10
+
     /// What one block of the ride looked like, from the recorded samples.
     public struct BlockStats: Codable, Equatable, Sendable {
         public var index: Int
@@ -53,7 +56,7 @@ public enum RideCommentary {
         public var avgHeartRate: Int?
         public var maxHeartRate: Int?
         public var avgCadence: Int?
-        /// Share of samples within ±5 % of their own target, 0–100.
+        /// Share of samples within `zoneTolerance` of their own target, 0–100.
         public var inZonePercent: Int?
 
         /// Samples are one per second of riding time, so the block's samples are the slice at its offset.
@@ -69,7 +72,7 @@ public enum RideCommentary {
             let cadence = slice.compactMap(\.cadence)
             let judged = slice.compactMap { s -> Bool? in
                 guard let w = s.watts, let t = s.targetWatts, t > 0 else { return nil }
-                return abs(Double(w) / Double(t) - 1) <= 0.05
+                return abs(Double(w) / Double(t) - 1) <= RideCommentary.zoneTolerance
             }
             let midpoint = step.intensity(at: step.duration / 2)
             return BlockStats(index: index, name: step.name, seconds: hi - lo,

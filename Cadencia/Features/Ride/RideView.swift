@@ -1,32 +1,39 @@
 import SwiftUI
+import Charts
 import CadenciaCore
 
-/// Live ride, laid out like a game HUD: the numbers strip on top, the workout timeline, the target with
-/// a tolerance band and the live marker inside it, the block countdown, what comes next, and the coach's
-/// line. Built to be read in a glance from the saddle.
+/// Live ride as a game HUD (concept B): numbers strip, workout timeline with playhead, the target with a
+/// tolerance band and the live marker inside it, the block countdown, what's next, the last two minutes
+/// of power, and the controls. The coach's line appears as a subtitle over the chart and fades out.
 struct RideView: View {
     let session: RideSession
     let onFinish: (RideRecording) -> Void
 
     @State private var confirmEnd = false
+    @State private var showProfile = false
+    @State private var captionShown = false
+    @State private var captionHide: Task<Void, Never>?
 
     private var engine: RideEngine { session.engine }
     private var live: BluetoothManager.Live { session.live }
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 0) {
             hud
-            timeline
+            timeline.padding(.top, 12)
             Spacer(minLength: 0)
             targetHero
-            blockCountdown
-            upNext
-            coachLine
             Spacer(minLength: 0)
-            controls
+            Divider().padding(.vertical, 6)
+            blockCountdown
+            upNext.padding(.top, 8)
+            sparkline.padding(.top, 8)
+            controls.padding(.top, 12)
         }
-        .padding(.horizontal)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 4)
+        .background(Color.black.ignoresSafeArea())
+        .preferredColorScheme(.dark)
         .navigationTitle(engine.workout.name)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
@@ -38,6 +45,27 @@ struct RideView: View {
         .onAppear { if engine.state == .ready { session.start() } }
         .onChange(of: engine.state) { _, state in
             if state == .finished { onFinish(session.finish()) }
+        }
+        .onChange(of: session.commentator?.caption) { _, caption in
+            guard caption != nil else { return }
+            captionHide?.cancel()
+            withAnimation(.spring(duration: 0.4)) { captionShown = true }
+            captionHide = Task {
+                try? await Task.sleep(for: .seconds(20))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.6)) { captionShown = false }
+            }
+        }
+        .sheet(isPresented: $showProfile) {
+            NavigationStack {
+                WorkoutProfileView(workout: engine.workout, ftp: engine.ftp, ceilingWatts: engine.ceilingWatts)
+                    .frame(height: 220)
+                    .padding()
+                    .navigationTitle(engine.workout.name)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showProfile = false } } }
+            }
+            .presentationDetents([.medium])
         }
         .alert("Trainer disconnected", isPresented: Binding(get: { session.trainerLostAlert }, set: { _ in session.acknowledgeTrainerLoss() })) {
             Button("Wait for it") {}
@@ -58,66 +86,94 @@ struct RideView: View {
         HStack(spacing: 0) {
             hudCell("Power", live.watts.map { "\($0)" } ?? "–", unit: "W", tint: powerTint)
             hudDivider
-            hudCell("HR", live.heartRate.map { "\($0)" } ?? "–", unit: "bpm", tint: live.heartRate == nil ? .pink : .primary)
+            hudCell("HR", live.heartRate.map { "\($0)" } ?? "–", unit: "bpm", tint: live.heartRate == nil ? .pink : .white)
             hudDivider
-            hudCell("Cadence", live.cadence.map { "\($0)" } ?? "–", unit: "rpm", tint: .primary)
+            hudCell("Cadence", live.cadence.map { "\($0)" } ?? "–", unit: "rpm", tint: .white)
             hudDivider
-            hudCell("Time", Format.clock(engine.elapsed), unit: nil, tint: .primary)
+            hudCell("Time", Format.clock(engine.elapsed), unit: nil, tint: .white)
             hudDivider
-            hudCell("Left", Format.clock(engine.remainingTotal), unit: nil, tint: .primary)
+            hudCell("Left", Format.clock(engine.remainingTotal), unit: nil, tint: .white)
         }
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
     }
 
-    private var hudDivider: some View { Divider().frame(height: 36) }
+    private var hudDivider: some View { Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 40) }
 
     private func hudCell(_ title: LocalizedStringKey, _ value: String, unit: String?, tint: Color) -> some View {
-        VStack(spacing: 2) {
-            Text(title).font(.caption2).textCase(.uppercase).foregroundStyle(.secondary)
+        VStack(spacing: 3) {
+            Text(title).font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(.secondary).tracking(0.6)
             Text(value)
                 .font(.system(size: 26, weight: .semibold, design: .rounded).monospacedDigit())
                 .foregroundStyle(tint)
                 .contentTransition(.numericText())
                 .lineLimit(1).minimumScaleFactor(0.6)
-            Text(unit ?? " ").font(.caption2).foregroundStyle(.secondary)
+            Text(unit ?? " ").font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
     }
 
     // MARK: Timeline
 
-    /// The whole workout as one strip: each block's width is its share of the time, its height the
-    /// intensity, past blocks dimmed, with a playhead at the current second.
+    private struct Cell: Identifiable {
+        let id: Int
+        let step: Int
+        let start: TimeInterval
+        let duration: TimeInterval
+        let intensity: Double
+    }
+
+    /// The workout cut into ~1-minute cells (20 s inside ramps so the slope shows), coloured by zone.
+    private var cells: [Cell] {
+        var out: [Cell] = []
+        var offset: TimeInterval = 0
+        for (i, step) in engine.workout.steps.enumerated() {
+            let size: TimeInterval = step.isRamp ? 20 : 60
+            let n = max(1, Int((step.duration / size).rounded(.up)))
+            let d = step.duration / Double(n)
+            for k in 0..<n {
+                out.append(Cell(id: out.count, step: i, start: offset + Double(k) * d, duration: d, intensity: step.intensity(at: (Double(k) + 0.5) * d)))
+            }
+            offset += step.duration
+        }
+        return out
+    }
+
     private var timeline: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             GeometryReader { geo in
                 let total = max(engine.workout.totalDuration, 1)
-                let peak = max(engine.workout.steps.map { max($0.startIntensity, $0.endIntensity) }.max() ?? 1, 0.5)
+                let cells = cells
+                let peak = max(cells.map(\.intensity).max() ?? 1, 0.4)
+                let gap: CGFloat = 1.5
                 ZStack(alignment: .bottomLeading) {
-                    HStack(alignment: .bottom, spacing: 1) {
-                        ForEach(Array(engine.workout.steps.enumerated()), id: \.element.id) { i, step in
-                            let height = max(geo.size.height * CGFloat(step.intensity(at: step.duration / 2) / peak), 3)
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(i < (engine.currentStepIndex ?? engine.workout.steps.count) ? Color.secondary.opacity(0.35) : (i == engine.currentStepIndex ? Color.accentColor : Color.accentColor.opacity(0.55)))
-                                .frame(width: max(geo.size.width * CGFloat(step.duration / total) - 1, 2), height: height)
+                    HStack(alignment: .bottom, spacing: gap) {
+                        ForEach(cells) { cell in
+                            let past = cell.start + cell.duration <= engine.elapsed
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(past ? Color.white.opacity(0.28) : Zone.color(for: cell.intensity).opacity(cell.step == engine.currentStepIndex ? 1 : 0.75))
+                                .frame(width: max(geo.size.width * CGFloat(cell.duration / total) - gap, 1.5),
+                                       height: max(geo.size.height * CGFloat(cell.intensity / peak), 4))
                         }
                     }
-                    Rectangle()
+                    .frame(width: geo.size.width, alignment: .leading)
+                    Capsule()
                         .fill(.white)
-                        .frame(width: 2, height: geo.size.height)
-                        .shadow(color: .white.opacity(0.8), radius: 3)
-                        .offset(x: geo.size.width * CGFloat(engine.progress))
+                        .frame(width: 3, height: geo.size.height + 6)
+                        .shadow(color: .white.opacity(0.9), radius: 4)
+                        .offset(x: geo.size.width * CGFloat(engine.progress) - 1.5, y: 3)
                 }
             }
-            .frame(height: 22)
+            .frame(height: 26)
             HStack {
                 Text("Block \(blockNumber) of \(engine.workout.steps.count)")
                 Spacer()
-                Text(Format.percent(engine.progress))
+                Text("\(Format.clock(engine.remainingTotal)) left")
             }
-            .font(.footnote).foregroundStyle(.secondary)
+            .font(.subheadline).foregroundStyle(.secondary)
         }
+        .contentShape(Rectangle())
+        .onTapGesture { showProfile = true }
     }
 
     private var blockNumber: Int {
@@ -127,15 +183,16 @@ struct RideView: View {
     // MARK: Target
 
     private var targetHero: some View {
-        VStack(spacing: 8) {
-            Text("Target").font(.caption).textCase(.uppercase).foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(engine.targetWatts.map { "\($0)" } ?? "–")
-                    .font(.system(size: 96, weight: .bold, design: .rounded).monospacedDigit())
-                    .contentTransition(.numericText())
-                Text("W").font(.title2.weight(.semibold)).foregroundStyle(.secondary)
-            }
-            toleranceBand
+        VStack(spacing: 0) {
+            Text("Target").font(.footnote.weight(.medium)).textCase(.uppercase).foregroundStyle(.secondary).tracking(1)
+            Text(engine.targetWatts.map { "\($0)" } ?? "–")
+                .font(.system(size: 92, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(.white)
+                .shadow(color: .white.opacity(0.25), radius: 12)
+                .contentTransition(.numericText())
+                .padding(.vertical, -10)
+            Text("W").font(.title3.weight(.semibold)).foregroundStyle(.secondary)
+            toleranceBand.padding(.top, 10)
             HStack(spacing: 6) {
                 Text(zoneText).foregroundStyle(powerTint).fontWeight(.semibold)
                 if let inZone = inZonePercent {
@@ -152,38 +209,59 @@ struct RideView: View {
                 }
             }
             .font(.subheadline)
+            .padding(.top, 6)
         }
         .animation(.default, value: engine.targetWatts)
     }
 
-    /// ±5 % of the target is "in zone". The band spans ±25 % so a marker outside the green is still on screen.
+    private var tolerance: Double { RideCommentary.zoneTolerance }
+
+    /// The band covers ±25 % of target; the green zone is ±10 %. The live marker is clamped to the band
+    /// so a wildly off number is still shown pinned at the edge. Under the band: the zone edges and the live value.
     private var toleranceBand: some View {
         GeometryReader { geo in
             let target = Double(engine.targetWatts ?? 0)
             let lo = target * 0.75, hi = target * 1.25
-            func x(_ w: Double) -> CGFloat { hi > lo ? geo.size.width * CGFloat((min(max(w, lo), hi) - lo) / (hi - lo)) : 0 }
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color(.tertiarySystemFill))
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.green.opacity(0.75))
-                    .frame(width: max(x(target * 1.05) - x(target * 0.95), 4))
-                    .offset(x: x(target * 0.95))
-                if let w = live.watts {
-                    Capsule().fill(.white)
-                        .frame(width: 4, height: geo.size.height + 8)
-                        .shadow(color: .white.opacity(0.6), radius: 3)
-                        .offset(x: x(Double(w)) - 2)
-                }
+            let zoneLo = target * (1 - tolerance), zoneHi = target * (1 + tolerance)
+            let w = geo.size.width
+            func x(_ v: Double) -> CGFloat { hi > lo ? w * CGFloat((min(max(v, lo), hi) - lo) / (hi - lo)) : w / 2 }
+            let bandH: CGFloat = 36
+            ZStack(alignment: .topLeading) {
+                Capsule().fill(Color(.secondarySystemBackground)).frame(height: bandH)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(LinearGradient(colors: [.green.opacity(0.95), .green.opacity(0.7)], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: max(x(zoneHi) - x(zoneLo), 6), height: bandH)
+                    .offset(x: x(zoneLo))
                 HStack {
-                    Text("\(Int(target * 0.95))").padding(.leading, 8)
+                    Text("< \(Int(zoneLo.rounded()))").padding(.leading, 14)
                     Spacer()
-                    Text("\(Int(target * 1.05))").padding(.trailing, 8)
+                    Text("> \(Int(zoneHi.rounded()))").padding(.trailing, 14)
                 }
-                .font(.caption2.monospacedDigit()).foregroundStyle(.secondary)
+                .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                .frame(height: bandH)
+                if let watts = live.watts {
+                    Capsule().fill(.white)
+                        .frame(width: 5, height: bandH + 10)
+                        .shadow(color: .white.opacity(0.8), radius: 4)
+                        .offset(x: x(Double(watts)) - 2.5, y: -5)
+                }
+                // Scale under the band: zone edges in gray, the live value in white under its marker.
+                ZStack(alignment: .topLeading) {
+                    Text("\(Int(zoneLo.rounded()))").foregroundStyle(.secondary)
+                        .frame(width: 60).offset(x: x(zoneLo) - 30)
+                    Text("\(Int(zoneHi.rounded()))").foregroundStyle(.secondary)
+                        .frame(width: 60).offset(x: x(zoneHi) - 30)
+                    if let watts = live.watts {
+                        Text("\(watts)").foregroundStyle(.white).fontWeight(.semibold)
+                            .padding(.horizontal, 4).background(Color.black)
+                            .frame(width: 60).offset(x: x(Double(watts)) - 30)
+                    }
+                }
+                .font(.subheadline.monospacedDigit())
+                .offset(y: bandH + 6)
             }
         }
-        .frame(height: 24)
-        .padding(.horizontal, 8)
+        .frame(height: 36 + 6 + 18)
         .animation(.easeOut(duration: 0.4), value: live.watts)
     }
 
@@ -191,24 +269,24 @@ struct RideView: View {
         guard let w = live.watts, let t = engine.targetWatts, t > 0 else { return "No power" }
         if let c = engine.ceilingWatts, w > c + 10 { return "Over the ceiling" }
         let ratio = Double(w) / Double(t)
-        if ratio > 1.05 { return "Too hard" }
-        if ratio < 0.95 { return "Too easy" }
+        if ratio > 1 + tolerance { return "Too hard" }
+        if ratio < 1 - tolerance { return "Too easy" }
         return "In zone"
     }
 
-    /// Share of this block's seconds so far spent within ±5 % of target.
+    /// Share of this block's seconds so far spent inside the zone.
     private var inZonePercent: Int? {
         guard let i = engine.currentStepIndex, engine.elapsedInStep >= 10 else { return nil }
         return RideCommentary.BlockStats.compute(index: i, workout: engine.workout, ftp: engine.ftp, samples: engine.recording.samples, upTo: engine.elapsed).inZonePercent
     }
 
-    /// Green inside ±5 % of target, orange above, blue below. Red above the ceiling.
+    /// Green inside the zone, orange above, blue below. Red above the ceiling.
     private var powerTint: Color {
-        guard let w = live.watts, let t = engine.targetWatts, t > 0 else { return .primary }
+        guard let w = live.watts, let t = engine.targetWatts, t > 0 else { return .white }
         if let c = engine.ceilingWatts, w > c + 10 { return .red }
         let ratio = Double(w) / Double(t)
-        if ratio > 1.05 { return .orange }
-        if ratio < 0.95 { return .blue }
+        if ratio > 1 + tolerance { return .orange }
+        if ratio < 1 - tolerance { return .blue }
         return .green
     }
 
@@ -217,39 +295,39 @@ struct RideView: View {
     private var blockCountdown: some View {
         VStack(spacing: 2) {
             Text(Format.clock(engine.remainingInStep))
-                .font(.system(size: 56, weight: .semibold, design: .rounded).monospacedDigit())
+                .font(.system(size: 60, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(.white)
                 .contentTransition(.numericText())
             if let step = engine.currentStep {
                 Text("\(step.name) · \(stepWatts(step)) · \(Format.minutes(step.duration))")
                     .font(.subheadline).foregroundStyle(.secondary)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .lineLimit(1).minimumScaleFactor(0.7)
             }
         }
     }
 
-    @ViewBuilder private var upNext: some View {
-        if let i = engine.currentStepIndex, i + 1 < engine.workout.steps.count {
-            let next = engine.workout.steps[i + 1]
+    private var upNext: some View {
+        Button { showProfile = true } label: {
             HStack(spacing: 12) {
-                Image(systemName: "chart.bar.fill").foregroundStyle(Color.accentColor)
-                Text("Up next").foregroundStyle(.secondary)
-                Text(next.name).fontWeight(.semibold).lineLimit(1)
-                Spacer()
-                Text("\(stepWatts(next)) · \(Format.minutes(next.duration))").foregroundStyle(.secondary).monospacedDigit()
+                Image(systemName: "chart.bar.fill").foregroundStyle(Color.accentColor).font(.title3)
+                Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 24)
+                if let i = engine.currentStepIndex, i + 1 < engine.workout.steps.count {
+                    let next = engine.workout.steps[i + 1]
+                    Text("Up next:").foregroundStyle(.secondary)
+                    Text(next.name).fontWeight(.semibold).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.7).layoutPriority(1)
+                    Text("· \(stepWatts(next)) · \(Format.clock(next.duration))").foregroundStyle(.secondary).monospacedDigit().lineLimit(1)
+                } else {
+                    Text("Last block").foregroundStyle(.secondary)
+                    Text("Finish strong").fontWeight(.semibold).foregroundStyle(.white)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(.secondary)
             }
             .font(.subheadline)
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-        } else {
-            HStack(spacing: 12) {
-                Image(systemName: "flag.checkered")
-                Text("Last block").foregroundStyle(.secondary)
-                Spacer()
-            }
-            .font(.subheadline)
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
         }
+        .buttonStyle(.plain)
     }
 
     private func stepWatts(_ step: WorkoutStep) -> String {
@@ -261,40 +339,120 @@ struct RideView: View {
         return step.isRamp ? "\(watts(step.startIntensity))→\(watts(step.endIntensity)) W" : "\(watts(step.startIntensity)) W"
     }
 
+    // MARK: Sparkline
+
+    private struct Point: Identifiable {
+        let id: Int        // seconds ago, 0…120
+        let watts: Int
+        let target: Int?
+    }
+
+    /// The last two minutes of 1 Hz samples, x = seconds ago (120 → 0).
+    private var recent: [Point] {
+        let samples = engine.recording.samples.suffix(120)
+        let n = samples.count
+        return samples.enumerated().compactMap { k, s in
+            s.watts.map { Point(id: n - 1 - k, watts: $0, target: s.targetWatts) }
+        }
+    }
+
+    private var sparkline: some View {
+        VStack(spacing: 4) {
+            HStack {
+                Text("Power (last 2 min)").font(.caption.weight(.medium)).textCase(.uppercase).foregroundStyle(.secondary).tracking(0.6)
+                Spacer()
+                Text(live.watts.map { "\($0) W" } ?? "–").font(.callout.weight(.semibold).monospacedDigit()).foregroundStyle(powerTint)
+            }
+            ZStack(alignment: .bottom) {
+                powerChart
+                if captionShown, let caption = session.commentator?.caption, session.commentator?.captionsEnabled == true {
+                    coachSubtitle(caption)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+        }
+    }
+
+    private var yMax: Int {
+        let peak = engine.workout.steps.map { max($0.startIntensity, $0.endIntensity) }.max() ?? 1
+        let planned = Double(engine.ftp) * peak * engine.intensityScale
+        let seen = Double(recent.map(\.watts).max() ?? 0)
+        return Int((max(planned, seen, 100) * 1.15 / 20).rounded(.up)) * 20
+    }
+
+    private var powerChart: some View {
+        let points = recent
+        return Chart {
+            ForEach(points) { p in
+                AreaMark(x: .value("Ago", -p.id), y: .value("W", p.watts))
+                    .foregroundStyle(LinearGradient(colors: [.green.opacity(0.45), .green.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+                    .interpolationMethod(.monotone)
+                LineMark(x: .value("Ago", -p.id), y: .value("W", p.watts))
+                    .foregroundStyle(.green)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .interpolationMethod(.monotone)
+            }
+            if let target = engine.targetWatts {
+                RuleMark(y: .value("Target", target))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                    .foregroundStyle(.white.opacity(0.35))
+            }
+            if let last = points.last {
+                PointMark(x: .value("Ago", -last.id), y: .value("W", last.watts))
+                    .foregroundStyle(.green)
+                    .symbolSize(50)
+            }
+        }
+        .chartXScale(domain: -120...0)
+        .chartYScale(domain: 0...yMax)
+        .chartXAxis {
+            AxisMarks(values: [-120, 0]) { value in
+                AxisValueLabel {
+                    if let v = value.as(Int.self) { Text(Format.clock(TimeInterval(-v))).font(.caption2).foregroundStyle(.secondary) }
+                }
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3])).foregroundStyle(.white.opacity(0.15))
+                AxisValueLabel().font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+        .frame(height: 80)
+    }
+
     // MARK: Coach
 
-    @ViewBuilder private var coachLine: some View {
-        if let commentator = session.commentator, commentator.captionsEnabled {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: commentator.caption.map { moodSymbol($0.line.mood) } ?? "waveform")
-                    .foregroundStyle(commentator.caption.map { moodTint($0.line.mood) } ?? .secondary)
-                    .font(.title3)
-                    .frame(width: 24)
-                    .symbolEffect(.variableColor.iterative, isActive: commentator.thinking)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Coach").font(.caption).foregroundStyle(.secondary)
-                    if let caption = commentator.caption {
-                        Text(caption.line.caption).font(.callout).fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        Text(commentator.thinking ? "Reading your numbers…" : "Listening to your numbers.")
-                            .font(.callout).foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-            .animation(.default, value: commentator.caption)
+    /// Game-style subtitle: the coach's line over the chart, with its mood as icon and tint.
+    private func coachSubtitle(_ caption: RideCommentator.Caption) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: moodSymbol(caption.line.mood))
+                .foregroundStyle(moodTint(caption.line.mood))
+                .font(.title3)
+            Text(caption.line.caption)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(moodTint(caption.line.mood).opacity(0.5), lineWidth: 1))
+        .padding(.bottom, 18)
+        .onTapGesture { withAnimation { captionShown = false } }
     }
 
     private func coachMenu(_ commentator: RideCommentator) -> some View {
         Menu {
             Toggle(isOn: Binding(get: { commentator.voiceEnabled }, set: { commentator.voiceEnabled = $0 })) { Label("Voice", systemImage: "speaker.wave.2") }
             Toggle(isOn: Binding(get: { commentator.captionsEnabled }, set: { commentator.captionsEnabled = $0 })) { Label("Captions", systemImage: "captions.bubble") }
+            if let caption = commentator.caption {
+                Divider()
+                Button { withAnimation { captionShown = true } } label: { Label(caption.line.caption, systemImage: "quote.bubble") }
+            }
         } label: {
-            Image(systemName: commentator.voiceEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+            Image(systemName: commentator.thinking ? "waveform" : (commentator.voiceEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill"))
+                .symbolEffect(.variableColor.iterative, isActive: commentator.thinking)
         }
     }
 
@@ -320,25 +478,25 @@ struct RideView: View {
 
     // MARK: Controls
 
-    /// Intensity is one labelled control, not two bare glyphs: "Easier · 100 % · Harder". Pause/Resume is
-    /// the prominent action; End is red and asks for confirmation.
+    /// Two rows of equal pills like the concept, but each says what it does: Easier · intensity · Harder,
+    /// then Pause/Resume and End ride (asks first).
     private var controls: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 0) {
+            HStack(spacing: 12) {
                 Button { session.adjustIntensity(by: -0.05) } label: {
-                    Label("Easier", systemImage: "minus.circle.fill").frame(maxWidth: .infinity)
+                    Label("Easier", systemImage: "minus").frame(maxWidth: .infinity)
                 }
                 .disabled(engine.intensityScale <= 0.8)
                 VStack(spacing: 0) {
                     Text(String(format: "%.0f %%", engine.intensityScale * 100))
-                        .font(.title3.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(engine.intensityScale == 1 ? Color.primary : .orange)
+                        .font(.headline.monospacedDigit())
+                        .foregroundStyle(engine.intensityScale == 1 ? Color.white : .orange)
                         .contentTransition(.numericText())
                     Text("Intensity").font(.caption2).foregroundStyle(.secondary)
                 }
-                .frame(width: 92)
+                .frame(width: 76)
                 Button { session.adjustIntensity(by: 0.05) } label: {
-                    Label("Harder", systemImage: "plus.circle.fill").frame(maxWidth: .infinity)
+                    Label("Harder", systemImage: "plus").frame(maxWidth: .infinity)
                 }
                 .disabled(engine.intensityScale >= 1.2)
             }
@@ -349,7 +507,7 @@ struct RideView: View {
             HStack(spacing: 12) {
                 if engine.state == .riding {
                     Button { session.pause() } label: { Label("Pause", systemImage: "pause.fill").frame(maxWidth: .infinity) }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.bordered)
                 } else {
                     Button { session.resume() } label: { Label("Resume", systemImage: "play.fill").frame(maxWidth: .infinity) }
                         .buttonStyle(.borderedProminent)

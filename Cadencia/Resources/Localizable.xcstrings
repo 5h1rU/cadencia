@@ -3872,42 +3872,12 @@
         }
       }
     },
-    "Up next": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Siguiente"
-          }
-        }
-      }
-    },
     "Last block": {
       "localizations": {
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Último bloque"
-          }
-        }
-      }
-    },
-    "Reading your numbers…": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Leyendo tus números…"
-          }
-        }
-      }
-    },
-    "Listening to your numbers.": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Atento a tus números."
           }
         }
       }
@@ -3988,6 +3958,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Al empezar cada bloque, a mitad de los largos y al terminar, el coach lee tus números y te dice qué significan. Se escucha sobre tu música; puedes silenciarlo desde la pantalla del rodaje."
+          }
+        }
+      }
+    },
+    "Up next:": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siguiente:"
+          }
+        }
+      }
+    },
+    "Finish strong": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Termina fuerte"
+          }
+        }
+      }
+    },
+    "Power (last 2 min)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potencia (últimos 2 min)"
+          }
+        }
+      }
+    },
+    "%@ left": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ restante"
           }
         }
       }
