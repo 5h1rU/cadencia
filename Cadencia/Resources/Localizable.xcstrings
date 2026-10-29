@@ -1,0 +1,2676 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "%@ left": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quedan %@"
+          }
+        }
+      }
+    },
+    "%@ · %lld days": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %lld días"
+          }
+        }
+      }
+    },
+    "%@: no training": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: sin entrenamiento"
+          }
+        }
+      }
+    },
+    "%@: up to %lld min": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: hasta %lld min"
+          }
+        }
+      }
+    },
+    "%lld TSS": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld TSS"
+          }
+        }
+      }
+    },
+    "%lld W": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld W"
+          }
+        }
+      }
+    },
+    "%lld min": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min"
+          }
+        }
+      }
+    },
+    "%lld pending": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld pendientes"
+          }
+        }
+      }
+    },
+    "%lld pending uploads are kept and resume when you reconnect this athlete.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se conservan %lld subidas pendientes y se reanudan cuando reconectes este atleta."
+          }
+        }
+      }
+    },
+    "%lld rides have not reached Intervals yet. They stay on this phone and upload when the same athlete signs back in.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld rodadas aún no han llegado a Intervals. Se quedan en este teléfono y se suben cuando el mismo atleta vuelva a iniciar sesión."
+          }
+        }
+      }
+    },
+    "%lld rpm": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld rpm"
+          }
+        }
+      }
+    },
+    "2 weeks": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 semanas"
+          }
+        }
+      }
+    },
+    "3 months": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3 meses"
+          }
+        }
+      }
+    },
+    "4 weeks": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4 semanas"
+          }
+        }
+      }
+    },
+    "A plan is a direction, not a contract. The coach reshapes each week from your recovery and what you tell it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un plan es una dirección, no un contrato. El coach rearma cada semana según tu recuperación y lo que le cuentes."
+          }
+        }
+      }
+    },
+    "A ride is saved here first, then sent to Intervals. “Checking” means the request went out but no answer came back; it is matched by id before any retry, so nothing is uploaded twice.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada rodada se guarda primero aquí y luego se envía a Intervals. “Verificando” significa que la petición salió pero no llegó respuesta; se busca por id antes de reintentar, así nada se sube dos veces."
+          }
+        }
+      }
+    },
+    "A · the one that matters": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A · la que importa"
+          }
+        }
+      }
+    },
+    "API key": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clave API"
+          }
+        }
+      }
+    },
+    "About": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acerca de"
+          }
+        }
+      }
+    },
+    "Account": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuenta"
+          }
+        }
+      }
+    },
+    "Activities (42 d)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actividades (42 d)"
+          }
+        }
+      }
+    },
+    "Also": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Además"
+          }
+        }
+      }
+    },
+    "Also keep an eye on": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "También vigila"
+          }
+        }
+      }
+    },
+    "Any OpenAI-compatible chat completions endpoint. The key is stored in the Keychain and only ever sent to this endpoint, together with today's readiness, your plan and your words. Leave the key empty to interpret on the phone only.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cualquier endpoint de chat compatible con OpenAI. La clave se guarda en el llavero y solo se envía a ese endpoint, junto con tu estado de hoy, tu plan y tus palabras. Deja la clave vacía para interpretar solo en el teléfono."
+          }
+        }
+      }
+    },
+    "Apple Health": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salud de Apple"
+          }
+        }
+      }
+    },
+    "Athlete": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atleta"
+          }
+        }
+      }
+    },
+    "Athlete id": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Id de atleta"
+          }
+        }
+      }
+    },
+    "Availability": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disponibilidad"
+          }
+        }
+      }
+    },
+    "B · important": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "B · importante"
+          }
+        }
+      }
+    },
+    "Base": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Base"
+          }
+        }
+      }
+    },
+    "Basis": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Base del cálculo"
+          }
+        }
+      }
+    },
+    "Blocks": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloques"
+          }
+        }
+      }
+    },
+    "Blocks alternate three loading weeks with one easier week.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los bloques alternan tres semanas de carga con una más suave."
+          }
+        }
+      }
+    },
+    "Build": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Construcción"
+          }
+        }
+      }
+    },
+    "Build, peak and taper for a date": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Construir, llegar al pico y afinar para una fecha"
+          }
+        }
+      }
+    },
+    "C · training ride": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C · rodada de entrenamiento"
+          }
+        }
+      }
+    },
+    "Cadencia keeps Intervals.icu as the system of record. Nothing is stored on other servers.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadencia usa Intervals.icu como fuente de verdad. Nada se guarda en otros servidores."
+          }
+        }
+      }
+    },
+    "Cadencia stores your credential only in this phone's Keychain and talks to Intervals.icu directly.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadencia guarda tu credencial solo en el llavero de este teléfono y habla directamente con Intervals.icu."
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar"
+          }
+        }
+      }
+    },
+    "Ceiling %lld W": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Techo %lld W"
+          }
+        }
+      }
+    },
+    "Checking": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificando"
+          }
+        }
+      }
+    },
+    "Clear conversation": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar conversación"
+          }
+        }
+      }
+    },
+    "Climb better": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subir mejor"
+          }
+        }
+      }
+    },
+    "Close": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar"
+          }
+        }
+      }
+    },
+    "Coach": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coach"
+          }
+        }
+      }
+    },
+    "Confidence": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confianza"
+          }
+        }
+      }
+    },
+    "Connect": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectar"
+          }
+        }
+      }
+    },
+    "Connect Intervals.icu": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectar Intervals.icu"
+          }
+        }
+      }
+    },
+    "Connect with an API key": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectar con clave API"
+          }
+        }
+      }
+    },
+    "Connected": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conectado"
+          }
+        }
+      }
+    },
+    "Connection": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conexión"
+          }
+        }
+      }
+    },
+    "Consolidate": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consolidar"
+          }
+        }
+      }
+    },
+    "Create a plan": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear un plan"
+          }
+        }
+      }
+    },
+    "Create plan": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear plan"
+          }
+        }
+      }
+    },
+    "Data": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datos"
+          }
+        }
+      }
+    },
+    "Date": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fecha"
+          }
+        }
+      }
+    },
+    "Devices": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dispositivos"
+          }
+        }
+      }
+    },
+    "Discard": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar"
+          }
+        }
+      }
+    },
+    "Discard plan": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descartar plan"
+          }
+        }
+      }
+    },
+    "Discard this plan?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Descartar este plan?"
+          }
+        }
+      }
+    },
+    "Distance": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Distancia"
+          }
+        }
+      }
+    },
+    "Distance (km)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Distancia (km)"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listo"
+          }
+        }
+      }
+    },
+    "Durability": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durabilidad"
+          }
+        }
+      }
+    },
+    "Duration": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duración"
+          }
+        }
+      }
+    },
+    "ERG by default": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ERG por defecto"
+          }
+        }
+      }
+    },
+    "ERG holds the target power for you. Off, the trainer keeps its own resistance and you ride to the numbers on screen.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ERG mantiene la potencia objetivo por ti. Apagado, el rodillo conserva su resistencia y tú sigues los números en pantalla."
+          }
+        }
+      }
+    },
+    "ERG mode": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo ERG"
+          }
+        }
+      }
+    },
+    "Effort (RPE)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esfuerzo (RPE)"
+          }
+        }
+      }
+    },
+    "End": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar"
+          }
+        }
+      }
+    },
+    "End and save": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar y guardar"
+          }
+        }
+      }
+    },
+    "End ride": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar rodada"
+          }
+        }
+      }
+    },
+    "End this ride?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Terminar esta rodada?"
+          }
+        }
+      }
+    },
+    "Endpoint": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endpoint"
+          }
+        }
+      }
+    },
+    "Endurance": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resistencia"
+          }
+        }
+      }
+    },
+    "Estimate": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimación"
+          }
+        }
+      }
+    },
+    "Event": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evento"
+          }
+        }
+      }
+    },
+    "FTP %lld": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FTP %lld"
+          }
+        }
+      }
+    },
+    "FTP looks like %lld W, not %lld W": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El FTP parece %1$lld W, no %2$lld W"
+          }
+        }
+      }
+    },
+    "Fatigue": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fatiga"
+          }
+        }
+      }
+    },
+    "Fatigue (ATL)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fatiga (ATL)"
+          }
+        }
+      }
+    },
+    "Few recovery signals today, so the prescription is conservative. Connect Apple Health or wear your watch to sleep for a sharper call.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoy hay pocas señales de recuperación, así que la prescripción es conservadora. Conecta Salud o duerme con el reloj para afinar el veredicto."
+          }
+        }
+      }
+    },
+    "Fitness (CTL)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forma (CTL)"
+          }
+        }
+      }
+    },
+    "Forget": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Olvidar"
+          }
+        }
+      }
+    },
+    "Form": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frescura"
+          }
+        }
+      }
+    },
+    "Form (TSB)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frescura (TSB)"
+          }
+        }
+      }
+    },
+    "Fresh": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frescas"
+          }
+        }
+      }
+    },
+    "From": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desde"
+          }
+        }
+      }
+    },
+    "Get ready": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prepárate"
+          }
+        }
+      }
+    },
+    "Go easy": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suave"
+          }
+        }
+      }
+    },
+    "Go hard": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A fondo"
+          }
+        }
+      }
+    },
+    "Goal": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Objetivo"
+          }
+        }
+      }
+    },
+    "Goal: %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Objetivo: %@"
+          }
+        }
+      }
+    },
+    "Group ride": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rodada en grupo"
+          }
+        }
+      }
+    },
+    "Gym sessions alongside the bike": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesiones de gimnasio junto a la bici"
+          }
+        }
+      }
+    },
+    "HRV (SDNN), resting heart rate and sleep from your watch. Health values win over Intervals for the same day.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HRV (SDNN), pulso en reposo y sueño desde tu reloj. Los valores de Salud ganan a los de Intervals para el mismo día."
+          }
+        }
+      }
+    },
+    "Hard days land on the days you train that do not precede the long ride.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los días duros caen en los días que entrenas que no preceden a la salida larga."
+          }
+        }
+      }
+    },
+    "Health available": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salud disponible"
+          }
+        }
+      }
+    },
+    "Heart rate": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulso"
+          }
+        }
+      }
+    },
+    "Heavy": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pesadas"
+          }
+        }
+      }
+    },
+    "High": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alta"
+          }
+        }
+      }
+    },
+    "Hold power deep into long rides": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sostener potencia al final de rodadas largas"
+          }
+        }
+      }
+    },
+    "How do you feel?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo te sientes?"
+          }
+        }
+      }
+    },
+    "How was it?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué tal estuvo?"
+          }
+        }
+      }
+    },
+    "I could not process that right now. Try again, or type it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pude procesar eso ahora. Inténtalo de nuevo o escríbelo."
+          }
+        }
+      }
+    },
+    "In": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En"
+          }
+        }
+      }
+    },
+    "In Intervals": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En Intervals"
+          }
+        }
+      }
+    },
+    "In Intervals.icu open Settings, scroll to Developer Settings and copy the API key. The key gives full access to your account; it never leaves this phone except to call intervals.icu.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En Intervals.icu abre Ajustes, baja hasta Developer Settings y copia la clave API. La clave da acceso total a tu cuenta; nunca sale de este teléfono salvo para llamar a intervals.icu."
+          }
+        }
+      }
+    },
+    "Indoor FTP is used when Intervals has one. Estimates come from the 42-day power curve and only become the working FTP when you accept them.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se usa el FTP indoor cuando Intervals lo tiene. Las estimaciones salen de la curva de potencia de 42 días y solo pasan a ser el FTP de trabajo cuando las aceptas."
+          }
+        }
+      }
+    },
+    "Intervals API documentation": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Documentación de la API de Intervals"
+          }
+        }
+      }
+    },
+    "Intervals FTP": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FTP en Intervals"
+          }
+        }
+      }
+    },
+    "Intervals did not return an authorization code.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervals no devolvió un código de autorización."
+          }
+        }
+      }
+    },
+    "Intervals indoor FTP": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FTP indoor en Intervals"
+          }
+        }
+      }
+    },
+    "Intervals rejected the credential. Reconnect in Settings.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervals rechazó la credencial. Reconecta en Ajustes."
+          }
+        }
+      }
+    },
+    "Intervals.icu API key": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clave API de Intervals.icu"
+          }
+        }
+      }
+    },
+    "Intervals.icu did not accept that credential.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intervals.icu no aceptó esa credencial."
+          }
+        }
+      }
+    },
+    "It's a race": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es una carrera"
+          }
+        }
+      }
+    },
+    "Keep %lld W": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener %lld W"
+          }
+        }
+      }
+    },
+    "Language model": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo de lenguaje"
+          }
+        }
+      }
+    },
+    "Last read": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última lectura"
+          }
+        }
+      }
+    },
+    "Last sync": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última sincronización"
+          }
+        }
+      }
+    },
+    "Latest estimate": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Última estimación"
+          }
+        }
+      }
+    },
+    "Legs": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piernas"
+          }
+        }
+      }
+    },
+    "Legs feel fresh": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piernas frescas"
+          }
+        }
+      }
+    },
+    "Legs feel heavy": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piernas pesadas"
+          }
+        }
+      }
+    },
+    "Legs feel normal": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Piernas normales"
+          }
+        }
+      }
+    },
+    "Long ride": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salida larga"
+          }
+        }
+      }
+    },
+    "Looking for devices…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscando dispositivos…"
+          }
+        }
+      }
+    },
+    "Low": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Baja"
+          }
+        }
+      }
+    },
+    "Manual": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manual"
+          }
+        }
+      }
+    },
+    "Message the coach": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escríbele al coach"
+          }
+        }
+      }
+    },
+    "Method": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Método"
+          }
+        }
+      }
+    },
+    "Microphone or speech access is off. Enable it in Settings to use voice notes.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El acceso al micrófono o al dictado está apagado. Actívalo en Ajustes para usar notas de voz."
+          }
+        }
+      }
+    },
+    "Model": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo"
+          }
+        }
+      }
+    },
+    "Moderate": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media"
+          }
+        }
+      }
+    },
+    "Month": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mes"
+          }
+        }
+      }
+    },
+    "Motivation": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Motivación"
+          }
+        }
+      }
+    },
+    "Name": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre"
+          }
+        }
+      }
+    },
+    "Nearby": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerca"
+          }
+        }
+      }
+    },
+    "Needs reconnect": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requiere reconectar"
+          }
+        }
+      }
+    },
+    "New plan": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuevo plan"
+          }
+        }
+      }
+    },
+    "No": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No"
+          }
+        }
+      }
+    },
+    "No plan yet": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay plan"
+          }
+        }
+      }
+    },
+    "No rides recorded on this phone yet.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay rodadas grabadas en este teléfono."
+          }
+        }
+      }
+    },
+    "None": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguno"
+          }
+        }
+      }
+    },
+    "Not paired": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin emparejar"
+          }
+        }
+      }
+    },
+    "Nothing planned this week.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nada planificado esta semana."
+          }
+        }
+      }
+    },
+    "OAuth": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OAuth"
+          }
+        }
+      }
+    },
+    "OAuth is not configured for this build. Use an API key.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OAuth no está configurado en esta versión. Usa una clave API."
+          }
+        }
+      }
+    },
+    "Objective": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Objetivo"
+          }
+        }
+      }
+    },
+    "Objective (finish fresh, podium…)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Objetivo (llegar fresco, podio…)"
+          }
+        }
+      }
+    },
+    "Off by default: if Intervals already receives Apple Health through its own integration, leave this off to avoid duplicates.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apagado por defecto: si Intervals ya recibe Salud por su propia integración, déjalo apagado para evitar duplicados."
+          }
+        }
+      }
+    },
+    "On-device interpretation": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interpretación en el teléfono"
+          }
+        }
+      }
+    },
+    "Open Intervals.icu settings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir ajustes de Intervals.icu"
+          }
+        }
+      }
+    },
+    "Opener": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activación"
+          }
+        }
+      }
+    },
+    "Pause": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pausar"
+          }
+        }
+      }
+    },
+    "Peak": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pico"
+          }
+        }
+      }
+    },
+    "Pending": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pendiente"
+          }
+        }
+      }
+    },
+    "Phases": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fases"
+          }
+        }
+      }
+    },
+    "Phases are the long-range intent. Each week's sessions are provisional until the morning they happen.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las fases son la intención a largo plazo. Las sesiones de cada semana son provisionales hasta la mañana en que ocurren."
+          }
+        }
+      }
+    },
+    "Pick a goal or an event. Cadencia lays out the phases and keeps only the coming week concrete; later weeks are intentions that adapt to how you recover.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige un objetivo o un evento. Cadencia traza las fases y solo concreta la semana que viene; las siguientes son intenciones que se adaptan a cómo te recuperas."
+          }
+        }
+      }
+    },
+    "Plan": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plan"
+          }
+        }
+      }
+    },
+    "Planned sessions are removed from your Intervals calendar. Completed rides stay.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las sesiones planificadas se quitan de tu calendario de Intervals. Las rodadas completadas se conservan."
+          }
+        }
+      }
+    },
+    "Power curve, last %lld days": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curva de potencia, últimos %lld días"
+          }
+        }
+      }
+    },
+    "Power meter": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potenciómetro"
+          }
+        }
+      }
+    },
+    "Prepare": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparación"
+          }
+        }
+      }
+    },
+    "Prepare an event": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparar un evento"
+          }
+        }
+      }
+    },
+    "Priority": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prioridad"
+          }
+        }
+      }
+    },
+    "RPE and feel go to Intervals with the activity and feed tomorrow's readiness.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RPE y sensaciones van a Intervals con la actividad y alimentan el estado de mañana."
+          }
+        }
+      }
+    },
+    "Race": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carrera"
+          }
+        }
+      }
+    },
+    "Raise FTP": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subir el FTP"
+          }
+        }
+      }
+    },
+    "Read Apple Health": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leer Salud de Apple"
+          }
+        }
+      }
+    },
+    "Ready": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listo"
+          }
+        }
+      }
+    },
+    "Recover": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recuperación"
+          }
+        }
+      }
+    },
+    "Recovery": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recuperación"
+          }
+        }
+      }
+    },
+    "Recovery spin": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rodaje de recuperación"
+          }
+        }
+      }
+    },
+    "Refresh": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualizar"
+          }
+        }
+      }
+    },
+    "Repeated efforts agree. Zones and targets will move with the new value.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Varios esfuerzos coinciden. Zonas y objetivos se moverán con el nuevo valor."
+          }
+        }
+      }
+    },
+    "Rest": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descanso"
+          }
+        }
+      }
+    },
+    "Resting HR": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulso en reposo"
+          }
+        }
+      }
+    },
+    "Resume": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reanudar"
+          }
+        }
+      }
+    },
+    "Retry now": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reintentar ahora"
+          }
+        }
+      }
+    },
+    "Review estimate": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisar estimación"
+          }
+        }
+      }
+    },
+    "Review the evidence before zones change.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisa la evidencia antes de que cambien las zonas."
+          }
+        }
+      }
+    },
+    "Ride": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rodada"
+          }
+        }
+      }
+    },
+    "Ride a few sustained efforts of 12 minutes or more and the estimate will appear here.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz algunos esfuerzos sostenidos de 12 minutos o más y la estimación aparecerá aquí."
+          }
+        }
+      }
+    },
+    "Ride complete": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rodada completa"
+          }
+        }
+      }
+    },
+    "Rides already in Intervals are unaffected.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las rodadas que ya están en Intervals no se ven afectadas."
+          }
+        }
+      }
+    },
+    "Save": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar"
+          }
+        }
+      }
+    },
+    "Save rides to Apple Health": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar rodadas en Salud"
+          }
+        }
+      }
+    },
+    "Saved to Apple Health": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardado en Salud"
+          }
+        }
+      }
+    },
+    "Saving…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardando…"
+          }
+        }
+      }
+    },
+    "Scope": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alcance"
+          }
+        }
+      }
+    },
+    "Secondary goal": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Objetivo secundario"
+          }
+        }
+      }
+    },
+    "Send": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar"
+          }
+        }
+      }
+    },
+    "Send Health wellness to Intervals": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar bienestar de Salud a Intervals"
+          }
+        }
+      }
+    },
+    "Session": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión"
+          }
+        }
+      }
+    },
+    "Set an FTP in Intervals.icu to get prescriptions.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Define un FTP en Intervals.icu para recibir prescripciones."
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustes"
+          }
+        }
+      }
+    },
+    "Seven mornings of HRV are needed before a typical range can be computed.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacen falta siete mañanas de HRV para calcular un rango típico."
+          }
+        }
+      }
+    },
+    "Several efforts point the same way. Accepting changes every zone and every target; declining keeps today as is.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Varios esfuerzos apuntan en la misma dirección. Aceptar cambia todas las zonas y objetivos; rechazar deja hoy como está."
+          }
+        }
+      }
+    },
+    "Sign out": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar sesión"
+          }
+        }
+      }
+    },
+    "Sign out of Intervals.icu?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cerrar sesión de Intervals.icu?"
+          }
+        }
+      }
+    },
+    "Sign-in was cancelled.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se canceló el inicio de sesión."
+          }
+        }
+      }
+    },
+    "Sleep": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sueño"
+          }
+        }
+      }
+    },
+    "Smart trainer": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rodillo inteligente"
+          }
+        }
+      }
+    },
+    "Sources": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fuentes"
+          }
+        }
+      }
+    },
+    "Start": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empezar"
+          }
+        }
+      }
+    },
+    "Start on trainer": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empezar en el rodillo"
+          }
+        }
+      }
+    },
+    "Status": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estado"
+          }
+        }
+      }
+    },
+    "Strength": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fuerza"
+          }
+        }
+      }
+    },
+    "Sustained efforts": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esfuerzos sostenidos"
+          }
+        }
+      }
+    },
+    "Sustained power at low cadence and repeated efforts": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potencia sostenida a baja cadencia y esfuerzos repetidos"
+          }
+        }
+      }
+    },
+    "Sync": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sincronización"
+          }
+        }
+      }
+    },
+    "Taper": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afinamiento"
+          }
+        }
+      }
+    },
+    "Target": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Objetivo"
+          }
+        }
+      }
+    },
+    "Tell the coach what changed": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuéntale al coach qué cambió"
+          }
+        }
+      }
+    },
+    "Tempo": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo"
+          }
+        }
+      }
+    },
+    "The ride is paused and nothing is lost. The app keeps trying to reconnect; resume when the trainer is back.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La rodada está en pausa y no se pierde nada. La app sigue intentando reconectar; reanuda cuando vuelva el rodillo."
+          }
+        }
+      }
+    },
+    "The sign-in response did not match this request.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La respuesta de inicio de sesión no coincide con esta solicitud."
+          }
+        }
+      }
+    },
+    "Thinking…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pensando…"
+          }
+        }
+      }
+    },
+    "This week": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta semana"
+          }
+        }
+      }
+    },
+    "Threshold": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umbral"
+          }
+        }
+      }
+    },
+    "Threshold blocks with enough recovery to absorb them": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloques de umbral con recuperación suficiente para asimilarlos"
+          }
+        }
+      }
+    },
+    "To": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hasta"
+          }
+        }
+      }
+    },
+    "Today": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoy"
+          }
+        }
+      }
+    },
+    "Today's session": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión de hoy"
+          }
+        }
+      }
+    },
+    "Today's verdict: %@ · %lld/100": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veredicto de hoy: %@ · %lld/100"
+          }
+        }
+      }
+    },
+    "Too few sustained efforts to trust this. Keep the working FTP; a 20-minute or ramp test would settle it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muy pocos esfuerzos sostenidos para fiarse. Mantén el FTP de trabajo; un test de 20 minutos o de rampa lo resolvería."
+          }
+        }
+      }
+    },
+    "Trainer disconnected": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rodillo desconectado"
+          }
+        }
+      }
+    },
+    "Training": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrenamiento"
+          }
+        }
+      }
+    },
+    "Training load": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga de entrenamiento"
+          }
+        }
+      }
+    },
+    "Turn on Bluetooth to find your devices.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa Bluetooth para encontrar tus dispositivos."
+          }
+        }
+      }
+    },
+    "Two days out intensity stops; the day before is a short opener so the legs arrive sharp, not tired.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dos días antes se acaba la intensidad; la víspera es una activación corta para que las piernas lleguen afiladas, no cansadas."
+          }
+        }
+      }
+    },
+    "Until the event": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hasta el evento"
+          }
+        }
+      }
+    },
+    "Uploads": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subidas"
+          }
+        }
+      }
+    },
+    "Use %lld W": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usar %lld W"
+          }
+        }
+      }
+    },
+    "Use an API key instead": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usar una clave API"
+          }
+        }
+      }
+    },
+    "Use the Intervals value again": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver al valor de Intervals"
+          }
+        }
+      }
+    },
+    "Using %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usando %@"
+          }
+        }
+      }
+    },
+    "VO₂max": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VO₂max"
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión"
+          }
+        }
+      }
+    },
+    "Volume in zone 2, intensity only when fresh": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volumen en zona 2, intensidad solo cuando estés fresco"
+          }
+        }
+      }
+    },
+    "Wait for it": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espera"
+          }
+        }
+      }
+    },
+    "Wake the device (spin the pedals, wear the band) so it advertises.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Despierta el dispositivo (gira los pedales, ponte la banda) para que anuncie."
+          }
+        }
+      }
+    },
+    "Week": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semana"
+          }
+        }
+      }
+    },
+    "Week %lld of %lld · %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semana %1$lld de %2$lld · %3$@"
+          }
+        }
+      }
+    },
+    "Week of %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semana del %@"
+          }
+        }
+      }
+    },
+    "Wellness days": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Días de bienestar"
+          }
+        }
+      }
+    },
+    "What I understood": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que entendí"
+          }
+        }
+      }
+    },
+    "What do you want to get out of the next weeks?": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué quieres sacar de las próximas semanas?"
+          }
+        }
+      }
+    },
+    "What you rode so far is kept and sent to Intervals.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que llevas rodado se guarda y se envía a Intervals."
+          }
+        }
+      }
+    },
+    "Why this session": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por qué esta sesión"
+          }
+        }
+      }
+    },
+    "Window": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ventana"
+          }
+        }
+      }
+    },
+    "Without a trainer you can still record with a power meter and heart rate band; targets will show on screen only.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin rodillo puedes grabar con potenciómetro y banda de pulso; los objetivos solo se muestran en pantalla."
+          }
+        }
+      }
+    },
+    "Working": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De trabajo"
+          }
+        }
+      }
+    },
+    "Working FTP": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FTP de trabajo"
+          }
+        }
+      }
+    },
+    "Yes": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sí"
+          }
+        }
+      }
+    },
+    "You can still switch ERG off before each ride.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes apagar ERG antes de cada rodada."
+          }
+        }
+      }
+    },
+    "Your Intervals.icu data, a daily prescription, and a trainer that listens.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus datos de Intervals.icu, una prescripción diaria y un rodillo que escucha."
+          }
+        }
+      }
+    },
+    "Your answer counts as one more signal. It can soften today's session, never harden it.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu respuesta cuenta como una señal más. Puede suavizar la sesión de hoy, nunca endurecerla."
+          }
+        }
+      }
+    },
+    "Your credential lives only in this phone's Keychain.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu credencial vive solo en el llavero de este teléfono."
+          }
+        }
+      }
+    },
+    "above usual": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "por encima de lo habitual"
+          }
+        }
+      }
+    },
+    "below usual": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "por debajo de lo habitual"
+          }
+        }
+      }
+    },
+    "in range": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "en rango"
+          }
+        }
+      }
+    },
+    "no data": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sin datos"
+          }
+        }
+      }
+    },
+    "“Saturday I have a 120 km group ride.” “Only 45 minutes on Thursday.” “Legs are heavy.” The week adapts; the long-range plan stays.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“El sábado tengo una rodada en grupo de 120 km.” “El jueves solo tengo 45 minutos.” “Piernas pesadas.” La semana se adapta; el plan a largo plazo se mantiene."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

@@ -1,0 +1,43 @@
+# XcodeGen spec. Fallback if the hand-written Cadencia.xcodeproj does not open cleanly:
+#   brew install xcodegen && xcodegen generate
+name: Cadencia
+options:
+  bundleIdPrefix: com.felipejaner
+  deploymentTarget:
+    iOS: "18.0"
+  developmentLanguage: en
+  xcodeVersion: "16.0"
+  generateEmptyDirectories: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+packages:
+  CadenciaCore:
+    path: CadenciaCore
+targets:
+  Cadencia:
+    type: application
+    platform: iOS
+    sources:
+      - path: Cadencia
+    dependencies:
+      - package: CadenciaCore
+    info:
+      path: Config/Info.plist
+    entitlements:
+      path: Config/Cadencia.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.felipejaner.cadencia
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Config/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/Cadencia.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1

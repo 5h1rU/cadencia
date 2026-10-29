@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Runs on every orb wake. Nothing to reconnect; just confirm the toolchain is still there.
+set -euo pipefail
+if [ -x "$HOME/swift/usr/bin/swift" ]; then
+  echo "swift: $("$HOME/swift/usr/bin/swift" --version 2>&1 | head -1)"
+else
+  echo "swift toolchain missing; rerun .agents/setup" >&2
+  exit 1
+fi
