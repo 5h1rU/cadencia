@@ -162,23 +162,39 @@ final class AppModel {
         guard let client, !isSyncing else { return }
         isSyncing = true
         defer { isSyncing = false }
+
+        // Each fetch is independent: a failing request (for example a malformed power-curve query)
+        // must not discard the athlete, wellness, and activities that did arrive. The first failure
+        // is surfaced; an auth failure wins over everything else because the user has to act on it.
+        var failures: [(String, Error)] = []
+
         do {
             let athlete = try await client.athlete()
-            let wellness = try await client.wellness(oldest: today.adding(days: -90), newest: today)
-            let activities = try await client.activities(oldest: today.adding(days: -42), newest: today)
-            let curve = try await client.powerCurve(newest: today)
-            mutate {
-                $0.athlete = athlete
-                $0.mergeWellness(wellness)
-                $0.activities = activities
-                $0.powerCurve = curve
-                $0.lastSyncAt = Date()
-            }
-            syncError = nil
-        } catch let error as HTTPError where error.isAuthFailure {
+            mutate { $0.athlete = athlete }
+        } catch { failures.append(("athlete", error)) }
+
+        if (failures.first?.1 as? HTTPError)?.isAuthFailure == true {
             syncError = String(localized: "Intervals rejected the credential. Reconnect in Settings.")
-        } catch {
-            syncError = String(describing: error)
+        } else {
+            do {
+                let wellness = try await client.wellness(oldest: today.adding(days: -90), newest: today)
+                mutate { $0.mergeWellness(wellness) }
+            } catch { failures.append(("wellness", error)) }
+
+            do {
+                let activities = try await client.activities(oldest: today.adding(days: -42), newest: today)
+                mutate { $0.activities = activities }
+            } catch { failures.append(("activities", error)) }
+
+            do {
+                let curve = try await client.powerCurve(newest: today)
+                mutate { $0.powerCurve = curve }
+            } catch { failures.append(("power curve", error)) }
+
+            if failures.count < 4 {
+                mutate { $0.lastSyncAt = Date() }
+            }
+            syncError = failures.first.map { "Intervals \($0.0): \($0.1.localizedDescription)" }
         }
 
         await readHealth()

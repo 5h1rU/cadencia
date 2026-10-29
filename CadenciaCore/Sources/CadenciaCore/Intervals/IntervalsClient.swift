@@ -73,9 +73,10 @@ public struct IntervalsClient: Sendable {
     }
 
     public func powerCurve(newest: Day, type: String = "Ride", days: Int = 42) async throws -> [PowerCurvePoint] {
+        // Intervals curve ids: "42d" (last N days), "s0" (season), "r.<from>.<to>" (date range). A comma separates curves.
         let oldest = newest.adding(days: -days)
         let dto: PowerCurvesDTO = try await get("/api/v1/athlete/\(athleteID)/power-curves.json",
-                                                query: ["newest": newest.iso, "type": type, "curves": "\(oldest.iso),\(newest.iso)"])
+                                                query: ["newest": newest.iso, "now": newest.iso, "type": type, "curves": "r.\(oldest.iso).\(newest.iso)"])
         return dto.points
     }
 

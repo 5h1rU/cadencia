@@ -48,6 +48,25 @@ final class IntervalsClientTests: XCTestCase {
         XCTAssertNotNil(days[0].updatedAt)
     }
 
+    func testPowerCurveUsesIntervalsCurveSyntaxNotABareDate() async throws {
+        // Intervals rejects `curves=<date>` with 422 "Invalid curve"; ranges are `r.<from>.<to>`.
+        let json = #"{"list":[{"secs":[5,60,1200],"values":[900.4,420,300.6]}]}"#
+        let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(json.utf8))])
+        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let points = try await client.powerCurve(newest: Day(year: 2026, month: 10, day: 29))
+        let items = URLComponents(url: t.requests[0].url, resolvingAgainstBaseURL: false)!.queryItems!
+        let query = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
+        XCTAssertEqual(query["curves"], "r.2026-09-17.2026-10-29")
+        XCTAssertEqual(query["type"], "Ride")
+        XCTAssertEqual(query["now"], "2026-10-29")
+        XCTAssertEqual(points.map(\.watts), [900, 420, 301])
+    }
+
+    func testHTTPErrorShowsIntervalsMessageNotEnvelope() {
+        let error = HTTPError.status(422, #"{"status":422,"error":"Invalid curve: [2026-09-17]"}"#)
+        XCTAssertEqual(error.localizedDescription, "HTTP 422: Invalid curve: [2026-09-17]")
+    }
+
     func testActivitiesDecodeAndMapTrainerAndFTPFields() async throws {
         let json = #"[{"id":"i9","name":"Umbral","type":"VirtualRide","start_date_local":"2026-10-27T18:05:00","moving_time":3600,"icu_training_load":72,"icu_intensity":84.2,"icu_average_watts":198,"icu_weighted_avg_watts":210,"average_heartrate":152,"icu_ftp":240,"icu_pm_ftp":248,"trainer":true,"external_id":"cadencia-abc"}]"#
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(json.utf8))])

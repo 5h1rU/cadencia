@@ -46,6 +46,25 @@ public enum HTTPError: Error, Equatable, Sendable {
     }
 }
 
+extension HTTPError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .status(let code, let body):
+            // Intervals returns JSON like {"status":422,"error":"Invalid curve: ..."}; show the message, not the envelope.
+            if let data = body.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let message = (json["error"] ?? json["message"]) as? String {
+                return "HTTP \(code): \(message)"
+            }
+            let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "HTTP \(code)" : "HTTP \(code): \(trimmed.prefix(160))"
+        case .unauthorized: return "HTTP 401: unauthorized"
+        case .transport(let message): return message
+        case .invalidResponse: return "Invalid response from server"
+        }
+    }
+}
+
 extension URLSession: HTTPTransport {
     public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         var r = URLRequest(url: request.url)

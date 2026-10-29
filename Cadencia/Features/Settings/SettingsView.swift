@@ -220,7 +220,20 @@ struct CoachSettingsView: View {
                     .textContentType(.password)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
-                TextField("Model", text: $modelName)
+                Picker("Model", selection: $modelName) {
+                    ForEach(AppConfig.llmModelPresets, id: \.id) { preset in
+                        VStack(alignment: .leading) {
+                            Text(preset.id)
+                            Text(preset.note).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .tag(preset.id)
+                    }
+                    if !AppConfig.llmModelPresets.contains(where: { $0.id == modelName }) {
+                        Text(modelName).tag(modelName)
+                    }
+                }
+                .pickerStyle(.navigationLink)
+                TextField("Custom model id", text: $modelName)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                 TextField("Endpoint", text: $endpoint)
@@ -234,7 +247,7 @@ struct CoachSettingsView: View {
             }
             Section {
                 Button("Save") {
-                    model.setLLMKey(key)
+                    if key != Self.maskedKey { model.setLLMKey(key) }
                     model.updateSettings {
                         if let url = URL(string: endpoint), url.scheme?.hasPrefix("http") == true { $0.llmEndpoint = url }
                         if !modelName.trimmingCharacters(in: .whitespaces).isEmpty { $0.llmModel = modelName }
@@ -249,9 +262,11 @@ struct CoachSettingsView: View {
         .onAppear {
             endpoint = model.state.settings.llmEndpoint.absoluteString
             modelName = model.state.settings.llmModel
-            key = model.hasLLMKey ? "••••••••" : ""
+            key = model.hasLLMKey ? Self.maskedKey : ""
         }
     }
+
+    private static let maskedKey = "••••••••"
 }
 
 struct RidePreferencesView: View {

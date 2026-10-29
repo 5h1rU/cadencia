@@ -71,14 +71,55 @@ public struct DailyPrescriber: Sendable {
             if kind.isHard { reasons.append("Recovery is above your range: the hard session goes ahead as planned.") }
         }
 
-        if reasons.isEmpty {
-            reasons.append(input.readiness.summary)
+        if let planned = input.planned {
+            reasons.insert("The week asks for \(Self.name(for: planned.kind).lowercased()) today (\(planned.targetMinutes) min).", at: 0)
         }
+        reasons.append(input.readiness.summary)
 
         let ceiling = Self.ceiling(for: kind, readiness: input.readiness.level)
         let steps = Self.steps(kind: kind, minutes: minutes)
         let name = Self.name(for: kind)
-        return Workout(name: name, kind: kind, steps: steps, intensityCeiling: ceiling, rationale: reasons.joined(separator: " "))
+        var workout = Workout(name: name, kind: kind, steps: steps, intensityCeiling: ceiling, rationale: "")
+        reasons.append(Self.purpose(for: kind))
+        if !steps.isEmpty { reasons.append(Self.numbers(for: workout, ftp: input.ftp)) }
+        workout.rationale = reasons.joined(separator: " ")
+        return workout
+    }
+
+    /// What the session is for, physiologically, so the athlete knows what "done right" feels like.
+    static func purpose(for kind: SessionKind) -> String {
+        switch kind {
+        case .rest: return "Adaptation happens on days like this; the load from the last block is absorbed, not added to."
+        case .recovery: return "Very light spinning speeds recovery by moving blood through the legs without adding training load."
+        case .endurance: return "Zone 2 builds mitochondrial density and fat oxidation; it should feel conversational the whole way."
+        case .tempo: return "Sweet spot (88 % FTP) accumulates time close to threshold at a cost you can repeat tomorrow."
+        case .threshold: return "Intervals at 98 % FTP raise the power you can hold for an hour; the last repeat should be hard but controlled."
+        case .vo2max: return "Three-minute efforts at 118 % FTP push oxygen uptake; expect to be gasping by the end of each one."
+        case .openerActivation: return "Short bursts wake the legs up without fatigue so you arrive at the event sharp."
+        case .longRide: return "Long steady riding builds durability: the ability to still produce power after hours in the saddle."
+        case .groupRide: return "Ride with the group; the load is whatever the group makes it, and it is logged as it comes."
+        case .race: return "Race day. Everything before this was to be fresh now."
+        case .strength: return "Off-bike strength protects the joints and adds the force that sprints and climbs draw on."
+        }
+    }
+
+    /// The numbers: time, power range, ceiling, load. Everything the chart shows, in one line.
+    static func numbers(for w: Workout, ftp: Int) -> String {
+        let work = w.steps.filter { !$0.isRamp && $0.startIntensity >= 0.6 }
+        let main = work.max { $0.duration < $1.duration }
+        var parts: [String] = []
+        parts.append("\(Int((w.totalDuration / 60).rounded())) min total")
+        if let main {
+            let watts = Int((main.startIntensity * Double(ftp)).rounded())
+            let reps = work.filter { abs($0.startIntensity - main.startIntensity) < 0.01 }.count
+            let repText = reps > 1 ? "\(reps) × \(Int((main.duration / 60).rounded())) min" : "\(Int((main.duration / 60).rounded())) min"
+            parts.append("\(repText) at \(watts) W (\(Int((main.startIntensity * 100).rounded())) % of \(ftp) W FTP)")
+        }
+        if let c = w.intensityCeiling, c > 0 {
+            parts.append("ceiling \(Int((c * Double(ftp)).rounded())) W")
+        }
+        parts.append("about \(w.estimatedLoad) TSS, IF \(String(format: "%.2f", w.averageIntensity))")
+        return parts.joined(separator: ", ") + "."
     }
 
     static func ceiling(for kind: SessionKind, readiness: Readiness.Level) -> Double? {
@@ -112,7 +153,7 @@ public struct DailyPrescriber: Sendable {
     }
 
     /// Builds the block structure. All durations in minutes are converted to seconds.
-    static func steps(kind: SessionKind, minutes: Int) -> [WorkoutStep] {
+    public static func steps(kind: SessionKind, minutes: Int) -> [WorkoutStep] {
         let m = Double(minutes) * 60
         func s(_ name: String, _ mins: Double, _ i: Double, cadence: Int? = nil) -> WorkoutStep {
             WorkoutStep(name: name, duration: mins * 60, intensity: i, cadenceRPM: cadence)

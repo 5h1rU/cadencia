@@ -166,13 +166,71 @@ public struct ReadinessEngine: Sendable {
         return (mean - sd)...(mean + sd)
     }
 
+    /// One sentence of verdict followed by the numbers behind it, e.g.
+    /// "Recovery is within your usual range. HRV 52 ms (usual 44–58), sleep 7.4 h (usual 6.8–7.9), resting HR 48 (usual 46–51), TSB −12."
     static func summary(level: Readiness.Level, signals: [Readiness.Signal]) -> String {
-        let negatives = signals.filter { $0.weight < 0 }.map(\.name)
+        let informed = signals.filter { $0.verdict != .missing }
+        let evidence = informed.compactMap(describe).joined(separator: ", ")
+        let negatives = informed.filter { $0.weight < 0 }.map { label($0.name) }
+
+        if informed.isEmpty {
+            return "No recovery data yet: no HRV, sleep, resting heart rate or training-load history for today. The session is set conservatively until Apple Health or Intervals wellness arrives."
+        }
+        let verdict: String
         switch level {
-        case .rest: return "Several recovery signals are below your range (\(negatives.joined(separator: ", "))). Today is for rest or a very short spin."
-        case .easy: return "Recovery is below usual (\(negatives.joined(separator: ", "))). Keep today easy and protect the key sessions."
-        case .normal: return "Recovery is within your usual range. A normal training day."
-        case .strong: return "Recovery is above your usual range. Good day for the hard session."
+        case .rest: verdict = "Several recovery signals are well below your range (\(negatives.joined(separator: ", "))). Today is for rest or a very short spin."
+        case .easy: verdict = "Recovery is below usual (\(negatives.joined(separator: ", "))). Keep today easy and protect the key sessions."
+        case .normal: verdict = informed.count < 2 ? "Only one recovery signal today, so this is a normal day by default." : "Recovery is within your usual range. A normal training day."
+        case .strong: verdict = "Recovery is above your usual range. Good day for the hard session."
+        }
+        return evidence.isEmpty ? verdict : "\(verdict) \(evidence)."
+    }
+
+    static func label(_ name: String) -> String {
+        switch name {
+        case "hrv": return "HRV"
+        case "sleep": return "sleep"
+        case "restingHR": return "resting HR"
+        case "form": return "form"
+        case "fatigue": return "fatigue"
+        case "legs": return "legs"
+        case "motivation": return "motivation"
+        default: return name
+        }
+    }
+
+    static func describe(_ s: Readiness.Signal) -> String? {
+        func range(_ r: ClosedRange<Double>?, _ f: (Double) -> String) -> String {
+            r.map { " (usual \(f($0.lowerBound))–\(f($0.upperBound)))" } ?? ""
+        }
+        switch s.name {
+        case "hrv":
+            guard let v = s.value else { return nil }
+            return "HRV \(Int(v.rounded())) ms" + range(s.baseline) { "\(Int($0.rounded()))" }
+        case "sleep":
+            guard let v = s.value else { return nil }
+            let h = { (x: Double) in String(format: "%.1f", x / 3600) }
+            return "sleep \(h(v)) h" + range(s.baseline) { h($0) }
+        case "restingHR":
+            guard let v = s.value else { return nil }
+            return "resting HR \(Int(v.rounded()))" + range(s.baseline) { "\(Int($0.rounded()))" }
+        case "form":
+            guard let v = s.value else { return nil }
+            return "TSB \(v >= 0 ? "+" : "−")\(Int(abs(v).rounded()))"
+        case "fatigue":
+            guard let v = s.value, let r = s.baseline else { return nil }
+            return "ATL \(Int(v.rounded())) vs CTL \(Int((r.upperBound / 1.3).rounded()))"
+        case "legs":
+            switch s.verdict {
+            case .below: return "legs heavy"
+            case .above: return "legs fresh"
+            default: return "legs normal"
+            }
+        case "motivation":
+            guard let v = s.value else { return nil }
+            return "motivation \(Int(v))/5"
+        default:
+            return nil
         }
     }
 }

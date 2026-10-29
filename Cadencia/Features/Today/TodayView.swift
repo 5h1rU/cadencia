@@ -68,8 +68,16 @@ struct TodayView: View {
                             Text(Format.minutes(workout.totalDuration)).foregroundStyle(.secondary).font(.subheadline)
                         }
                         Text(workout.name).font(.title2.weight(.semibold))
-                        Text(workout.rationale).font(.subheadline).foregroundStyle(.secondary)
-                        WorkoutProfileView(workout: workout).frame(height: 56).padding(.top, 4)
+                        Text(workout.rationale).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
+                        WorkoutProfileView(workout: workout, ftp: ftp, compact: true).frame(height: 64).padding(.top, 4)
+                        HStack(spacing: 12) {
+                            ForEach(legend, id: \.0) { item in
+                                HStack(spacing: 4) {
+                                    Circle().fill(item.1).frame(width: 7, height: 7)
+                                    Text(item.0).font(.caption2).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
                         HStack(spacing: 16) {
                             metric("Target", value: Format.watts(workout.targetWatts(ftp: ftp, at: mainBlockOffset(workout))))
                             if let ceiling = workout.intensityCeiling {
@@ -159,6 +167,18 @@ struct TodayView: View {
 
     private func signal(_ name: String) -> Readiness.Signal? { model.readiness?.signals.first { $0.name == name } }
 
+    /// Zones present in today's workout, for the small legend under the profile.
+    private var legend: [(String, Color)] {
+        guard let workout = model.todayWorkout else { return [] }
+        var seen: [(String, Color)] = []
+        for step in workout.steps {
+            let i = (step.startIntensity + step.endIntensity) / 2
+            let name = Zone.shortName(for: i)
+            if !seen.contains(where: { $0.0 == name }) { seen.append((name, Zone.color(for: i))) }
+        }
+        return seen
+    }
+
     private func metric(_ title: LocalizedStringKey, value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption).foregroundStyle(.secondary)
@@ -190,38 +210,6 @@ struct TodayView: View {
             elapsed += step.duration
         }
         return best.offset
-    }
-}
-
-/// Compact bar profile of a workout, intensity as height, colored by zone.
-struct WorkoutProfileView: View {
-    let workout: Workout
-
-    var body: some View {
-        GeometryReader { geo in
-            let total = max(workout.totalDuration, 1)
-            let maxIntensity = max(workout.steps.map { max($0.startIntensity, $0.endIntensity) }.max() ?? 1, 1)
-            HStack(alignment: .bottom, spacing: 1) {
-                ForEach(workout.steps) { step in
-                    let width = max(geo.size.width * step.duration / total - 1, 1)
-                    Rectangle()
-                        .fill(zoneColor((step.startIntensity + step.endIntensity) / 2))
-                        .frame(width: width, height: max(geo.size.height * ((step.startIntensity + step.endIntensity) / 2) / maxIntensity, 2))
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    private func zoneColor(_ intensity: Double) -> Color {
-        switch intensity {
-        case ..<0.55: return .gray
-        case ..<0.75: return .blue
-        case ..<0.90: return .green
-        case ..<1.05: return .yellow
-        case ..<1.20: return .orange
-        default: return .red
-        }
     }
 }
 

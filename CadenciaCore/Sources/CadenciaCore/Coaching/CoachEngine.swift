@@ -148,7 +148,9 @@ public struct LLMCoach: CoachEngine {
     public var model: String
     public var fallback: any CoachEngine
 
-    public init(transport: any HTTPTransport, endpoint: URL, apiKey: String, model: String = "gpt-4o-mini", fallback: any CoachEngine = HeuristicCoach()) {
+    public static let defaultModel = "gpt-5.6-sol"
+
+    public init(transport: any HTTPTransport, endpoint: URL, apiKey: String, model: String = LLMCoach.defaultModel, fallback: any CoachEngine = HeuristicCoach()) {
         self.transport = transport
         self.endpoint = endpoint
         self.apiKey = apiKey
@@ -186,12 +188,13 @@ public struct LLMCoach: CoachEngine {
     }
 
     public func interpret(_ utterance: String, context: CoachContext) async throws -> CoachIntent {
+        // No `temperature`: reasoning models (GPT-5.x / GPT-6 / o-series) reject it. `developer` is the
+        // instruction role those models expect; older chat models accept it too.
         let body: [String: Any] = [
             "model": model,
-            "temperature": 0,
             "response_format": ["type": "json_object"],
             "messages": [
-                ["role": "system", "content": Self.systemPrompt(context: context)],
+                ["role": "developer", "content": Self.systemPrompt(context: context)],
                 ["role": "user", "content": utterance],
             ],
         ]
