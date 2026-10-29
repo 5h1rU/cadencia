@@ -146,7 +146,14 @@ public struct LLMCoach: Sendable {
         try request(instructions: Self.systemPrompt(context: context), userText: utterance)
     }
 
-    func request(instructions prompt: String, userText utterance: String) throws -> HTTPRequest {
+    /// JSON mode (`json_object`) is only granted when the *input* messages mention JSON; the instructions
+    /// do not count. The user turn therefore ends with an explicit JSON request on every backend.
+    static func jsonUserText(_ utterance: String) -> String {
+        utterance + "\n\nReply with a single JSON object only."
+    }
+
+    func request(instructions prompt: String, userText: String) throws -> HTTPRequest {
+        let utterance = Self.jsonUserText(userText)
         switch backend {
         case .apiKey(let endpoint, let key):
             let body: [String: Any] = [

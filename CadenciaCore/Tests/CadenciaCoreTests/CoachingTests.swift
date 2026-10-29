@@ -569,6 +569,8 @@ final class AICoachTests: XCTestCase {
         XCTAssertTrue(instructions.contains("(es)"))
         let input = body["input"] as! [[String: Any]]
         XCTAssertTrue((input[0]["content"] as! String).contains("\"legs\":\"heavy\""))
+        // json_object mode is refused unless an *input* message says "JSON"; the instructions alone do not count.
+        XCTAssertTrue((input[0]["content"] as! String).contains("JSON"))
 
         // A 3-hour session when the athlete has 75 min is thrown away, not softened.
         let long = #"{"readiness":{"level":"strong"},"workout":{"name":"x","kind":"longRide","steps":[{"name":"a","minutes":180,"intensity":0.65}]}}"#
