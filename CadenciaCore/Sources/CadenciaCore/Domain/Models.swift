@@ -116,10 +116,12 @@ public struct WellnessDay: Codable, Equatable, Sendable, Identifiable {
     public var soreness: Int?          // 1 (none) … 4 (very sore), Intervals scale
     public var fatigue: Int?
     public var updatedAt: Date?
+    /// Intervals' running cycling eFTP, distinct from an estimate based on a single ride.
+    public var estimatedFTP: Double?
 
     public init(day: Day, hrvMs: Double? = nil, restingHR: Int? = nil, sleepSeconds: Int? = nil,
                 ctl: Double? = nil, atl: Double? = nil, weightKg: Double? = nil, readinessReported: Double? = nil,
-                soreness: Int? = nil, fatigue: Int? = nil, updatedAt: Date? = nil) {
+                soreness: Int? = nil, fatigue: Int? = nil, updatedAt: Date? = nil, estimatedFTP: Double? = nil) {
         self.day = day
         self.hrvMs = hrvMs
         self.restingHR = restingHR
@@ -131,6 +133,7 @@ public struct WellnessDay: Codable, Equatable, Sendable, Identifiable {
         self.soreness = soreness
         self.fatigue = fatigue
         self.updatedAt = updatedAt
+        self.estimatedFTP = estimatedFTP
     }
 
     /// Training Stress Balance (form) = CTL − ATL.
@@ -152,6 +155,7 @@ public struct WellnessDay: Codable, Equatable, Sendable, Identifiable {
         m.soreness = other.soreness ?? soreness
         m.fatigue = other.fatigue ?? fatigue
         m.updatedAt = [updatedAt, other.updatedAt].compactMap { $0 }.max()
+        m.estimatedFTP = other.estimatedFTP ?? estimatedFTP
         return m
     }
 }
@@ -177,12 +181,13 @@ public struct ActivitySummary: Codable, Equatable, Sendable, Identifiable {
     public var isTrainer: Bool
     public var externalID: String?
     public var pairedEventID: Int?
+    public var elevationGainMeters: Double?
 
     public init(id: String, name: String, type: String, startDateLocal: Date, movingTime: TimeInterval,
                 distanceMeters: Double? = nil, trainingLoad: Int? = nil, intensity: Double? = nil,
                 averageWatts: Int? = nil, normalizedWatts: Int? = nil, averageHR: Int? = nil, ftpAtTime: Int? = nil,
                 estimatedFTP: Int? = nil, rpe: Int? = nil, feel: Int? = nil, isTrainer: Bool = false,
-                externalID: String? = nil, pairedEventID: Int? = nil) {
+                externalID: String? = nil, pairedEventID: Int? = nil, elevationGainMeters: Double? = nil) {
         self.id = id
         self.name = name
         self.type = type
@@ -201,6 +206,7 @@ public struct ActivitySummary: Codable, Equatable, Sendable, Identifiable {
         self.isTrainer = isTrainer
         self.externalID = externalID
         self.pairedEventID = pairedEventID
+        self.elevationGainMeters = elevationGainMeters
     }
 
     public var day: Day { Day(startDateLocal) }
@@ -492,10 +498,20 @@ public struct PlannedSession: Codable, Equatable, Sendable, Identifiable {
     public var note: String?
     public var intervalsEventID: Int?
     public var isPriority: Bool
+    /// Nil in older plans means indoor.
+    public var location: RideLocation?
+    public var prescriptionFTP: Int?
+    public var deliveredWorkout: Workout?
+    public var deliveredFTP: Int?
+    /// Optional navigation course, independent of the structured workout's power targets.
+    public var route: GPXRoute?
+    public var routeFileName: String?
+    public var routeSourceIndex: Int?
 
     public init(id: UUID = UUID(), day: Day, kind: SessionKind, title: String, targetMinutes: Int,
                 targetLoad: Int? = nil, status: Status = .provisional, workout: Workout? = nil,
-                note: String? = nil, intervalsEventID: Int? = nil, isPriority: Bool = false) {
+                note: String? = nil, intervalsEventID: Int? = nil, isPriority: Bool = false, location: RideLocation? = nil,
+                prescriptionFTP: Int? = nil) {
         self.id = id
         self.day = day
         self.kind = kind
@@ -507,11 +523,17 @@ public struct PlannedSession: Codable, Equatable, Sendable, Identifiable {
         self.note = note
         self.intervalsEventID = intervalsEventID
         self.isPriority = isPriority
+        self.location = location
+        self.prescriptionFTP = prescriptionFTP
     }
 }
 
 public enum GoalKind: String, Codable, Sendable, CaseIterable {
-    case climbing, ftp, durability, endurance, strength, event
+    case climbing, ftp, durability, endurance, vo2max, event
+    /// Retained so saved strength plans keep their original meaning.
+    case strength
+
+    public static let selectableGoals: [GoalKind] = [.climbing, .ftp, .durability, .endurance, .vo2max, .event]
 }
 
 public struct TrainingEvent: Codable, Equatable, Sendable, Identifiable {
@@ -525,7 +547,11 @@ public struct TrainingEvent: Codable, Equatable, Sendable, Identifiable {
     /// A race is ridden at the limit; a group ride or gran fondo is a priority day but not a race effort.
     public var isRace: Bool
 
-    public init(id: UUID = UUID(), name: String, day: Day, distanceKm: Double? = nil, priority: Priority = .a, objective: String = "", isRace: Bool = false) {
+    public var course: EventCourse?
+    public var details: EventDetails?
+
+    public init(id: UUID = UUID(), name: String, day: Day, distanceKm: Double? = nil, priority: Priority = .a, objective: String = "", isRace: Bool = false,
+                course: EventCourse? = nil, details: EventDetails? = nil) {
         self.id = id
         self.name = name
         self.day = day
@@ -533,6 +559,8 @@ public struct TrainingEvent: Codable, Equatable, Sendable, Identifiable {
         self.priority = priority
         self.objective = objective
         self.isRace = isRace
+        self.course = course
+        self.details = details
     }
 
     public var sessionKind: SessionKind { isRace ? .race : .groupRide }
@@ -606,7 +634,7 @@ public struct TrainingPlan: Codable, Equatable, Sendable, Identifiable {
         self.isActive = isActive
     }
 
-    public var weekCount: Int { max(1, (startDay.days(until: endDay) + 6) / 7) }
+    public var weekCount: Int { max(1, startDay.days(until: endDay) / 7 + 1) }
 
     public func weekNumber(of day: Day) -> Int? {
         guard day >= startDay, day <= endDay else { return nil }

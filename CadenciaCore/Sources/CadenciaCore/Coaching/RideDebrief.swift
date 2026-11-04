@@ -1,10 +1,18 @@
 import Foundation
 
 /// The coach's post-ride read of a session: what it built, how it was executed block by block, what the
-/// heart rate said, and what that means for tomorrow. Written by the AI from the recording plus the
-/// analysis Intervals.icu computed once the upload was processed. Everything here is pure; the app
+/// heart rate said, and what that means for tomorrow. Intervals.icu supplies all completed-ride measurements;
+/// the AI explains them alongside the intended workout and athlete context. Everything here is pure; the app
 /// decides when to ask, over which network, and where to keep the answer.
 public enum RideDebrief {
+    public static let evidenceRevision = 2
+
+    /// Earlier reports mixed local block calculations with provider analysis. Refresh them against
+    /// the single Intervals analysis source before displaying or syncing their assessment.
+    public static func requiresRefresh(_ ride: RideRecording) -> Bool {
+        (ride.debrief != nil || ride.debriefNote != nil)
+            && ride.debrief?.evidenceRevision != evidenceRevision
+    }
     // MARK: Brief: everything the coach sees
 
     public struct Brief: Codable, Equatable, Sendable {
@@ -13,7 +21,7 @@ public enum RideDebrief {
             public var kind: String
             public var rationale: String
             public var plannedMinutes: Int
-            public var riddenMinutes: Int
+            public var riddenMinutes: Int?
         }
 
         public struct PlannedBlock: Codable, Equatable, Sendable {
@@ -23,15 +31,8 @@ public enum RideDebrief {
             public var targetWatts: Int
             public var zone: String
             public var isRamp: Bool
-        }
-
-        public struct Totals: Codable, Equatable, Sendable {
-            public var avgWatts: Int?
-            public var normalizedWatts: Int?
-            public var load: Int?
-            public var avgHeartRate: Int?
-            public var avgCadence: Int?
-            public var kilojoules: Int
+            public var startSeconds: Double
+            public var seconds: Double
         }
 
         public struct Athlete: Codable, Equatable, Sendable {
@@ -67,6 +68,8 @@ public enum RideDebrief {
                 public var type: String?
                 public var startMinute: Int
                 public var minutes: Int
+                public var startSeconds: Int
+                public var seconds: Int
                 public var avgWatts: Int?
                 public var normalizedWatts: Int?
                 public var avgHeartRate: Int?
@@ -86,7 +89,9 @@ public enum RideDebrief {
             public var kilojoules: Int?
             public var kilojoulesAboveFTP: Int?
             public var powerZoneMinutes: [ZoneMinutes]
+            public var powerZoneSeconds: [ActivityDetail.ZoneTime]
             public var hrZoneMinutes: [Int]
+            public var hrZoneSeconds: [Int]
             public var hrRecoveryDrop: Int?
             public var decouplingPercent: Double?
             public var efficiencyFactor: Double?
@@ -108,6 +113,8 @@ public enum RideDebrief {
                 estimatedFTP = d.estimatedFTP
                 kilojoules = d.kilojoules
                 kilojoulesAboveFTP = d.kilojoulesAboveFTP
+                powerZoneSeconds = d.powerZoneTimes
+                hrZoneSeconds = d.hrZoneTimes
                 powerZoneMinutes = d.powerZoneTimes.map { .init(zone: $0.zone, minutes: Int((Double($0.seconds) / 60).rounded())) }
                 hrZoneMinutes = d.hrZoneTimes.map { Int((Double($0) / 60).rounded()) }
                 hrRecoveryDrop = d.hrRecovery?.drop
@@ -119,7 +126,7 @@ public enum RideDebrief {
                 fatigueATL = d.atl.map { $0.rounded() }
                 formTSB = d.tsb.map { $0.rounded() }
                 intervals = d.intervals.map {
-                    .init(label: $0.label, type: $0.type, startMinute: $0.startSeconds / 60, minutes: Int((Double($0.seconds) / 60).rounded()),
+                    .init(label: $0.label, type: $0.type, startMinute: $0.startSeconds / 60, minutes: Int((Double($0.seconds) / 60).rounded()), startSeconds: $0.startSeconds, seconds: $0.seconds,
                           avgWatts: $0.averageWatts, normalizedWatts: $0.normalizedWatts, avgHeartRate: $0.averageHR, maxHeartRate: $0.maxHR,
                           avgCadence: $0.averageCadence, decouplingPercent: $0.decoupling.map { ($0 * 10).rounded() / 10 })
                 }
@@ -130,32 +137,40 @@ public enum RideDebrief {
         public var day: String
         public var session: Session
         public var planned: [PlannedBlock]
-        public var executed: [RideCommentary.BlockStats]
-        public var totals: Totals
+        public var analysisSource: String
         public var athlete: Athlete
         public var readiness: ReadinessRow?
         public var feedback: Feedback?
         public var context: Context
         public var intervals: Analysis?
+        public var unstructuredRide: Bool?
+        public var recordedDistanceKm: Double?
+        public var recordedCourse: CoachBrief.Event.Course?
+        public var isReanalysis: Bool?
 
         public init(locale: String, ride: RideRecording, ftp: Int, athlete: Athlete? = nil, readiness: Readiness? = nil,
                     plan: TrainingPlan? = nil, recentActivities: [ActivitySummary] = [], analysis: ActivityDetail? = nil) {
             self.locale = locale
+            let analysis = analysis.flatMap { $0.analyzed ? $0 : nil }
+            analysisSource = "intervals.icu"
             let day = Day(ride.startedAt)
             self.day = day.iso
             let workout = ride.workout
-            session = Session(name: workout.name, kind: workout.kind.rawValue, rationale: workout.rationale,
-                              plannedMinutes: Int((workout.totalDuration / 60).rounded()), riddenMinutes: Int((ride.duration / 60).rounded()))
+            let unstructured = ride.sourceActivity != nil && ride.plannedSessionID == nil
+            unstructuredRide = unstructured
+            recordedDistanceKm = ride.recordedRoute?.distanceKm
+            recordedCourse = ride.recordedRoute.map { CoachBrief.Event.Course(EventCourse(elevationGainM: $0.elevationGainM,
+                elevationLossM: $0.elevationLossM, startAltitudeM: $0.start?.elevationM, minAltitudeM: $0.minAltitudeM, maxAltitudeM: $0.maxAltitudeM, route: $0)) }
+            session = Session(name: workout.name, kind: unstructured ? "unstructured" : workout.kind.rawValue, rationale: workout.rationale,
+                              plannedMinutes: Int((workout.totalDuration / 60).rounded()), riddenMinutes: analysis.map { Int(($0.movingTime / 60).rounded()) })
             planned = workout.steps.indices.map { i in
                 let step = workout.steps[i]
                 let mid = step.intensity(at: step.duration / 2)
                 return PlannedBlock(index: i, name: step.name, minutes: Int((step.duration / 60).rounded()),
-                                    targetWatts: Int((mid * Double(ftp)).rounded()), zone: RideCommentary.Zone.of(intensity: mid).name, isRamp: step.isRamp)
+                                    targetWatts: Int((mid * Double(ftp)).rounded()), zone: RideCommentary.Zone.of(intensity: mid).name, isRamp: step.isRamp,
+                                    startSeconds: workout.steps[..<i].reduce(0) { $0 + $1.duration }, seconds: step.duration)
             }
-            executed = workout.steps.indices.map { RideCommentary.BlockStats.compute(index: $0, workout: workout, ftp: ftp, samples: ride.samples) }
-                .filter { $0.seconds > 0 }
-            totals = Totals(avgWatts: ride.averageWatts, normalizedWatts: ride.normalizedWatts, load: ride.trainingLoad(ftp: ftp),
-                            avgHeartRate: ride.averageHeartRate, avgCadence: ride.averageCadence, kilojoules: Int(ride.kilojoules.rounded()))
+            isReanalysis = RideDebrief.requiresRefresh(ride)
             self.athlete = athlete ?? Athlete(ftp: ftp)
             self.readiness = readiness.map { ReadinessRow(level: $0.level.rawValue, score: $0.score) }
             feedback = ride.feedback.map { Feedback(rpe: $0.rpe, legs: $0.legs?.rawValue) }
@@ -163,7 +178,7 @@ public enum RideDebrief {
             context = Context(goal: plan?.goal.rawValue, planTitle: plan?.title, eventName: event?.name,
                               daysToEvent: event.map { day.days(until: $0.day) },
                               recentActivities: recentActivities
-                                .filter { $0.day >= day.adding(days: -7) && $0.day <= day && $0.externalID != ride.externalID }
+                                .filter { $0.day >= day.adding(days: -7) && $0.day <= day && $0.externalID != ride.externalID && $0.id != ride.sourceActivity?.id }
                                 .sorted { $0.startDateLocal < $1.startDateLocal }
                                 .map(CoachBrief.ActivityRow.init))
             intervals = analysis.map(Analysis.init)
@@ -195,14 +210,30 @@ public enum RideDebrief {
         public var flags: [String]
         public var model: String
         public var createdAt: Date
+        public var evidenceRevision: Int?
+        public var correctionNotice: String?
+
+        /// Human-readable Notes in Intervals, also used by session details after syncing.
+        public var noteContent: String {
+            let paragraphs = [correctionNotice ?? "", headline, benefit, execution, physiology, next].filter { !$0.isEmpty }
+            let blockNotes = blocks.filter { !$0.note.isEmpty }.map { "\($0.index + 1). \($0.note)" }
+            let watch = flags.map { "• \($0)" }
+            return IntervalsActivityNote.coachPrefix +
+                (paragraphs + [blockNotes.joined(separator: "\n"), watch.joined(separator: "\n")].filter { !$0.isEmpty })
+                .joined(separator: "\n\n")
+        }
 
         public init(headline: String, grade: Grade, benefit: String, execution: String, physiology: String, next: String,
-                    blocks: [BlockVerdict] = [], flags: [String] = [], model: String, createdAt: Date = Date()) {
+                    blocks: [BlockVerdict] = [], flags: [String] = [], model: String, createdAt: Date = Date(),
+                    evidenceRevision: Int? = RideDebrief.evidenceRevision, correctionNotice: String? = nil) {
             self.headline = headline; self.grade = grade; self.benefit = benefit; self.execution = execution
             self.physiology = physiology; self.next = next; self.blocks = blocks; self.flags = flags
             self.model = model; self.createdAt = createdAt
+            self.evidenceRevision = evidenceRevision; self.correctionNotice = correctionNotice
         }
     }
+
+    public enum AnalysisError: Error, Equatable, Sendable { case notReady }
 
     public enum ParseError: Error, Equatable, Sendable { case noHeadline, unknownGrade(String) }
 
@@ -235,16 +266,30 @@ public enum RideDebrief {
         """
         You are the head coach inside Cadencia, a cycling training app: an expert road-cycling coach with deep knowledge \
         of exercise physiology, power-based training (FTP, zones, NP, IF, TSS/CTL/ATL/TSB), heart-rate response \
-        (decoupling, efficiency factor, HR recovery) and recovery. The athlete just finished a trainer session and \
+        (decoupling, efficiency factor, HR recovery) and recovery. The athlete just finished a cycling session and \
         wants your honest debrief, the way you would talk after the ride: concrete, numeric, warm, never generic.
 
-        You get a JSON brief with the session as prescribed (name, kind, rationale, blocks with target watts and zone), \
-        how it was ridden block by block from the trainer (average/max watts, heart rate, cadence, share of time in zone), \
-        the ride totals, the athlete's FTP and thresholds, the day's readiness, the athlete's RPE/legs if given, the plan \
-        context (goal, next event) and the last week of activities. When present, "intervals" holds what Intervals.icu \
-        computed from the file: load, intensity factor, time in power and HR zones, HR recovery, decoupling, efficiency \
-        factor, variability index, compliance, fitness/fatigue/form after the ride, and the intervals it detected. \
-        Use ONLY these facts. Never invent a number. If something is missing, say what you could not judge.
+        All completed-ride measurements come from Intervals.icu after processing the uploaded activity, \
+        whether the ride was recorded by this phone or an outdoor head unit. Missing measurements are unknown, \
+        not zero effort. Never invent per-block power, compliance or cadence.
+
+        When unstructuredRide is true, there was no planned prescription. Assess the actual training stimulus and recovery \
+        using recorded evidence; never invent target blocks or grade the rider against an endurance workout they did not plan. \
+        Use recordedCourse for climb and altitude context when available; it describes actual GPS, not the intended course.
+
+        You get the intended session (planned blocks, target watts, start and duration in seconds), athlete and plan context, \
+        and `intervals`: the completed activity's provider analysis. Only `intervals` contains measured performance: \
+        load, intensity, power/HR zones, HR recovery, decoupling, efficiency, compliance, fitness/fatigue and detected intervals. \
+        Zone seconds and interval start/duration seconds preserve short efforts; rounded minutes are for readable summaries. \
+        The language model explains these results; it does not recompute performance from phone samples.
+
+        A whole-ride average or one combined RECOVERY interval cannot establish that a short planned effort was missed. \
+        Assess a specific planned block only when Intervals supplies a detected interval with compatible timing and duration. \
+        Otherwise explain what the aggregate zones and compliance support and state that individual-block detail is unavailable. \
+        Do not fabricate a block average, map a whole-ride interval to a short effort, or lower the grade solely because \
+        Intervals did not separate the efforts. High overall compliance supports overall adherence, not invented per-block certainty. \
+        Use only provided facts; missing data means an assessment limit. When isReanalysis is true, assess this provider \
+        evidence afresh without repeating an earlier verdict.
 
         Write in the language with code "\(locale)", in the second person. Answer ONLY with a JSON object:
         {"headline": string (one sentence verdict, ≤ 120 characters),
@@ -256,11 +301,12 @@ public enum RideDebrief {
          "physiology": string (2-3 sentences: what heart rate, decoupling, efficiency factor, HR recovery and cadence say \
         about aerobic condition and fatigue today; compare to the athlete's thresholds when given),
          "next": string (1-2 sentences: what this means for recovery and the next session, consistent with the plan context),
-         "blocks": [{"index": int, "verdict": "hit"|"over"|"under"|"short", "note": string (≤ 60 characters)}] one per block that was ridden,
+         "blocks": [{"index": int, "verdict": "hit"|"over"|"under"|"short", "note": string (≤ 60 characters)}] only for planned blocks supported by corresponding Intervals measurements; otherwise [],
          "flags": [string] (0-3 short items worth watching: HR drift, ended early, power far off target, FTP looks wrong…)}
 
-        Grading: "excellent" when the work blocks were in zone ≥ 85 % of the time and the full duration was ridden; "good" \
-        when mostly in zone with minor drift; "partial" when a work block was clearly missed, cut short or ridden far \
+        For unstructured rides, grade only what recorded effort and physiology support and say that prescription adherence cannot be assessed. \
+        For prescribed sessions: "excellent" when Intervals compliance, zone times and duration support full delivery; "good" \
+        when the provider evidence supports the purpose with minor drift; "partial" when a work block was clearly missed, cut short or ridden far \
         off target; "off" when the session was abandoned early or ridden as a different workout. Warm-up and cool-down \
         never lower the grade. A block "short" means it ended early; "over"/"under" mean average power out of the zone.
         """
@@ -276,6 +322,7 @@ public enum RideDebrief {
 public extension LLMCoach {
     /// The coach's debrief of a finished ride. Throws like `complete`; the app decides whether to retry.
     func debrief(_ brief: RideDebrief.Brief, now: Date = Date()) async throws -> RideDebrief.Report {
+        guard brief.intervals != nil else { throw RideDebrief.AnalysisError.notReady }
         let content = try await complete(instructions: RideDebrief.instructions(locale: brief.locale),
                                          userText: try RideDebrief.userMessage(brief))
         do {

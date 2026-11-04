@@ -4,63 +4,129 @@ import CadenciaCore
 
 /// Live ride as a game HUD (concept B): numbers strip, workout timeline with playhead, the target with a
 /// tolerance band and the live marker inside it, the block countdown, what's next, the last two minutes
-/// of power, and the controls. The coach's line appears as a subtitle over the chart and fades out.
+/// of power, and the controls. The coach's caption opens into a full, scrollable message.
 struct RideView: View {
     let session: RideSession
     let onFinish: (RideRecording) -> Void
 
     @State private var confirmEnd = false
     @State private var showProfile = false
+    @State private var profileDetent: PresentationDetent = .large
+    @State private var coachMessage: CoachMessage?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .title2) private var hudValueSize = 26.0
+
+    private struct CoachMessage: Identifiable {
+        let id = UUID()
+        let text: String
+    }
 
     private var engine: RideEngine { session.engine }
     private var live: BluetoothManager.Live { session.live }
 
     var body: some View {
-        VStack(spacing: 0) {
-            hud
-            timeline.padding(.top, 12)
-            Spacer(minLength: 0)
-            targetHero
-            Spacer(minLength: 0)
-            Divider().padding(.vertical, 6)
-            blockCountdown
-            upNext.padding(.top, 8)
-            sparkline.padding(.top, 8)
-            coachLine.padding(.top, 8)
-            controls.padding(.top, 10)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 0) {
+                    hud
+                    timeline.padding(.top, 12)
+                    Spacer(minLength: 12)
+                    targetHero
+                    Spacer(minLength: 12)
+                    Divider().padding(.vertical, 6)
+                    blockCountdown
+                    upNext.padding(.top, 8)
+                    sparkline.padding(.top, 8)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+                .frame(minHeight: geometry.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 4)
         .background(Color.black.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 10) {
+                coachLine
+                controls
+            }
+            .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 4)
+            .background(Color.black)
+        }
         .preferredColorScheme(.dark)
         .navigationTitle(engine.workout.name)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
         .toolbar {
-            if let commentator = session.commentator {
-                ToolbarItem(placement: .topBarTrailing) { coachMenu(commentator) }
-            }
+            ToolbarItem(placement: .topBarTrailing) { rideMenu }
         }
-        .onAppear { if engine.state == .ready { session.start() } }
+        .onAppear {
+            if engine.state == .ready { session.start() }
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--cadencia-preview-workout-profile") { showProfile = true }
+            if ProcessInfo.processInfo.arguments.contains("--cadencia-preview-coach-message"),
+               let caption = session.commentator?.caption {
+                coachMessage = CoachMessage(text: caption.line.caption)
+            }
+            #endif
+        }
         .onChange(of: engine.state) { _, state in
             if state == .finished { onFinish(session.finish()) }
         }
         .sheet(isPresented: $showProfile) {
             NavigationStack {
-                WorkoutProfileView(workout: engine.workout, ftp: engine.ftp, ceilingWatts: engine.ceilingWatts)
-                    .frame(height: 220)
-                    .padding()
-                    .navigationTitle(engine.workout.name)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showProfile = false } } }
+                List {
+                    WorkoutProfileView(workout: engine.workout, ftp: engine.ftp, ceilingWatts: engine.ceilingWatts)
+                        .frame(height: 220)
+                    Section("Workout blocks") {
+                        ForEach(Array(engine.workout.steps.enumerated()), id: \.offset) { _, step in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(step.name).font(.headline).fixedSize(horizontal: false, vertical: true)
+                                Text("\(stepWatts(step)) · \(Format.clock(step.duration))")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+                .navigationTitle(engine.workout.name)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showProfile = false } } }
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.medium, .large], selection: $profileDetent)
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $coachMessage) { message in
+            NavigationStack {
+                ScrollView {
+                    Text(message.text)
+                        .font(.body)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                        .padding()
+                }
+                .navigationTitle("Coach message")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { coachMessage = nil }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .alert("Trainer disconnected", isPresented: Binding(get: { session.trainerLostAlert }, set: { _ in session.acknowledgeTrainerLoss() })) {
             Button("Wait for it") {}
             Button("End ride", role: .destructive) { onFinish(session.finish()) }
         } message: {
             Text("The ride is paused and nothing is lost. The app keeps trying to reconnect; resume when the trainer is back.")
+        }
+        .alert("Pause workout?", isPresented: Binding(get: { engine.shouldSuggestPause }, set: { if !$0 { session.keepRiding() } })) {
+            Button("Pause") { session.pause() }
+            Button("Keep riding", role: .cancel) { session.keepRiding() }
+        } message: {
+            Text("You haven't pedaled for 5 seconds. Pause the workout timer until you're ready to resume?")
         }
         .confirmationDialog("End this ride?", isPresented: $confirmEnd, titleVisibility: .visible) {
             Button("End and save", role: .destructive) { onFinish(session.finish()) }
@@ -71,20 +137,45 @@ struct RideView: View {
 
     // MARK: HUD strip
 
+    private var usesTimerRow: Bool {
+        engine.workout.totalDuration >= 3600 || dynamicTypeSize.isAccessibilitySize
+    }
+
     private var hud: some View {
-        HStack(spacing: 0) {
-            hudCell("Power", live.watts.map { "\($0)" } ?? "–", unit: "W", tint: powerTint)
-            hudDivider
-            hudCell("HR", live.heartRate.map { "\($0)" } ?? "–", unit: "bpm", tint: live.heartRate == nil ? .pink : .white)
-            hudDivider
-            hudCell("Cadence", live.cadence.map { "\($0)" } ?? "–", unit: "rpm", tint: .white)
-            hudDivider
-            hudCell("Time", Format.clock(engine.elapsed), unit: nil, tint: .white)
-            hudDivider
-            hudCell("Left", Format.clock(engine.remainingTotal), unit: nil, tint: .white)
+        VStack(spacing: 8) {
+            if usesTimerRow {
+                HStack(spacing: 0) {
+                    sensorCells
+                }
+                Divider().overlay(Color.white.opacity(0.12))
+                HStack(spacing: 0) {
+                    timerCells
+                }
+            } else {
+                HStack(spacing: 0) {
+                    sensorCells
+                    hudDivider
+                    timerCells
+                }
+            }
         }
         .padding(.vertical, 10)
+        .padding(.horizontal, 6)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    @ViewBuilder private var sensorCells: some View {
+        hudCell("Power", live.watts.map { "\($0)" } ?? "–", unit: "W", tint: powerTint)
+        hudDivider
+        hudCell("HR", live.heartRate.map { "\($0)" } ?? "–", unit: "bpm", tint: live.heartRate == nil ? .pink : .white)
+        hudDivider
+        hudCell("Cadence", live.cadence.map { "\($0)" } ?? "–", unit: "rpm", tint: .white)
+    }
+
+    @ViewBuilder private var timerCells: some View {
+        hudCell("Time", Format.clock(engine.elapsed), unit: nil, tint: .white)
+        hudDivider
+        hudCell("Left", Format.countdown(engine.remainingTotal), unit: nil, tint: .white)
     }
 
     private var hudDivider: some View { Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1, height: 40) }
@@ -92,12 +183,17 @@ struct RideView: View {
     private func hudCell(_ title: LocalizedStringKey, _ value: String, unit: String?, tint: Color) -> some View {
         VStack(spacing: 3) {
             Text(title).font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(.secondary).tracking(0.6)
+                .lineLimit(1).minimumScaleFactor(0.4)
             Text(value)
-                .font(.system(size: 26, weight: .semibold, design: .rounded).monospacedDigit())
+                .font(.system(size: hudValueSize, weight: .semibold, design: .rounded).monospacedDigit())
                 .foregroundStyle(tint)
                 .contentTransition(.numericText())
                 .lineLimit(1).minimumScaleFactor(0.6)
-            Text(unit ?? " ").font(.caption).foregroundStyle(.secondary)
+            if let unit {
+                Text(unit).font(.caption).foregroundStyle(.secondary)
+            } else if !usesTimerRow {
+                Text(" ").font(.caption)
+            }
         }
         .frame(maxWidth: .infinity)
     }
@@ -157,7 +253,7 @@ struct RideView: View {
             HStack {
                 Text("Block \(blockNumber) of \(engine.workout.steps.count)")
                 Spacer()
-                Text("\(Format.clock(engine.remainingTotal)) left")
+                Text("\(Format.countdown(engine.remainingTotal)) left")
             }
             .font(.footnote).foregroundStyle(.secondary)
         }
@@ -318,10 +414,11 @@ struct RideView: View {
 
     private var blockCountdown: some View {
         VStack(spacing: 2) {
-            Text(Format.clock(engine.remainingInStep))
+            Text(Format.countdown(engine.remainingInStep))
                 .font(.system(size: 60, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundStyle(.white)
                 .contentTransition(.numericText())
+                .lineLimit(1).minimumScaleFactor(0.6)
             if let step = engine.currentStep {
                 Text("\(step.name) · \(stepWatts(step)) · \(Format.minutes(step.duration))")
                     .font(.subheadline).foregroundStyle(.secondary)
@@ -439,40 +536,61 @@ struct RideView: View {
 
     // MARK: Coach
 
-    /// The coach's last line, in its own row so it never covers anything. Two lines at most.
+    /// A compact preview; tapping captures this message so newer captions cannot replace it mid-read.
     @ViewBuilder private var coachLine: some View {
         if let commentator = session.commentator, commentator.captionsEnabled {
-            HStack(alignment: .center, spacing: 10) {
-                Image(systemName: commentator.caption.map { moodSymbol($0.line.mood) } ?? "waveform")
-                    .foregroundStyle(commentator.caption.map { moodTint($0.line.mood) } ?? .secondary)
-                    .font(.title3)
-                    .frame(width: 24)
-                    .symbolEffect(.variableColor.iterative, isActive: commentator.thinking)
-                if let caption = commentator.caption {
-                    Text(caption.line.caption)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white)
-                        .lineLimit(2).minimumScaleFactor(0.85)
-                } else {
-                    Text("Coach").font(.subheadline).foregroundStyle(.tertiary)
+            Button {
+                if let caption = commentator.caption { coachMessage = CoachMessage(text: caption.line.caption) }
+            } label: {
+                HStack(alignment: .center, spacing: 10) {
+                    Image(systemName: commentator.caption.map { moodSymbol($0.line.mood) } ?? "waveform")
+                        .foregroundStyle(commentator.caption.map { moodTint($0.line.mood) } ?? .secondary)
+                        .font(.system(size: 22))
+                        .frame(width: 24)
+                        .symbolEffect(.variableColor.iterative, isActive: commentator.thinking)
+                    if let caption = commentator.caption {
+                        Text(caption.line.caption)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.white)
+                            .lineLimit(2).minimumScaleFactor(0.85)
+                    } else {
+                        Text("Coach").font(.subheadline).foregroundStyle(.tertiary)
+                    }
+                    Spacer(minLength: 0)
+                    if commentator.caption != nil {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                Spacer(minLength: 0)
+                .frame(minHeight: 40)
+                .padding(.horizontal, 14).padding(.vertical, 6)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
             }
-            .frame(minHeight: 40)
-            .padding(.horizontal, 14).padding(.vertical, 6)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+            .buttonStyle(.plain)
+            .disabled(commentator.caption == nil)
+            .accessibilityLabel("Read full coach message")
+            .accessibilityValue(commentator.caption?.line.caption ?? String(localized: "Coach"))
             .animation(.default, value: commentator.caption)
         }
     }
 
-    private func coachMenu(_ commentator: RideCommentator) -> some View {
+    private var rideMenu: some View {
         Menu {
-            Toggle(isOn: Binding(get: { commentator.voiceEnabled }, set: { commentator.voiceEnabled = $0 })) { Label("Voice", systemImage: "speaker.wave.2") }
-            Toggle(isOn: Binding(get: { commentator.captionsEnabled }, set: { commentator.captionsEnabled = $0 })) { Label("Captions", systemImage: "captions.bubble") }
+            Toggle(isOn: Binding(get: { session.countdownBeepsEnabled }, set: { session.countdownBeepsEnabled = $0 })) {
+                Label("Block countdown beeps", systemImage: "bell")
+            }
+            if let commentator = session.commentator {
+                Toggle(isOn: Binding(get: { commentator.voiceEnabled }, set: { commentator.voiceEnabled = $0 })) { Label("Voice", systemImage: "speaker.wave.2") }
+                Toggle(isOn: Binding(get: { commentator.captionsEnabled }, set: { commentator.captionsEnabled = $0 })) { Label("Captions", systemImage: "captions.bubble") }
+            }
         } label: {
-            Image(systemName: commentator.thinking ? "waveform" : (commentator.voiceEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill"))
-                .symbolEffect(.variableColor.iterative, isActive: commentator.thinking)
+            Image(systemName: session.commentator?.thinking == true ? "waveform" :
+                    (session.commentator?.voiceEnabled == true ? "speaker.wave.2.fill" :
+                        (session.countdownBeepsEnabled ? "bell.fill" : "speaker.slash.fill")))
+                .symbolEffect(.variableColor.iterative, isActive: session.commentator?.thinking == true)
         }
+        .accessibilityLabel("Ride audio and captions")
     }
 
     private func moodSymbol(_ mood: RideCommentary.Line.Mood) -> String {
@@ -499,20 +617,38 @@ struct RideView: View {
 
     /// Pause/Resume and End ride (asks first). Intensity lives next to the target.
     private var controls: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                if engine.state == .riding {
-                    Button { session.pause() } label: { Label("Pause", systemImage: "pause.fill").frame(maxWidth: .infinity) }
-                        .buttonStyle(.bordered)
-                } else {
-                    Button { session.resume() } label: { Label("Resume", systemImage: "play.fill").frame(maxWidth: .infinity) }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.green)
-                }
-                Button(role: .destructive) { confirmEnd = true } label: { Label("End ride", systemImage: "stop.fill").frame(maxWidth: .infinity) }
-                    .buttonStyle(.bordered)
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(spacing: 10) { controlButtons }
+            } else {
+                HStack(spacing: 12) { controlButtons }
             }
-            .controlSize(.large)
         }
+        .controlSize(.large)
+        .lineLimit(1).minimumScaleFactor(0.5)
+    }
+
+    @ViewBuilder private var controlButtons: some View {
+        if engine.state == .riding {
+            Button { session.pause() } label: { Label("Pause", systemImage: "pause.fill").frame(maxWidth: .infinity) }
+                .buttonStyle(.bordered)
+        } else {
+            Button { session.resume() } label: { Label("Resume", systemImage: "play.fill").frame(maxWidth: .infinity) }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+        }
+        Button(role: .destructive) { confirmEnd = true } label: { Label("End ride", systemImage: "stop.fill").frame(maxWidth: .infinity) }
+            .buttonStyle(.bordered)
     }
 }
+
+#if DEBUG
+struct RideHUDPreview: View {
+    @State private var session = RideSession.hudPreview(
+        longRide: !ProcessInfo.processInfo.arguments.contains("--cadencia-preview-short-ride"))
+
+    var body: some View {
+        NavigationStack { RideView(session: session, onFinish: { _ in }) }
+    }
+}
+#endif

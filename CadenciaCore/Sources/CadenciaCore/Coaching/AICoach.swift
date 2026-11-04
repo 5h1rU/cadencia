@@ -77,14 +77,53 @@ public struct CoachBrief: Codable, Equatable, Sendable {
         public var minutes: Int
         public var status: String
         public var priority: Bool
+        public var routeDistanceKm: Double?
+        public var route: Event.Course?
 
         public init(_ s: PlannedSession) {
             day = s.day.iso; kind = s.kind.rawValue; title = s.title; minutes = s.targetMinutes
             status = s.status.rawValue; priority = s.isPriority
+            routeDistanceKm = s.route?.distanceKm
+            route = s.route.map { Event.Course(EventCourse(elevationGainM: $0.elevationGainM, elevationLossM: $0.elevationLossM,
+                startAltitudeM: $0.start?.elevationM, minAltitudeM: $0.minAltitudeM, maxAltitudeM: $0.maxAltitudeM, route: $0)) }
         }
     }
 
     public struct Event: Codable, Equatable, Sendable {
+        public struct Course: Codable, Equatable, Sendable {
+            public struct Climb: Codable, Equatable, Sendable {
+                public var startKm: Double
+                public var distanceKm: Double
+                public var gainM: Double
+                public var averageGradient: Double
+                public var estimatedCategory: String
+                public var steepest250mGradient: Double?
+                public var steepest1kmGradient: Double?
+                init(_ climb: RouteClimb) {
+                    startKm = climb.startKm; distanceKm = climb.distanceKm; gainM = climb.gainM
+                    averageGradient = climb.averageGradient; estimatedCategory = climb.category.rawValue
+                    steepest250mGradient = climb.detail?.steepest250m?.averageGradient
+                    steepest1kmGradient = climb.detail?.steepest1km?.averageGradient
+                }
+            }
+            public var elevationGainM: Double?
+            public var elevationLossM: Double?
+            public var startAltitudeM: Double?
+            public var minAltitudeM: Double?
+            public var maxAltitudeM: Double?
+            public var surface: String?
+            public var technicalDifficulty: String?
+            public var gpxElevationCoverage: Double?
+            public var estimatedClimbs: [Climb]
+
+            init(_ course: EventCourse) {
+                elevationGainM = course.elevationGainM; elevationLossM = course.elevationLossM
+                startAltitudeM = course.startAltitudeM; minAltitudeM = course.minAltitudeM; maxAltitudeM = course.maxAltitudeM
+                surface = course.surface?.rawValue; technicalDifficulty = course.technicalDifficulty?.rawValue
+                gpxElevationCoverage = course.route?.elevationCoverage
+                estimatedClimbs = (course.route?.climbs ?? []).sorted { $0.gainM > $1.gainM }.prefix(8).map(Climb.init)
+            }
+        }
         public var name: String
         public var day: String
         public var daysOut: Int
@@ -92,10 +131,15 @@ public struct CoachBrief: Codable, Equatable, Sendable {
         public var priority: String
         public var objective: String
         public var isRace: Bool
+        public var course: Course?
+        public var details: EventDetails?
 
         public init(_ e: TrainingEvent, today: Day) {
             name = e.name; day = e.day.iso; daysOut = today.days(until: e.day); distanceKm = e.distanceKm
             priority = e.priority.rawValue; objective = e.objective; isRace = e.isRace
+            course = e.course.map(Course.init)
+            details = e.details
+            details?.latitude = nil; details?.longitude = nil
         }
     }
 
@@ -157,6 +201,15 @@ public struct CoachBrief: Codable, Equatable, Sendable {
     public var availableMinutes: Int?
     public var recentCoachNotes: [String]   // what the athlete told the coach lately
     public var measured: Measured
+    /// The date and load used for readiness, separate from today's planned-inclusive Intervals row.
+    public var loadBeforeToday: WellnessRow?
+    public var intervalsEFTP: Double?
+    /// A review is allowed only when the deterministic evidence check agrees.
+    public var ftpReviewWatts: Int?
+    /// Optional courses attached to individual days, including standalone rides.
+    public var plannedRoutes: [PlannedRow]?
+    /// Only an explicit, dated request is actionable. Unapplied chat proposals are not coaching inputs.
+    public var workoutRequest: CoachIntent.WorkoutRequest?
 
     public init(today: Day, locale: String, athlete: Athlete, ftpEstimate: FTPEstimate?, powerCurve: [PowerCurvePoint],
                 wellness: [WellnessDay], feedback: [Day: SubjectiveFeedback], activities: [ActivitySummary],
@@ -182,18 +235,26 @@ public struct CoachBrief: Codable, Equatable, Sendable {
         self.availableMinutes = availableMinutes
         self.recentCoachNotes = recentCoachNotes
         self.measured = Measured(measured)
+        loadBeforeToday = self.wellness.last { $0.day < today.iso && $0.ctl != nil && $0.atl != nil }
+        intervalsEFTP = wellness.filter { $0.day <= today }.sorted { $0.day < $1.day }.compactMap(\.estimatedFTP).last
+        let recentEFTP = activities.filter { $0.isCycling && $0.day >= today.adding(days: -(ftpEstimate?.windowDays ?? 42)) && $0.day <= today }
+            .compactMap(\.estimatedFTP).max()
+        let corroboratingEFTP = [recentEFTP, intervalsEFTP.map { Int($0.rounded()) }].compactMap { $0 }.max()
+        ftpReviewWatts = ftpEstimate.flatMap { FTPEstimator().proposal(current: athlete.ftp, estimate: $0, recentEFTP: corroboratingEFTP) }
     }
 
     /// A stable fingerprint of the inputs that should trigger a new decision. Same key → same answer is fine.
     public var fingerprint: String {
-        let parts: [String] = [
-            today, String(athlete.ftp), availableMinutes.map(String.init) ?? "-",
-            wellness.last.map { "\($0.hrv ?? -1)/\($0.rhr ?? -1)/\($0.sleepH ?? -1)/\($0.atl ?? -1)/\($0.legs ?? "-")" } ?? "-",
-            String(activities.count), activities.last?.day ?? "-",
-            plan?.next7Days.map { "\($0.day)\($0.kind)\($0.minutes)" }.joined() ?? "-",
-            upcomingEvent?.day ?? "-", String(recentCoachNotes.count),
-        ]
-        return parts.joined(separator: "|")
+        var inputs = self
+        // Mirroring the coach's own workout changes today's projection. It is display context,
+        // not new evidence of fatigue; including it would repeatedly regenerate the prescription.
+        for i in inputs.wellness.indices where inputs.wellness[i].day == today {
+            inputs.wellness[i].ctl = nil; inputs.wellness[i].atl = nil; inputs.wellness[i].tsb = nil
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(inputs) else { return "invalid-brief" }
+        return SHA256.hash(Array(AICoachPrompt.revision.utf8) + Array(data)).map { String(format: "%02x", $0) }.joined()
     }
 }
 
@@ -292,6 +353,7 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
 
     public enum ValidationError: Error, Equatable, Sendable {
         case unknownReadiness(String), unknownKind(String), noSteps, stepOutOfRange(String), tooLong(Int), badDay(String)
+        case sessionIntent(String)
     }
 
     /// Hard limits on what the model may send to the trainer.
@@ -315,7 +377,7 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
 
     /// Builds a validated prescription from the model's JSON. The measured signals (HRV vs the athlete's
     /// range, etc.) are kept as computed; the model supplies the verdict and the words.
-    public static func parse(_ json: Data, measured: CoachBrief.Measured, today: Day, availableMinutes: Int?, model: String, now: Date = Date()) throws -> DailyPrescription {
+    public static func parse(_ json: Data, measured: CoachBrief.Measured, today: Day, availableMinutes: Int?, model: String, now: Date = Date(), brief: CoachBrief? = nil) throws -> DailyPrescription {
         let w = try JSONDecoder().decode(Wire.self, from: json)
 
         guard let level = Readiness.Level(rawValue: w.readiness.level.lowercased()) else { throw ValidationError.unknownReadiness(w.readiness.level) }
@@ -342,6 +404,7 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
 
         var ceiling = w.workout.ceiling
         if kind == .rest { ceiling = 0 }
+        if ceiling == 0, kind != .rest { throw ValidationError.stepOutOfRange("A riding workout cannot have a zero power ceiling") }
         if let c = ceiling, c != 0 { ceiling = min(max(c, intensityRange.lowerBound), intensityRange.upperBound) }
         // The ceiling must never cut the session's own blocks; raise it to the hardest step if the model got it backwards.
         if let c = ceiling, c > 0, let top = steps.map({ max($0.startIntensity, $0.endIntensity) }).max(), top > c { ceiling = top }
@@ -358,8 +421,10 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
         }
         week.sort { $0.day < $1.day }
 
-        return DailyPrescription(readiness: readiness, workout: workout, week: week, note: note,
-                                 flags: w.flags ?? [], model: model, generatedAt: now)
+        let prescription = DailyPrescription(readiness: readiness, workout: workout, week: week, note: note,
+                                             flags: w.flags ?? [], model: model, generatedAt: now)
+        try PrescriptionValidator().validate(prescription, brief: brief)
+        return prescription
     }
 
     static func defaultScore(_ level: Readiness.Level) -> Int {
@@ -370,9 +435,12 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
 // MARK: - Prompt
 
 public enum AICoachPrompt {
+    /// Changes to the decision contract invalidate earlier daily decisions once, including persisted ones.
+    public static let revision = "session-intent-v2"
     /// Who the model is and how it must decide. The data arrives as JSON in the user turn.
     public static func instructions(locale: String) -> String {
-        """
+        let rules = PrescriptionValidator()
+        return """
         You are the head coach inside Cadencia, a cycling training app. You are an expert road-cycling coach with deep \
         knowledge of exercise physiology, periodization, power-based training (FTP, zones, TSS/CTL/ATL/TSB), HRV- and \
         sleep-guided training, recovery, nutrition basics and athlete health. You decide what this athlete should do today \
@@ -385,13 +453,51 @@ public enum AICoachPrompt {
         HRV, sleep, resting HR, form, fatigue and legs compared with the athlete's own 28-day range (below / typical / above). \
         Nothing has been decided for you; you are the only coach.
 
+        Today's wellness CTL/ATL/TSB are Intervals.icu's projection INCLUDING planned workouts. Do not treat the \
+        session you are about to prescribe as fatigue already accumulated. `loadBeforeToday` contains the dated \
+        load through yesterday used by `measured`; keep those dates distinct when discussing numbers.
+        `intervalsEFTP` is Intervals.icu's running cycling estimate. `ftpEstimate` is a heuristic from recent best \
+        recorded power, which need not be maximal. A lower recent curve does not establish a fall in FTP. \
+        Only request an FTP review or emit `ftp_review` when `ftpReviewWatts` is present. Otherwise retain the \
+        working FTP and do not claim that sustained power proves it too high.
+
         Decide like a coach who sees this athlete every day:
         - Readiness comes from the trend, not one number. Compare today's HRV, resting HR and sleep with the athlete's own \
         recent range; weigh TSB (form) and the ATL ramp; weigh RPE/feel of the last sessions; weigh what the athlete said.
-        - Hard days need a reason to go ahead (recovered, in a build phase, far enough from the event). Easy days need no \
-        excuse. When signals conflict, be conservative on intensity and generous on easy volume.
-        - Respect the plan's intent and the event: taper before an A event (opener the day before, nothing hard in the \
-        last 48 h), do not stack hard days, keep the long ride where the athlete can do it.
+        - Distinguish a demanding training session from brief activation efforts. A hard training day needs recovery, \
+        a reason in the plan and sufficient distance from the event. Short, fully recovered opener efforts have a different \
+        purpose and do not require a build phase. Readiness can reduce the planned dose; it never upgrades an easy day into a hard one.
+        - Respect the plan's intent and event priority. Taper by reducing volume and accumulated fatigue while preserving \
+        appropriate brief intensity. Avoid sustained threshold/VO2 workouts and stacked hard days immediately before an A event. \
+        An opener the day before an event can include brief near-FTP or above-FTP efforts with full easy recovery. \
+        The event being tomorrow is not a reason to impose a below-threshold power ceiling.
+        - Individual plannedRoutes describe optional navigation courses for specific days. Use their distance, climbs and altitude \
+        as preparation context, while recovery still sets the training ceiling. A GPX course never forces a hard session or guarantees completion. \
+        - Use the confirmed event course and preparation details: distinguish total elevation gain from absolute altitude; \
+        consider climb length/gradient, surface, technical difficulty, expected duration, objective, cutoff, travel, \
+        usual training altitude, arrival date and available terrain. Conditions are the athlete's expectations, not a forecast. \
+        GPX climbs are approximate; confirmed course metrics take precedence, missing data is unknown, and you must not \
+        invent weather, acclimatization, a precise altitude power penalty or a guaranteed finish time. These details guide \
+        specificity and conservative preparation; they never override readiness or raise intensity beyond the planned session.
+        - Choose one purpose for today and make the workout, note and today's week entry agree. Recovery is \
+        gentle Z1 (at or below 55% FTP); endurance needs a meaningful Z2 main block above 55% and up to 75% FTP. \
+        Warm-up and cool-down may be below Z2. Do not label an entirely Z1 session endurance. An opener needs \
+        a confirmed event the following day. Build it from the rider's history, training exposure, time available, event demands \
+        and personal recovery trends, not a fixed workout template or population HRV cutoff. Include brief activation \
+        near threshold (at least \(Int(rules.activationIntensity * 100))% FTP) or above, with most riding at or below \
+        \(Int(rules.easyRidingIntensity * 100))% FTP and at least as much easy recovery as each effort, at or below \
+        \(Int(rules.easyRecoveryIntensity * 100))% FTP. Each continuous activation must be at most \
+        \(Int(rules.maxContinuousActivation / 60)) minutes and all activation must occupy at most \
+        \(Int(rules.maxActivationFraction * 100))% of the session. These are validation bounds, not a target dose. Use less when the athlete's evidence warrants it. \
+        A ride entirely below that range is an easy/endurance or recovery alternative, not an opener. If recovery, illness, \
+        recent load or the athlete's preferences warrant that alternative, label it honestly and explain the downgrade. \
+        Missing a single recovery measurement does not by itself require cancelling all activation. Do not invent an event or taper.
+        - `workoutRequest`, when present for today, is the athlete's explicit request awaiting execution. Preserve its \
+        purpose, duration and requested blocks when compatible with the plan and recovery. Explain any adjustment to \
+        those requirements in `note.session`; never silently substitute an easy spin or claim the requested session was saved. \
+        An opener requested "without hard efforts" may mean no prolonged fatiguing work; distinguish that from an explicit \
+        request for easy-only riding, and use the athlete's confirmed instructions. Historical chat notes are context, not \
+        new workout commands, and do not override today's dated request.
         - The session must be executable on a smart trainer in ERG mode: ordered steps with intensity as a fraction of FTP \
         (0.50 = 50 % FTP). Always include a warm-up and a cool-down. Use ramps (`from`/`to`) for warm-ups and cool-downs \
         and steady blocks (`intensity`) for work and recovery. Keep step intensities within 0.3–1.5 and keep the total \
@@ -399,7 +505,7 @@ public enum AICoachPrompt {
         - `ceiling` is the fraction of FTP the trainer must never exceed today, at or above the hardest step.
         - The week outlook covers today plus the next seven days, one entry per day including rest days; it should \
         build toward the goal with sensible hard/easy alternation and total hours close to the plan's hours per week.
-        - If the power curve or recent efforts suggest the FTP is wrong, say so in `flags` (e.g. "ftp_review") and in the note.
+        - An FTP review requires `ftpReviewWatts`; never substitute a recent easy ride's power for the working FTP.
 
         The `note` is what the athlete reads on the home screen. They are a committed rider, not a sports scientist, \
         and they read it on a phone before the ride. Write it in the athlete's language (\(locale)), in the second \

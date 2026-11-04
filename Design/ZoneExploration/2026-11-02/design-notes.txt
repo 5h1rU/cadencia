@@ -1,0 +1,24 @@
+Cadencia zone layout exploration — 2026-11-02
+
+Scope: user-provided ride analysis screenshot; time-in-zone legibility. Four concepts only; no app sources changed.
+
+Observed issues: eight narrow power-zone legend columns force hour durations onto several lines. Small secondary text weakens the most useful values. Z7 and Sweet Spot have similar colors. Fifteen metrics compete with zones.
+
+Source corroboration: Cadencia/Features/Ride/RideDebriefView.swift ZoneTimeBar uses one HStack for all legend entries and caption2 text. No runtime interactions, VoiceOver, or Dynamic Type behavior tested.
+
+Data preserved from screenshot: Power Z1 1h25m, Z2 44m, Z3 1h01m, Z4 27m, Z5 8m, Z6 4m, Z7 2m; Sweet Spot 42m. Heart rate Z1 53m, Z2 37m, Z3 12m, Z4 1h21m, Z5 44m, Z6 3m. No totals or thresholds inferred.
+
+Sweet Spot displayed separately because it overlaps numbered power zones: https://forum.intervals.icu/t/change-training-zones/13401 . Follow-up implementation should omit SS from the exclusive-zone distribution sum.
+
+Display order:
+1 — Horizontal bars, fixed duration column, Power/Heart rate segment. Proportion and exact times, one sensor at once.
+2 — Stacked overview and two-column legend. Both sensors and distribution; requires color matching.
+3 — Full-width duration rows. Clear reading order; taller list, less emphasis on proportion.
+4 — Side-by-side Power/Heart rate table. Compact comparison; different thresholds across systems.
+
+All concepts retain native dark styling and move secondary metrics behind disclosure. English, Spanish, and large text need implementation validation.
+
+Built-in Image Gen, source screenshot attached to every call. Exact prompts in generation-prompts.txt. Tool produced 1123 x 1401 rasters despite requested 590 x 1278. Concept visuals are not verified phone-viewport specifications. Preserve intended font sizes and allow scrolling in implementation; do not shrink the entire layout to force a fit.
+
+Selected implementation — 2026-11-02
+User chose the third displayed concept and required Intervals.icu zones for both power and HR. Implemented full-width rows, unchanged provider mappings, stable colors by provider ID, separate SS, visible short/zero entries, localized durations, metrics disclosure and accessibility reflow. See root design-qa.md for captures and verification.

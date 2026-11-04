@@ -51,21 +51,27 @@ struct DevicesView: View {
 
     var body: some View {
         List {
-            Section {
+            InfoSection(hasInformation: bt.isPoweredOn && bt.trainer == nil) {
                 deviceRow(.trainer, title: "Smart trainer", symbol: "bicycle")
                 deviceRow(.heartRate, title: "Heart rate", symbol: "heart")
                 deviceRow(.powerMeter, title: "Power meter", symbol: "bolt.circle", optional: true)
+                if !bt.isPoweredOn {
+                    Label("Turn on Bluetooth to find your devices.", systemImage: "exclamationmark.triangle")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             } header: {
                 Text("Devices")
-            } footer: {
-                if !bt.isPoweredOn { Text("Turn on Bluetooth to find your devices.") }
-                else if bt.trainer == nil { Text("Without a trainer you can still record with a power meter and heart rate band; targets will show on screen only.") }
+            } information: {
+                Text("Without a trainer you can still record with a power meter and heart rate band; targets will show on screen only.")
             }
 
-            Section {
+            InfoSection {
                 Toggle("ERG mode", isOn: $ergEnabled)
                     .disabled(bt.trainer == nil)
-            } footer: {
+            } header: {
+                Text("ERG mode")
+            } information: {
                 Text("ERG holds the target power for you. Off, the trainer keeps its own resistance and you ride to the numbers on screen.")
             }
 
@@ -86,10 +92,17 @@ struct DevicesView: View {
 
             Section {
                 Button { start() } label: {
-                    Label("Start", systemImage: "play.fill").frame(maxWidth: .infinity)
+                    Label("Start", systemImage: "play.fill")
+                        .labelStyle(.titleAndIcon)
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 32, alignment: .center)
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .disabled(bt.trainer?.isReady != true && bt.powerMeter?.isReady != true && bt.heartRateMonitor?.isReady != true)
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                .listRowSeparator(.hidden)
             }
             .listRowBackground(Color.clear)
         }
@@ -163,7 +176,7 @@ struct DevicePickerView: View {
                         }
                     }
                 }
-                Section {
+                InfoSection {
                     ForEach(candidates) { d in
                         Button {
                             bt.connect(d, as: role)
@@ -183,7 +196,7 @@ struct DevicePickerView: View {
                     }
                 } header: {
                     Text("Nearby")
-                } footer: {
+                } information: {
                     Text("Wake the device (spin the pedals, wear the band) so it advertises.")
                 }
             }

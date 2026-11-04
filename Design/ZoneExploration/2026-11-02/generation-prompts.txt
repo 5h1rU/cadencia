@@ -1,0 +1,95 @@
+Built-in Image Gen. Input reference attached for every generation. Display order preserved.
+
+1. 01-zone-bars.png
+
+Use case: ui-mockup.
+Create ONE realistic, production-quality UI concept named "Zone bars" for Cadencia, an existing native iOS cycling coach. This is one independent design direction, not a comparison board.
+Input image is the current app reference: preserve its black background, charcoal grouped surfaces, SF-style system typography, iOS blue accent and existing gray/blue/green/yellow/orange/red/purple zone colors, but redesign the cramped time-in-zone area.
+Target dimensions: 590 x 1278 portrait, same aspect ratio as the reference, with layout density equivalent to a 390pt wide iPhone. App content ONLY; no phone body, bezel, notch, Dynamic Island, OS status bar, clock, signal, battery, or home indicator. No exterior presentation, headings outside app, or option numbers. No visible date is needed; current date anchor November 2, 2026 if needed.
+Goal: instantly read exact zone durations without tiny legends or wrapped durations. Render comfortably readable type equivalent to 16-17pt body and tabular monospaced digits.
+STRUCTURE: slim navigation row with back chevron and title "Ride analysis". Below, "From Intervals" in subdued text, large heading "Time in zones". Native segmented control "Power" selected and "Heart rate" unselected. Only the selected Power chart occupies the current screen, heart rate is reached through the segment.
+Seven full-width HORIZONTAL BAR ROWS, one per numbered power zone. Each row has a short colored zone label at left, a neutral track with proportional colored fill in the middle, and bold duration aligned in one clean right-hand column. Longest Z1 bar=85 minutes, scale all others relative to 85. Every duration must be a SINGLE unbroken horizontal line:
+Z1 gray — 1 h 25 min
+Z2 blue — 44 min
+Z3 green — 1 h 01 min
+Z4 yellow — 27 min
+Z5 orange — 8 min
+Z6 red — 4 min
+Z7 purple — 2 min
+Below these rows, a divider then a separate line "Sweet Spot" with magenta marker, duration "42 min" and subtle helper "Overlaps power zones". Sweet Spot is NOT an eighth bar or part of the distribution.
+Below zones, a spaced "Ride metrics" strip with three equal columns: Load 236; Intensity 0.78; NP 154 W. Follow with an "All metrics" disclosure row. Supporting values remain behind disclosure instead of cramming all 15 metrics into frame.
+Bottom native tab bar: Home selected blue; Coach; Plan; Settings, use clean familiar icons. Keep generous blank breathing space if contents fit early.
+Prioritize alignment, spacing, hierarchy on the base surface; only one subtle grouped chart surface if needed, no cards inside cards, no shadows. Crisp flat screenshot of a finished native app. No decorative hero artwork, no gradients, no fake data, no percentages or power thresholds not provided. Show a noticeably different layout from the original, focused horizontal bars with selectable Power/Heart rate, no stacked distribution bar.
+
+2. 02-paired-legend.png
+
+Create ONE realistic production-quality native iOS UI design named "Overview and paired legend" for the attached existing Cadencia cycling app. Use case: ui-mockup. The input screenshot is the actual style and data reference.
+STRICT CANVAS: tall narrow iPhone viewport, 590 pixels wide x 1278 pixels high, aspect 0.462, portrait. Layout should fit a logical 390pt phone screen. Keep exactly that tall narrow composition, not a tablet or wide dashboard. App content only, no phone device, bezel, OS status bar, clock, battery, home indicator, exterior headings, option numbers, or surrounding presentation.
+Goal: redesign the narrow time-in-zone labels using TWO LEGEND COLUMNS, while keeping BOTH Power and Heart rate visible on one screen. Retain black page, native charcoal rounded grouped surfaces, white readable SF typography, iOS blue accent, existing zone colors. Body type equivalent to 16-17pt minimum, good contrast, clean time alignment, no tiny text. Every duration remains on one line; never split "1 h 25 min".
+Top: simple back chevron "Ride analysis", small source "From Intervals", heading "Time in zones". No date needed, current date anchor Nov 2 2026 only if required.
+MAIN POWER SECTION: heading "Power". Under it, a single thin proportional stacked distribution bar with ONLY Z1-Z7, no sweet spot. Relative durations minutes 85,44,61,27,8,4,2; distribution proportions approximately 36.8%,19.0%,26.4%,11.7%,3.5%,1.7%,0.9%.
+Under the bar a well-spaced TWO-COLUMN legend, not seven columns. Each column has two aligned fields: colored dot and zone label on left, bright bold duration on right, row height ~34pt. Rows:
+left Z1 / 1 h 25 min; right Z2 / 44 min
+left Z3 / 1 h 01 min; right Z4 / 27 min
+left Z5 / 8 min; right Z6 / 4 min
+left Z7 / 2 min; right blank.
+Gray Z1, blue Z2, green Z3, yellow Z4, orange Z5, red Z6, purple Z7.
+Then small separate row with magenta dot "Sweet Spot" left, "42 min" right. Subtle text underneath "Overlaps power zones". It is not an eighth segment.
+HEART-RATE SECTION below a clear gap or divider: heading "Heart rate". A thin stacked bar of Z1-Z6, relative minutes53,37,12,81,44,3. Two-column legend arranged:
+left Z1 / 53 min; right Z2 / 37 min
+left Z3 / 12 min; right Z4 / 1 h 21 min
+left Z5 / 44 min; right Z6 / 3 min.
+Use same zone colors. Labels and durations must have enough space, each time reads as one horizontal unit.
+Below zones, one compact three-column summary: Load / 236, Intensity / 0.78, NP / 154 W. "All metrics" chevron disclosure. The other existing metrics can be reached there.
+Bottom tab bar familiar icons Home(selected blue), Coach, Plan, Settings.
+Differentiate sections primarily by spacing and dividers. No nested cards, no excessive panels, no illustrations, no shadows, no new features, no extra data or percentages in UI. Focus the composition on the TWO-column legends and slim stacked bars, preserve enough vertical space for both sensors without cramming. All text crisp and correctly spelled. One single design, no multi-image board.
+
+3. 03-duration-ledger.png
+
+Use case ui-mockup. Create ONE independent realistic native iOS redesign concept named "Duration ledger" for Cadencia cycling app, grounded in attached current app screenshot. This design intentionally replaces graphs and cramped legends with a highly legible LIST of exact durations.
+Target dimensions: 590 x 1278 pixels, tall narrow portrait, equivalent layout to 390pt iPhone width. App content ONLY, no device frame, bezel, OS status bar, clock, battery, home indicator, mockup background, external title, or option numbers. Use the whole tall canvas for the app with minimal exterior margins. No visible dates needed; current date anchor Nov 2 2026.
+Preserve app's black base, charcoal grouped surfaces, white SF system text, gray secondary labels, iOS blue interactions, consistent existing zone colors gray blue green yellow orange red purple. Use body equivalent to 17pt, tabular digits. Times are PRIMARY values, bright, semibold, large enough to scan. No small legends, no stacked charts, no bar charts, no pie/ring chart.
+Top native navigation row: back chevron, "Ride analysis". Below small "From Intervals" and clear "Time in zones" heading.
+Below show BOTH Power and Heart rate together, arranged vertically as native inset-grouped list sections, NOT side by side. Each list is a simple flat shared charcoal surface, no individual row cards or nested cards.
+POWER section heading "Power". Seven rows, approximately 31pt tall, full width. Every row has colored short vertical line or dot and label "Zone 1" at left, a bold single-line duration right-aligned. Subtle hairline dividers make values track easily across the full width. Exact rows:
+Zone 1 gray | 1 h 25 min
+Zone 2 blue | 44 min
+Zone 3 green | 1 h 01 min
+Zone 4 yellow | 27 min
+Zone 5 orange | 8 min
+Zone 6 red | 4 min
+Zone 7 purple | 2 min
+After numbered rows, a separate "Sweet Spot" magenta row | 42 min, subdued secondary caption "Overlaps power zones". Clearly extra metric, not eighth exclusive zone.
+HEART RATE section heading "Heart rate", separated by enough space. Six rows using same alignment and colors:
+Zone 1 gray | 53 min
+Zone 2 blue | 37 min
+Zone 3 green | 12 min
+Zone 4 yellow | 1 h 21 min
+Zone 5 orange | 44 min
+Zone 6 red | 3 min
+Every duration is ONE unbroken line. Right-hand durations align vertically across both sections. Do not add estimated percentages, zone names like endurance, watt limits or bpm thresholds.
+After zones, a native disclosure row "Ride metrics" with small secondary preview "Load 236 · Intensity 0.78 · NP 154 W", chevron at right. All original metrics live on that next screen; prioritize durations in this frame.
+Bottom tab bar matches reference: Home(selected blue), Coach, Plan, Settings, standard crisp icons. Keep bottom navigation clearly separate from content and no clipping.
+This is a quiet, practical native list redesign with stronger type and excellent alignment. Its difference from other concepts is ALL zone values as full-width readable rows with NO distribution graphics and NO sensor toggle. Fit content naturally within tall mobile viewport; generous readable row rhythm without giant page title. No decorative artwork, gradients, shadows or feature inventory. Render exact text crisply.
+
+4. 04-parallel-table.png
+
+Use case ui-mockup. Generate ONE independent realistic finished native iOS design concept "Parallel zone table" for the Cadencia cycling app shown in the attached reference.
+Target 590 x 1278 pixels, narrow tall portrait iPhone composition, same aspect ratio as source (width/height 0.462), layout intended for 390pt wide phone. APP CONTENT ONLY. No device bezel, phone body, OS status bar, clock, battery, notch, home indicator, external heading, option number, or presentation board. No dates necessary; if necessary current anchor November 2, 2026.
+Preserve actual product style: true black page, charcoal native grouped surfaces, strong readable white SF typography, iOS blue accents, subdued gray helper text, existing zone colors gray blue green yellow orange red purple. Do not invent brand art.
+Goal: show ALL numbered Power and Heart rate zone durations in ONE exceptionally clear table. A single shared zone-label column, plus two broad right-aligned time columns. No narrow horizontal eight-item legends, no sensor toggle, no repeated vertical zone lists, no ring chart. Exact durations must always be one line, readable 16-17pt equivalent minimum; use tabular digits and align right edges.
+Top navigation: back chevron and "Ride analysis". Small "From Intervals", title "Time in zones".
+Primary table under title: header row "Zone" | "Power" | "Heart rate". Zone column narrow (~52pt), Power and Heart rate each ~134pt. Seven rows with generous 44-46pt height, fine separators. Colored dot plus short Z label only in first column. Exact text:
+Z1 (gray) | 1 h 25 min | 53 min
+Z2 (blue) | 44 min | 37 min
+Z3 (green) | 1 h 01 min | 12 min
+Z4 (yellow) | 27 min | 1 h 21 min
+Z5 (orange) | 8 min | 44 min
+Z6 (red) | 4 min | 3 min
+Z7 (purple) | 2 min | —
+All three column headers visible. Time text white, monospaced/tabular, easy scanning. NO colored full-row backgrounds, no extra duration bars behind digits.
+Under table a quiet helper note on two lines maximum: "Power and heart-rate zones use different thresholds." This avoids implying the same physical intensity across systems.
+Below a separate full-width metric row: magenta dot + "Sweet Spot" left and "42 min" right; secondary line "Overlaps power zones". Do not add Sweet Spot as Z8 or to zone totals.
+Below zones "Ride metrics" grouped strip, three readable columns: Load 236; Intensity 0.78; NP 154 W. Beneath "All metrics" with chevron, so all original secondary metrics remain accessible. Keep this section visually subordinate to time table.
+Native tab bar at bottom: Home(selected blue), Coach, Plan, Settings, familiar crisp icons. Keep reasonable breathing room between summary and bottom navigation. Use simple spacing and subtle separators, one flat table surface plus metric section, no cards inside cards, no excessive border or shadow.
+This is a distinct comparison-table information architecture. Put both sensor columns next to each other and prioritize fast reading of exact times. All reference durations precisely preserved, no extra percentages, no invented thresholds, totals, or metrics. Render as one polished app screenshot.

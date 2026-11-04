@@ -26,29 +26,32 @@ public struct PlanBuilder: Sendable {
     }
 
     public func build(_ r: Request) -> TrainingPlan {
-        let weeks = max(1, (r.startDay.days(until: r.endDay) + 6) / 7)
+        let weeks = max(1, r.startDay.days(until: r.endDay) / 7 + 1)
         let phases = Self.phases(weeks: weeks, hasEvent: r.event != nil, goal: r.goal)
         var sessions: [PlannedSession] = []
 
         for week in 1...weeks {
             let phase = phases.first { $0.startWeek <= week && week <= $0.endWeek }!
-            let weekStart = r.startDay.adding(days: (week - 1) * 7).startOfWeek()
+            let weekStart = r.startDay.adding(days: (week - 1) * 7)
             // Recovery week every 4th week (3:1), and the last week before an event is a taper.
             let isRecoveryWeek = phase.focus == .recover || (week % 4 == 0 && phase.focus != .taper)
-            let template = Self.weekTemplate(goal: r.goal, phase: phase.focus, recovery: isRecoveryWeek)
+            let template = Self.weekTemplate(goal: r.goal, phase: phase.focus, recovery: isRecoveryWeek, event: r.event)
             var hardSlots = template.hardSessions
 
             for offset in 0..<7 {
                 let day = weekStart.adding(days: offset)
                 guard day >= r.startDay, day <= r.endDay else { continue }
                 let weekday = day.weekday()
-                guard let minutes = r.availability.minutesByWeekday[weekday] else { continue }
 
                 if let event = r.event, event.day == day {
+                    let duration = event.details?.expectedDurationMinutes ?? r.availability.minutesByWeekday[weekday]
+                        ?? Int(((event.distanceKm ?? 100) / 28 * 60).rounded())
                     sessions.append(PlannedSession(day: day, kind: event.sessionKind, title: event.name,
-                                                   targetMinutes: minutes, status: .provisional, isPriority: event.priority == .a))
+                                                   targetMinutes: duration,
+                                                   status: .provisional, isPriority: event.priority == .a))
                     continue
                 }
+                guard let minutes = r.availability.minutesByWeekday[weekday] else { continue }
                 if let event = r.event, day.days(until: event.day) == 1 {
                     sessions.append(PlannedSession(day: day, kind: .openerActivation, title: "Opener", targetMinutes: min(minutes, 30)))
                     continue
@@ -86,6 +89,7 @@ public struct PlanBuilder: Sendable {
         case .ftp: return "Raise FTP"
         case .durability: return "Durability"
         case .endurance: return "Endurance"
+        case .vo2max: return "VO₂max"
         case .strength: return "Strength"
         case .event: return "Event"
         }
@@ -96,13 +100,18 @@ public struct PlanBuilder: Sendable {
         var hardKind: SessionKind
     }
 
-    static func weekTemplate(goal: GoalKind, phase: TrainingPhase.Focus, recovery: Bool) -> WeekTemplate {
+    static func weekTemplate(goal: GoalKind, phase: TrainingPhase.Focus, recovery: Bool, event: TrainingEvent? = nil) -> WeekTemplate {
         if recovery { return WeekTemplate(hardSessions: 0, hardKind: .endurance) }
         switch phase {
         case .prepare, .base: return WeekTemplate(hardSessions: 1, hardKind: .tempo)
-        case .build: return WeekTemplate(hardSessions: 2, hardKind: goal == .ftp ? .threshold : (goal == .climbing ? .threshold : .tempo))
+        case .build:
+            let climbingEvent = goal == .event && (event?.course?.elevationGainM ?? 0) >= 1_000
+                && (event?.distanceKm ?? 0) > 0
+                && (event?.course?.elevationGainM ?? 0) / (event?.distanceKm ?? 1) >= 10
+            let kind: SessionKind = goal == .vo2max ? .vo2max : (goal == .ftp || goal == .climbing || climbingEvent ? .threshold : .tempo)
+            return WeekTemplate(hardSessions: 2, hardKind: kind)
         case .peak: return WeekTemplate(hardSessions: 2, hardKind: goal == .endurance || goal == .durability ? .tempo : .vo2max)
-        case .consolidate: return WeekTemplate(hardSessions: 1, hardKind: .threshold)
+        case .consolidate: return WeekTemplate(hardSessions: 1, hardKind: goal == .vo2max ? .vo2max : .threshold)
         case .taper: return WeekTemplate(hardSessions: 1, hardKind: .openerActivation)
         case .recover: return WeekTemplate(hardSessions: 0, hardKind: .endurance)
         }
@@ -116,7 +125,7 @@ public struct PlanBuilder: Sendable {
         return [3, 5, 7].contains(weekday)
     }
 
-    static func provisionalLoad(kind: SessionKind, minutes: Int) -> Int {
+    public static func provisionalLoad(kind: SessionKind, minutes: Int) -> Int {
         let intensity: Double
         switch kind {
         case .rest: return 0
@@ -134,6 +143,10 @@ public struct PlanBuilder: Sendable {
 
     static func phases(weeks: Int, hasEvent: Bool, goal: GoalKind) -> [TrainingPhase] {
         if weeks <= 2 {
+            if hasEvent {
+                return [TrainingPhase(focus: .taper, startWeek: 1, endWeek: weeks,
+                                      summary: "Reduce volume and preserve brief event-specific intensity; arrive fresh")]
+            }
             return [TrainingPhase(focus: .prepare, startWeek: 1, endWeek: weeks, summary: "Consistency and a reference of your current level")]
         }
         if hasEvent {
@@ -168,6 +181,20 @@ public struct PlanBuilder: Sendable {
 /// What the coach understood from a voice note or message. All fields optional: the UI shows what
 /// was understood and asks for the rest.
 public struct CoachIntent: Codable, Equatable, Sendable {
+    /// Athlete-authored requirements for one day, separate from conversational replies and time limits.
+    /// Kept as instructions so the runtime coach can adapt any session purpose to the athlete's evidence.
+    public struct WorkoutRequest: Codable, Equatable, Sendable {
+        public var day: Day
+        public var instructions: String
+        public var maxMinutes: Int?
+
+        public init(day: Day, instructions: String, maxMinutes: Int? = nil) {
+            self.day = day
+            self.instructions = instructions
+            self.maxMinutes = maxMinutes
+        }
+    }
+
     public struct DayConstraint: Codable, Equatable, Sendable, Identifiable {
         public var id: Day { day }
         public var day: Day
@@ -186,18 +213,20 @@ public struct CoachIntent: Codable, Equatable, Sendable {
     public var goal: GoalKind?
     public var reply: String
     public var needsClarification: [String]
+    public var workoutRequest: WorkoutRequest?
 
     public init(event: TrainingEvent? = nil, constraints: [DayConstraint] = [], feeling: SubjectiveFeedback.Legs? = nil,
-                goal: GoalKind? = nil, reply: String = "", needsClarification: [String] = []) {
+                goal: GoalKind? = nil, reply: String = "", needsClarification: [String] = [], workoutRequest: WorkoutRequest? = nil) {
         self.event = event
         self.constraints = constraints
         self.feeling = feeling
         self.goal = goal
         self.reply = reply
         self.needsClarification = needsClarification
+        self.workoutRequest = workoutRequest
     }
 
-    public var isEmpty: Bool { event == nil && constraints.isEmpty && feeling == nil && goal == nil }
+    public var isEmpty: Bool { event == nil && constraints.isEmpty && feeling == nil && goal == nil && workoutRequest == nil }
 }
 
 /// Applies an understood intent to the current week of a plan: pins the event, shortens constrained

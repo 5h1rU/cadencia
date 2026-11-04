@@ -17,7 +17,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		CA0000000000000000000004 /* Cadencia */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Cadencia; sourceTree = "<group>"; };
+		CA0000000000000000000004 /* Cadencia */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Cadencia;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -208,7 +212,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/Cadencia.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = L237GJ735W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
@@ -235,7 +239,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/Cadencia.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = L237GJ735W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;

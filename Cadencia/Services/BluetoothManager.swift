@@ -33,7 +33,13 @@ final class BluetoothManager: NSObject {
         var heartRate: Int?
         var cadence: Int?
         var speedKmh: Double?
+        var totalDistanceMeters: Int?
+        var speedUpdatedAt: Date?
+        var distanceUpdatedAt: Date?
         var updatedAt: Date?
+        // A heart-rate packet must not make an old pedaling reading look fresh.
+        var wattsUpdatedAt: Date?
+        var cadenceUpdatedAt: Date?
     }
 
     private(set) var isPoweredOn = false
@@ -287,10 +293,18 @@ extension BluetoothManager: CBPeripheralDelegate {
         switch characteristic.uuid.uuidString.uppercased() {
         case GATT.indoorBikeData:
             guard let bike = IndoorBikeData.parse(data) else { return }
+            let now = Date()
             // A separate power meter wins over the trainer's own power reading.
-            if connections[.powerMeter]?.isReady != true, let w = bike.instantaneousPower { live.watts = w }
-            if let c = bike.cadenceRPM { live.cadence = Int(c.rounded()) }
-            if let s = bike.speedKmh { live.speedKmh = s }
+            if connections[.powerMeter]?.isReady != true, let w = bike.instantaneousPower {
+                live.watts = w
+                live.wattsUpdatedAt = now
+            }
+            if let c = bike.cadenceRPM {
+                live.cadence = Int(c.rounded())
+                live.cadenceUpdatedAt = now
+            }
+            if let s = bike.speedKmh { live.speedKmh = s; live.speedUpdatedAt = Date() }
+            if let distance = bike.totalDistanceMeters { live.totalDistanceMeters = distance; live.distanceUpdatedAt = Date() }
             if connections[.heartRate]?.isReady != true, let hr = bike.heartRate, hr > 0 { live.heartRate = hr }
             live.updatedAt = Date()
         case GATT.heartRateMeasurement:
@@ -299,9 +313,21 @@ extension BluetoothManager: CBPeripheralDelegate {
             live.updatedAt = Date()
         case GATT.cyclingPowerMeasurement:
             guard let m = CyclingPowerMeasurement.parse(data) else { return }
+            let now = Date()
             live.watts = m.watts
-            if let prev = lastPowerMeasurement, let rpm = CyclingPowerMeasurement.cadence(previous: prev, current: m) {
-                live.cadence = Int(rpm.rounded())
+            live.wattsUpdatedAt = now
+            if let prev = lastPowerMeasurement {
+                if let rpm = CyclingPowerMeasurement.cadence(previous: prev, current: m) {
+                    live.cadence = Int(rpm.rounded())
+                    live.cadenceUpdatedAt = now
+                } else if let revolutions = m.cumulativeCrankRevolutions,
+                          let eventTime = m.lastCrankEventTime,
+                          revolutions == prev.cumulativeCrankRevolutions,
+                          eventTime == prev.lastCrankEventTime {
+                    // Repeated crank counters confirm stopped pedals, rather than retaining old RPM.
+                    live.cadence = 0
+                    live.cadenceUpdatedAt = now
+                }
             }
             lastPowerMeasurement = m
             live.updatedAt = Date()

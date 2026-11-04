@@ -2,6 +2,20 @@ import SwiftUI
 import CadenciaCore
 
 enum Format {
+    /// Match the minute precision of provider zone summaries, retaining seconds for short efforts.
+    static func zoneTime(_ seconds: Int, locale: Locale) -> String {
+        let seconds = max(seconds, 0)
+        let formatter = DateComponentsFormatter()
+        var calendar = Calendar.current
+        calendar.locale = locale
+        formatter.calendar = calendar
+        formatter.unitsStyle = .abbreviated
+        formatter.allowedUnits = seconds < 60 ? [.second] : [.hour, .minute]
+        formatter.zeroFormattingBehavior = .dropAll
+        let displayedSeconds = seconds < 60 ? seconds : seconds / 60 * 60
+        return formatter.string(from: TimeInterval(displayedSeconds)) ?? minutes(TimeInterval(seconds))
+    }
+
     static func minutes(_ seconds: TimeInterval) -> String {
         let total = Int(seconds.rounded())
         let h = total / 3600
@@ -15,6 +29,9 @@ enum Format {
         let h = total / 3600, m = (total % 3600) / 60, s = total % 60
         return h > 0 ? String(format: "%d:%02d:%02d", h, m, s) : String(format: "%d:%02d", m, s)
     }
+
+    /// Remaining time stays in the displayed second until it has fully elapsed.
+    static func countdown(_ seconds: TimeInterval) -> String { clock(seconds.rounded(.up)) }
 
     static func hours(_ seconds: Int) -> String {
         let h = Double(seconds) / 3600
@@ -161,6 +178,7 @@ extension GoalKind {
         case .ftp: return "Raise FTP"
         case .durability: return "Durability"
         case .endurance: return "Endurance"
+        case .vo2max: return "VO₂max"
         case .strength: return "Strength"
         case .event: return "Prepare an event"
         }
@@ -172,6 +190,7 @@ extension GoalKind {
         case .ftp: return "Threshold blocks with enough recovery to absorb them"
         case .durability: return "Hold power deep into long rides"
         case .endurance: return "Volume in zone 2, intensity only when fresh"
+        case .vo2max: return "Build aerobic power with short, hard intervals"
         case .strength: return "Gym sessions alongside the bike"
         case .event: return "Build, peak and taper for a date"
         }
@@ -183,6 +202,7 @@ extension GoalKind {
         case .ftp: return "chart.line.uptrend.xyaxis"
         case .durability: return "battery.100percent"
         case .endurance: return "figure.outdoor.cycle"
+        case .vo2max: return "flame"
         case .strength: return "dumbbell"
         case .event: return "flag.checkered"
         }

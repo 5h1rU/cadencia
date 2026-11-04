@@ -1,5 +1,27 @@
 import Foundation
 
+/// An activity note, as returned by Intervals' messages endpoint. Deleted notes never count as synced.
+public struct IntervalsActivityNote: Codable, Equatable, Sendable, Identifiable {
+    public static let coachPrefix = "Cadencia · Coach\n\n"
+    public var id: Int64
+    public var content: String
+    public var deleted: String?
+
+    public init(id: Int64, content: String, deleted: String? = nil) {
+        self.id = id; self.content = content; self.deleted = deleted
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int64.self, forKey: .id)
+        content = try c.decodeIfPresent(String.self, forKey: .content) ?? ""
+        deleted = try c.decodeIfPresent(String.self, forKey: .deleted)
+    }
+
+    public var isCoachDebrief: Bool { deleted == nil && content.hasPrefix(Self.coachPrefix) }
+    public var debriefText: String { isCoachDebrief ? String(content.dropFirst(Self.coachPrefix.count)) : content }
+}
+
 // Wire formats for Intervals.icu. Field names match the OpenAPI spec at https://intervals.icu/api/v1/docs.
 // Everything is optional: the API omits fields freely and we never want a missing field to fail a sync.
 
@@ -31,6 +53,7 @@ struct AthleteDTO: Decodable {
 }
 
 struct WellnessDTO: Decodable {
+    struct SportInfoDTO: Decodable { let type: String?; let eftp: Double? }
     let id: String
     let ctl: Double?
     let atl: Double?
@@ -43,12 +66,14 @@ struct WellnessDTO: Decodable {
     let soreness: Int?
     let fatigue: Int?
     let updated: String?
+    let sportInfo: [SportInfoDTO]?
 
     var model: WellnessDay? {
         guard let day = Day(iso: id) else { return nil }
         return WellnessDay(day: day, hrvMs: hrv ?? hrvSDNN, restingHR: restingHR, sleepSeconds: sleepSecs, ctl: ctl, atl: atl,
                            weightKg: weight, readinessReported: readiness, soreness: soreness, fatigue: fatigue,
-                           updatedAt: updated.flatMap(IntervalsDates.parseDateTime))
+                           updatedAt: updated.flatMap(IntervalsDates.parseDateTime),
+                           estimatedFTP: sportInfo?.first { $0.type == "Ride" }?.eftp)
     }
 }
 
@@ -137,6 +162,7 @@ struct ActivityDTO: Decodable {
     let moving_time: Int?
     let elapsed_time: Int?
     let distance: Double?
+    let total_elevation_gain: Double?
     let icu_training_load: Int?
     let icu_intensity: Double?
     let icu_average_watts: Int?
@@ -157,7 +183,7 @@ struct ActivityDTO: Decodable {
                                trainingLoad: icu_training_load, intensity: icu_intensity, averageWatts: icu_average_watts,
                                normalizedWatts: icu_weighted_avg_watts, averageHR: average_heartrate, ftpAtTime: icu_ftp,
                                estimatedFTP: icu_pm_ftp, rpe: icu_rpe, feel: feel, isTrainer: trainer ?? false,
-                               externalID: external_id, pairedEventID: paired_event_id)
+                               externalID: external_id, pairedEventID: paired_event_id, elevationGainMeters: total_elevation_gain)
     }
 }
 
@@ -175,7 +201,7 @@ struct PowerCurvesDTO: Decodable {
 }
 
 /// A calendar event as Intervals returns it. Kept close to the wire so the sync layer can reconcile by `uid`/`external_id`.
-public struct IntervalsEvent: Decodable, Equatable, Sendable, Identifiable {
+public struct IntervalsEvent: Codable, Equatable, Sendable, Identifiable {
     public let id: Int
     public let uid: String?
     public let external_id: String?
@@ -188,7 +214,21 @@ public struct IntervalsEvent: Decodable, Equatable, Sendable, Identifiable {
     public let icu_training_load: Int?
 
     public var day: Day? { start_date_local.flatMap { Day(iso: $0) } }
-    public var isCadenciaOwned: Bool { uid?.hasPrefix(PlanMirror.uidPrefix) == true }
+    public var isCadenciaOwned: Bool {
+        uid?.hasPrefix(PlanMirror.uidPrefix) == true || external_id?.hasPrefix(PlanMirror.uidPrefix) == true
+    }
+
+    public var trainingEvent: TrainingEvent? {
+        guard let day, let name, !name.isEmpty else { return nil }
+        let priority: TrainingEvent.Priority
+        switch category {
+        case "RACE_A": priority = .a
+        case "RACE_B": priority = .b
+        case "RACE_C": priority = .c
+        default: return nil
+        }
+        return TrainingEvent(name: name, day: day, priority: priority, objective: description ?? "", isRace: true)
+    }
 }
 
 /// How Cadencia's plan is mirrored to the Intervals calendar and kept to exactly one event per session.
@@ -201,11 +241,29 @@ public enum PlanMirror {
 
     public static func uid(for session: PlannedSession) -> String { uidPrefix + session.id.uuidString.lowercased() }
 
+    /// Intervals can replace a supplied UID on creation. The external id survives unchanged.
+    public static func externalID(for session: PlannedSession) -> String { uid(for: session) }
+
+    public static func matches(_ event: IntervalsEvent, session: PlannedSession) -> Bool {
+        event.id == session.intervalsEventID || event.uid == uid(for: session)
+            || event.external_id == externalID(for: session)
+            || event.external_id?.lowercased() == session.id.uuidString.lowercased()
+    }
+
+    /// Prefer the recorded server id; otherwise keep the newest copy of this known session.
+    public static func existingEvent(for session: PlannedSession, in events: [IntervalsEvent]) -> IntervalsEvent? {
+        let candidates = events.filter { matches($0, session: session) }
+        return candidates.first { $0.id == session.intervalsEventID } ?? candidates.max { $0.id < $1.id }
+    }
+
     /// Cadencia-owned events that no session in the current plan accounts for. Other apps' and the
     /// athlete's own events are never touched.
     public static func staleEvents(_ events: [IntervalsEvent], sessions: [PlannedSession]) -> [IntervalsEvent] {
-        let live = Set(sessions.map(uid(for:)))
-        return events.filter { $0.isCadenciaOwned && !live.contains($0.uid ?? "") }
+        let keep = Set(sessions.compactMap { existingEvent(for: $0, in: events)?.id })
+        return events.filter { event in
+            let owned = event.isCadenciaOwned || sessions.contains { matches(event, session: $0) }
+            return owned && !keep.contains(event.id)
+        }
     }
 }
 

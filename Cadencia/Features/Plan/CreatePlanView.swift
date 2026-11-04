@@ -10,8 +10,8 @@ struct CreatePlanView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    ForEach(GoalKind.allCases, id: \.self) { g in
+                InfoSection {
+                    ForEach(GoalKind.selectableGoals, id: \.self) { g in
                         NavigationLink(value: g) {
                             Label {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -23,14 +23,17 @@ struct CreatePlanView: View {
                     }
                 } header: {
                     Text("What do you want to get out of the next weeks?")
-                } footer: {
+                } information: {
                     Text("A plan is a direction, not a contract. The coach reshapes each week from your recovery and what you tell it.")
                 }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("New plan")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: GoalKind.self) { g in ConfigureGoalView(goal: g) { dismiss() } }
+            .navigationDestination(for: GoalKind.self) { g in
+                if g == .event { EventPlanFlow { dismiss() } }
+                else { ConfigureGoalView(goal: g) { dismiss() } }
+            }
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
     }
@@ -42,12 +45,6 @@ struct ConfigureGoalView: View {
     let finished: () -> Void
 
     @State private var weeks = 8
-    @State private var eventName = ""
-    @State private var eventDate = Calendar.current.date(byAdding: .weekOfYear, value: 12, to: Date())!
-    @State private var distanceKm = ""
-    @State private var priority: TrainingEvent.Priority = .a
-    @State private var isRace = false
-    @State private var objective = ""
     @State private var secondaryGoal: GoalKind?
     @State private var days: Set<Int> = Set(Availability.typical.availableWeekdays)
     @State private var longRideDay = Availability.typical.longRideWeekday
@@ -55,41 +52,25 @@ struct ConfigureGoalView: View {
     @State private var weekendMinutes = 150
     @State private var saving = false
 
-    private var isEvent: Bool { goal == .event }
-    private var canCreate: Bool { !days.isEmpty && (!isEvent || !eventName.trimmingCharacters(in: .whitespaces).isEmpty) }
+    private var canCreate: Bool { !days.isEmpty }
 
     var body: some View {
         Form {
-            if isEvent {
-                Section("Event") {
-                    TextField("Name", text: $eventName)
-                    DatePicker("Date", selection: $eventDate, in: Date()..., displayedComponents: .date)
-                    TextField("Distance (km)", text: $distanceKm).keyboardType(.decimalPad)
-                    Picker("Priority", selection: $priority) {
-                        Text("A · the one that matters").tag(TrainingEvent.Priority.a)
-                        Text("B · important").tag(TrainingEvent.Priority.b)
-                        Text("C · training ride").tag(TrainingEvent.Priority.c)
-                    }
-                    Toggle("It's a race", isOn: $isRace)
-                    TextField("Objective (finish fresh, podium…)", text: $objective)
-                }
-            } else {
-                Section {
-                    Stepper("\(weeks) weeks", value: $weeks, in: 4...24)
-                } header: {
-                    Text("Duration")
-                } footer: {
-                    Text("Blocks alternate three loading weeks with one easier week.")
-                }
-                Section("Also keep an eye on") {
-                    Picker("Secondary goal", selection: $secondaryGoal) {
-                        Text("None").tag(GoalKind?.none)
-                        ForEach(GoalKind.allCases.filter { $0 != goal && $0 != .event }, id: \.self) { Text($0.title).tag(GoalKind?.some($0)) }
-                    }
+            InfoSection {
+                Stepper("\(weeks) weeks", value: $weeks, in: 4...24)
+            } header: {
+                Text("Duration")
+            } information: {
+                Text("Blocks alternate three loading weeks with one easier week.")
+            }
+            Section("Also keep an eye on") {
+                Picker("Secondary goal", selection: $secondaryGoal) {
+                    Text("None").tag(GoalKind?.none)
+                    ForEach(GoalKind.selectableGoals.filter { $0 != goal && $0 != .event }, id: \.self) { Text($0.title).tag(GoalKind?.some($0)) }
                 }
             }
 
-            Section {
+            InfoSection {
                 HStack(spacing: 6) {
                     ForEach([2, 3, 4, 5, 6, 7, 1], id: \.self) { wd in
                         let on = days.contains(wd)
@@ -114,7 +95,7 @@ struct ConfigureGoalView: View {
                 Stepper("Weekend: \(Format.minutes(TimeInterval(weekendMinutes * 60)))", value: $weekendMinutes, in: 60...360, step: 30)
             } header: {
                 Text("Availability")
-            } footer: {
+            } information: {
                 Text("Hard days land on the days you train that do not precede the long ride.")
             }
 
@@ -143,12 +124,9 @@ struct ConfigureGoalView: View {
         let hours = Double(minutes.values.reduce(0, +)) / 60
         let availability = Availability(hoursPerWeek: hours, minutesByWeekday: minutes, longRideWeekday: longRideDay)
         let start = model.today
-        let event: TrainingEvent? = isEvent ? TrainingEvent(name: eventName.trimmingCharacters(in: .whitespaces), day: Day(eventDate),
-                                                            distanceKm: Double(distanceKm.replacingOccurrences(of: ",", with: ".")),
-                                                            priority: priority, objective: objective, isRace: isRace) : nil
-        let end = isEvent ? Day(eventDate) : start.adding(days: weeks * 7 - 1)
-        let request = PlanBuilder.Request(goal: goal, secondaryGoal: isEvent ? nil : secondaryGoal, startDay: start, endDay: end,
-                                          event: event, availability: availability, currentCTL: model.latestLoad?.ctl)
+        let end = start.adding(days: weeks * 7 - 1)
+        let request = PlanBuilder.Request(goal: goal, secondaryGoal: secondaryGoal, startDay: start, endDay: end,
+                                          availability: availability, currentCTL: model.latestLoad?.ctl)
         await model.createPlan(request)
     }
 

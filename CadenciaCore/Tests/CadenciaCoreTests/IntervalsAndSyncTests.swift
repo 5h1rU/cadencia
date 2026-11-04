@@ -35,7 +35,7 @@ final class IntervalsClientTests: XCTestCase {
     }
 
     func testWellnessDecodesIntervalsFieldNames() async throws {
-        let json = #"[{"id":"2026-10-28","ctl":62.1,"atl":78.4,"restingHR":54,"hrv":48.2,"sleepSecs":22320,"updated":"2026-10-28T09:37:12.000+0000"},{"id":"not-a-date"}]"#
+        let json = #"[{"id":"2026-10-28","ctl":62.1,"atl":78.4,"restingHR":54,"hrv":48.2,"sleepSecs":22320,"sportInfo":[{"type":"Run","eftp":300},{"type":"Ride","eftp":202.18922}],"updated":"2026-10-28T09:37:12.000+0000"},{"id":"not-a-date"}]"#
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(json.utf8))])
         let client = IntervalsClient(transport: t, credential: .oauth(accessToken: "tok", scopes: ["WELLNESS:READ"]))
         let days = try await client.wellness(oldest: Day(year: 2026, month: 9, day: 1), newest: Day(year: 2026, month: 10, day: 28))
@@ -46,6 +46,7 @@ final class IntervalsClientTests: XCTestCase {
         XCTAssertEqual(days[0].sleepSeconds, 22320)
         XCTAssertEqual(days[0].tsb!, -16.3, accuracy: 0.01)
         XCTAssertNotNil(days[0].updatedAt)
+        XCTAssertEqual(days[0].estimatedFTP, 202.18922)
     }
 
     func testPowerCurveUsesIntervalsCurveSyntaxNotABareDate() async throws {
@@ -80,10 +81,12 @@ final class IntervalsClientTests: XCTestCase {
         XCTAssertEqual(acts[0].externalID, "cadencia-abc")
     }
 
-    func testUploadSendsMultipartWithExternalIDAndReturnsActivityID() async throws {
+    func testUploadSendsBinaryFITWithExternalIDAndReturnsActivityID() async throws {
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"icu_athlete_id":"i1","activities":[{"icu_athlete_id":"i1","id":"i777"}]}"#.utf8))])
         let client = IntervalsClient(transport: t, credential: .apiKey("k"))
-        let result = try await client.uploadActivity(tcx: Data("<x/>".utf8), name: "Easy", externalID: "cadencia-1", pairedEventID: 42)
+        let fit = FITActivityEncoder.encode(RideRecording(athleteID: "i1", workout: Workout(name: "Easy", kind: .endurance, steps: []),
+                                                        startedAt: Date(timeIntervalSince1970: 1_700_000_000)))
+        let result = try await client.uploadActivity(fit: fit, name: "Easy", externalID: "cadencia-1", pairedEventID: 42)
         XCTAssertEqual(result.activityID, "i777")
         let req = t.requests[0]
         XCTAssertEqual(req.method, .post)
@@ -91,9 +94,44 @@ final class IntervalsClientTests: XCTestCase {
         XCTAssertTrue(req.url.query!.contains("external_id=cadencia-1"))
         XCTAssertTrue(req.url.query!.contains("paired_event_id=42"))
         XCTAssertTrue(req.headers["Content-Type"]!.hasPrefix("multipart/form-data; boundary="))
-        let body = String(data: req.body!, encoding: .utf8)!
-        XCTAssertTrue(body.contains("name=\"file\"; filename=\"cadencia-1.tcx\""))
-        XCTAssertTrue(body.contains("<x/>"))
+        let boundary = String(req.headers["Content-Type"]!.split(separator: "=").last!)
+        var expected = Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"cadencia-1.fit\"\r\nContent-Type: application/octet-stream\r\n\r\n".utf8)
+        expected.append(fit)
+        expected.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        XCTAssertEqual(req.body, expected, "FIT bytes must survive multipart encoding unchanged")
+    }
+
+    func testRideUploadReusesExistingActivityAcrossTheFileFormatChange() async throws {
+        let ride = RideRecording(athleteID: "i1", workout: Workout(name: "Easy", kind: .endurance, steps: []),
+                                 startedAt: Date(timeIntervalSince1970: 1_700_000_000))
+        let existing: [[String: Any]] = [["id": "i777", "external_id": ride.externalID, "start_date_local": "2023-11-14T17:13:20"]]
+        let transport = FakeTransport(responses: [HTTPResponse(status: 200, body: try JSONSerialization.data(withJSONObject: existing))])
+        let client = IntervalsClient(transport: transport, credential: .apiKey("k"))
+        let result = try await client.uploadActivity(ride)
+        XCTAssertEqual(result.activityID, "i777")
+        XCTAssertEqual(transport.requests.map(\.method), [.get], "do not POST a FIT copy of a previously uploaded TCX ride")
+    }
+
+    func testRideUploadRequiresSuccessfulReconciliationBeforePostingFIT() async throws {
+        let ride = RideRecording(athleteID: "i1", workout: Workout(name: "Easy", kind: .endurance, steps: []),
+                                 intervalsEventID: 42, startedAt: Date(timeIntervalSince1970: 1_700_000_000))
+        let transport = FakeTransport(responses: [HTTPResponse(status: 503, body: Data()), HTTPResponse(status: 200, body: Data("[]".utf8)),
+            HTTPResponse(status: 200, body: Data(#"{"activities":[{"id":"i777"}]}"#.utf8))])
+        let client = IntervalsClient(transport: transport, credential: .apiKey("k"))
+        do {
+            _ = try await client.uploadActivity(ride)
+            XCTFail("failed reconciliation must not upload")
+        } catch let error as HTTPError {
+            guard case .status(503, _) = error else { return XCTFail("unexpected error: \(error)") }
+        }
+        XCTAssertEqual(transport.requests.map(\.method), [.get])
+        let result = try await client.uploadActivity(ride)
+        XCTAssertEqual(result.activityID, "i777")
+        XCTAssertEqual(transport.requests.map(\.method), [.get, .get, .post])
+        let post = transport.requests[2]
+        XCTAssertTrue(post.url.query!.contains("external_id=\(ride.externalID)"))
+        XCTAssertTrue(post.url.query!.contains("paired_event_id=42"))
+        XCTAssertNotNil(post.body?.range(of: FITActivityEncoder.encode(ride)))
     }
 
     func testUnauthorizedBecomesTypedError() async {
@@ -140,6 +178,77 @@ final class IntervalsClientTests: XCTestCase {
         XCTAssertEqual(PlanMirror.staleEvents(events, sessions: [kept]).map(\.id), [2])
         XCTAssertEqual(PlanMirror.staleEvents(events, sessions: []).map(\.id), [1, 2])
     }
+
+    func testReconcilesLegacyCopiesWithServerGeneratedUIDsAndPreservesUnrelatedEvents() throws {
+        var session = PlannedSession(day: Day(year: 2026, month: 10, day: 29), kind: .recovery, title: "Recovery", targetMinutes: 45)
+        let legacyID = session.id.uuidString.lowercased()
+        let json = """
+        [{"id":11,"uid":"server-uuid-1","external_id":"\(legacyID)"},
+         {"id":12,"uid":"server-uuid-2","external_id":"\(legacyID)"},
+         {"id":13,"uid":"server-uuid-3","external_id":"another-app-uuid"},
+         {"id":14,"uid":"server-uuid-4","external_id":"cadencia-stale"}]
+        """
+        let events = try JSONDecoder().decode([IntervalsEvent].self, from: Data(json.utf8))
+        XCTAssertEqual(PlanMirror.existingEvent(for: session, in: events)?.id, 12)
+        XCTAssertEqual(Set(PlanMirror.staleEvents(events, sessions: [session]).map(\.id)), [11, 14])
+        session.intervalsEventID = 11
+        XCTAssertEqual(PlanMirror.existingEvent(for: session, in: events)?.id, 11)
+        XCTAssertEqual(Set(PlanMirror.staleEvents(events, sessions: [session]).map(\.id)), [12, 14])
+        XCTAssertEqual(PlanMirror.staleEvents(events, sessions: []).map(\.id), [14], "unknown legacy UUIDs are not proof of ownership")
+    }
+
+    func testCalendarRaceProvidesDatedPriorityContextButOrdinaryWorkoutsDoNot() throws {
+        let json = #"[{"id":1,"name":"November race","category":"RACE_A","start_date_local":"2026-11-01T00:00:00","description":"Finish strong"},{"id":2,"name":"Endurance","category":"WORKOUT","start_date_local":"2026-10-31T00:00:00"}]"#
+        let events = try JSONDecoder().decode([IntervalsEvent].self, from: Data(json.utf8))
+        let race = try XCTUnwrap(events[0].trainingEvent)
+        XCTAssertEqual(race.day, Day(year: 2026, month: 11, day: 1))
+        XCTAssertEqual(race.priority, .a)
+        XCTAssertEqual(race.objective, "Finish strong")
+        XCTAssertTrue(race.isRace)
+        XCTAssertNil(events[1].trainingEvent, "an ordinary workout must not invent a goal event")
+    }
+
+    func testBulkDeletionSendsOnlySelectedServerIDsWithoutSharedExternalIDs() async throws {
+        let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"eventsDeleted":2}"#.utf8))])
+        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let count = try await client.deleteEvents(ids: [12, 11, 12])
+        XCTAssertEqual(count, 2)
+        let request = try XCTUnwrap(t.requests.first)
+        XCTAssertEqual(request.method, .put)
+        XCTAssertEqual(request.url.path, "/api/v1/athlete/0/events/bulk-delete")
+        let body = try JSONSerialization.jsonObject(with: request.body!) as! [[String: Int]]
+        XCTAssertEqual(body, [["id": 11], ["id": 12]])
+        XCTAssertFalse(String(decoding: request.body!, as: UTF8.self).contains("external_id"), "external ids also identify the retained copies")
+    }
+
+    func testEmptyBulkDeletionMakesNoRequest() async throws {
+        let t = FakeTransport()
+        let count = try await IntervalsClient(transport: t, credential: .apiKey("k")).deleteEvents(ids: [])
+        XCTAssertEqual(count, 0)
+        XCTAssertTrue(t.requests.isEmpty)
+    }
+
+    func testLostCreateResponseIsReconciledByExternalIDThenUpdatedByServerID() async throws {
+        let session = PlannedSession(day: Day(year: 2026, month: 10, day: 29), kind: .endurance, title: "Endurance", targetMinutes: 60)
+        let event = "{\"id\":42,\"uid\":\"random-server-uid\",\"external_id\":\"\(PlanMirror.externalID(for: session))\"}"
+        let t = FakeTransport(responses: [
+            HTTPResponse(status: 502, body: Data()),
+            HTTPResponse(status: 200, body: Data("[\(event)]".utf8)),
+            HTTPResponse(status: 200, body: Data(event.utf8)),
+        ])
+        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        do { _ = try await client.upsertPlannedWorkout(session, ftp: 198); XCTFail("expected lost response") } catch {}
+        let events = try await client.events(oldest: session.day, newest: session.day)
+        let existing = try XCTUnwrap(PlanMirror.existingEvent(for: session, in: events))
+        XCTAssertTrue(existing.isCadenciaOwned, "external id is authoritative when Intervals replaces uid")
+        _ = try await client.upsertPlannedWorkout(session, ftp: 198, existingEventID: existing.id)
+        XCTAssertEqual(t.requests.map(\.method), [.post, .get, .put], "retry must not create a second event")
+        XCTAssertEqual(t.requests.last?.url.path, "/api/v1/athlete/0/events/42")
+        let body = try JSONSerialization.jsonObject(with: t.requests.last!.body!) as! [String: Any]
+        XCTAssertEqual(body["external_id"] as? String, PlanMirror.externalID(for: session))
+        XCTAssertNil(body["uid"], "preserve the server's uid on update")
+        XCTAssertTrue(body["icu_training_load"] is NSNull, "clear obsolete projected load when none is known")
+    }
 }
 
 final class WorkoutTextTests: XCTestCase {
@@ -174,7 +283,7 @@ final class OAuthTests: XCTestCase {
         XCTAssertEqual(pkce.verifier.count, 64)
         let url = oauth.authorizationURL(pkce: pkce, state: "s1")
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
-        XCTAssertEqual(items.first { $0.name == "scope" }?.value, "ACTIVITY:WRITE,WELLNESS:READ,CALENDAR:WRITE,SETTINGS:READ")
+        XCTAssertEqual(items.first { $0.name == "scope" }?.value, "ACTIVITY:WRITE,WELLNESS:READ,CALENDAR:WRITE,SETTINGS:READ,CHATS:WRITE")
         XCTAssertEqual(items.first { $0.name == "code_challenge_method" }?.value, "S256")
         XCTAssertEqual(items.first { $0.name == "code_challenge" }?.value, pkce.challenge)
 
@@ -263,15 +372,4 @@ final class RideRecordingTests: XCTestCase {
         XCTAssertEqual(ride.trainingLoad(ftp: 300), 1) // 90 s at IF 0.5 → 0.025 h × 0.25 × 100 ≈ 0.6 → 1
     }
 
-    func testTCXContainsPowerHeartRateAndCadencePerTrackpoint() {
-        let ride = makeRide(watts: [150, 160])
-        let xml = String(data: TCXEncoder.encode(ride), encoding: .utf8)!
-        XCTAssertTrue(xml.contains("<Activity Sport=\"Biking\">"))
-        XCTAssertEqual(xml.components(separatedBy: "<Trackpoint>").count - 1, 2)
-        XCTAssertTrue(xml.contains("<ns3:Watts>160</ns3:Watts>"))
-        XCTAssertTrue(xml.contains("<HeartRateBpm><Value>121</Value></HeartRateBpm>"))
-        XCTAssertTrue(xml.contains("<Cadence>88</Cadence>"))
-        XCTAssertTrue(xml.contains("<Time>2023-11-14T22:13:20Z</Time>"))
-        XCTAssertTrue(xml.contains("<TotalTimeSeconds>2</TotalTimeSeconds>"))
-    }
 }

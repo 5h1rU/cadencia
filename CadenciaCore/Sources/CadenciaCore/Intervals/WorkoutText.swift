@@ -12,14 +12,23 @@ import Foundation
 /// - 45m 65% 88rpm
 /// ```
 public enum WorkoutText {
-    public static func render(_ workout: Workout) -> String {
+    public static func render(_ workout: Workout, ftp: Int? = nil) -> String {
         var blocks: [String] = []
         for step in workout.steps {
+            let start = min(step.startIntensity, workout.intensityCeiling ?? step.startIntensity)
+            let end = min(step.endIntensity, workout.intensityCeiling ?? step.endIntensity)
+            func target(_ intensity: Double) -> String {
+                if let ftp { return String(Int((intensity * Double(ftp) + 0.000001).rounded(.down))) }
+                // Floor capped percentages so rounding cannot lift a target above the ceiling.
+                if workout.intensityCeiling != nil { return String(Int((intensity * 100 + 0.000001).rounded(.down))) }
+                return String(percent(intensity))
+            }
+            let unit = ftp == nil ? "%" : "w"
             var line = "- \(duration(step.duration)) "
-            if step.isRamp {
-                line += "ramp \(percent(step.startIntensity))-\(percent(step.endIntensity))%"
+            if abs(start - end) > 0.001 {
+                line += "ramp \(target(start))-\(target(end))\(unit)"
             } else {
-                line += "\(percent(step.startIntensity))%"
+                line += "\(target(start))\(unit)"
             }
             if let rpm = step.cadenceRPM { line += " \(rpm)rpm" }
             blocks.append("\(step.name)\n\(line)")

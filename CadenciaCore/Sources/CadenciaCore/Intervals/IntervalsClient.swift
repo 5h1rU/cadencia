@@ -80,16 +80,49 @@ public struct IntervalsClient: Sendable {
         return dto.points
     }
 
+    /// Dedicated, read-only history for the rider profile. Does not expand daily-coaching inputs
+    /// or reuse the daily 42-day power curve as if it covered six months.
+    public func cyclistProfileBrief(newest: Day, locale: String) async throws -> CyclistProfile.Brief {
+        let athlete = try await athlete()
+        let activities = try await activities(oldest: newest.adding(days: -(CyclistProfile.historyDays - 1)), newest: newest)
+        var curve: [PowerCurvePoint] = []
+        var unavailable = false
+        do {
+            curve = try await powerCurve(newest: newest, days: CyclistProfile.historyDays - 1)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as HTTPError where error.isAuthFailure {
+            throw error
+        } catch {
+            // Sparse accounts can lack a power curve. Keep the riding history and explicitly tell
+            // the coach that the curve could not be read; never substitute the shorter cached curve.
+            unavailable = true
+        }
+        try Task.checkCancellation()
+        return CyclistProfile.Brief(locale: locale, newest: newest, athlete: athlete, activities: activities,
+                                    powerCurve: curve, powerCurveUnavailable: unavailable)
+    }
+
     public struct UploadResult: Codable, Equatable, Sendable {
         public var activityID: String
         public init(activityID: String) { self.activityID = activityID }
     }
 
-    /// Uploads a completed ride as a TCX file. `externalID` lets us reconcile duplicates if the
+    /// Reconcile before every attempt, including rides whose last attempt used TCX. A failed
+    /// lookup stops the upload; changing formats must never create a second copy of a ride.
+    public func uploadActivity(_ ride: RideRecording) async throws -> UploadResult {
+        if let existing = try await activity(externalID: ride.externalID, around: Day(ride.startedAt)) {
+            return UploadResult(activityID: existing.id)
+        }
+        return try await uploadActivity(fit: FITActivityEncoder.encode(ride), name: ride.workout.name,
+                                        externalID: ride.externalID, pairedEventID: ride.intervalsEventID)
+    }
+
+    /// Uploads a completed ride as a FIT activity file. `externalID` lets us reconcile duplicates if the
     /// response is lost: Intervals keeps it on the activity, and a repeat upload with the same id is rejected.
-    public func uploadActivity(tcx: Data, name: String, externalID: String, pairedEventID: Int? = nil) async throws -> UploadResult {
+    public func uploadActivity(fit: Data, name: String, externalID: String, pairedEventID: Int? = nil) async throws -> UploadResult {
         var multipart = MultipartBody()
-        multipart.addFile(name: "file", filename: "\(externalID).tcx", contentType: "application/xml", contents: tcx)
+        multipart.addFile(name: "file", filename: "\(externalID).fit", contentType: "application/octet-stream", contents: fit)
         var query = ["name": name, "external_id": externalID, "device_name": "Cadencia"]
         if let pairedEventID { query["paired_event_id"] = String(pairedEventID) }
         let response = try await send(.post, "/api/v1/athlete/\(athleteID)/activities", query: query, body: multipart.finish(), contentType: multipart.contentType)
@@ -113,6 +146,13 @@ public struct IntervalsClient: Sendable {
         return dto.model
     }
 
+    /// Official recorded-GPS export. Strava-sourced activities and rides without GPS may lack it.
+    public func activityGPX(id: String) async throws -> Data {
+        let response = try await send(.get, "/api/v1/activity/\(id)/gpx-file", query: ["power": "false", "hr": "false"])
+        guard response.body.count <= GPXImporter.maximumBytes else { throw GPXImporter.ImportError.tooLarge }
+        return response.body
+    }
+
     public func updateActivityFeedback(activityID: String, rpe: Int?, feel: Int?) async throws {
         var body: [String: Any] = [:]
         if let rpe { body["icu_rpe"] = rpe }
@@ -122,39 +162,95 @@ public struct IntervalsClient: Sendable {
         _ = try await send(.put, "/api/v1/activity/\(activityID)", body: data, contentType: "application/json")
     }
 
+    /// Notes are messages, separate from the activity description. Read all pages so a retry can
+    /// reconcile an accepted POST whose response was lost, even on an activity with many comments.
+    public func activityNotes(activityID: String) async throws -> [IntervalsActivityNote] {
+        var notes: [IntervalsActivityNote] = []
+        var sinceID: Int64 = 0
+        while true {
+            let page: [IntervalsActivityNote] = try await get("/api/v1/activity/\(activityID)/messages",
+                query: ["sinceId": String(sinceID), "limit": "100"])
+            notes.append(contentsOf: page)
+            guard page.count == 100, let nextID = page.map(\.id).max(), nextID > sinceID else { break }
+            sinceID = nextID
+        }
+        return notes
+    }
+
+    /// Reuse the activity's saved debrief instead of appending it on each refresh/retry.
+    public func saveDebriefNote(activityID: String, report: RideDebrief.Report) async throws -> IntervalsActivityNote {
+        let content = report.noteContent
+        if let existing = try await activityNotes(activityID: activityID).first(where: { $0.isCoachDebrief && $0.content == content }) { return existing }
+        let body = try JSONEncoder().encode(["content": content])
+        let response = try await send(.post, "/api/v1/activity/\(activityID)/messages", body: body, contentType: "application/json")
+        struct Result: Decodable { let id: Int64 }
+        let result = try Self.decoder.decode(Result.self, from: response.body)
+        return IntervalsActivityNote(id: result.id, content: content)
+    }
+
     // MARK: Calendar
 
     public func events(oldest: Day, newest: Day) async throws -> [IntervalsEvent] {
         try await get("/api/v1/athlete/\(athleteID)/events.json", query: ["oldest": oldest.iso, "newest": newest.iso])
     }
 
-    /// Creates (or updates, by `uid`) a planned workout on the athlete's calendar.
+    /// Updates by the server's event id. A failed/uncertain create must be reconciled by external id
+    /// before retrying: Intervals may replace the UID, so upsertOnUid alone is not idempotent.
     @discardableResult
-    public func upsertPlannedWorkout(_ session: PlannedSession, ftp: Int) async throws -> IntervalsEvent {
+    public func upsertPlannedWorkout(_ session: PlannedSession, ftp: Int, existingEventID: Int? = nil) async throws -> IntervalsEvent {
         var body: [String: Any] = [
             "category": session.kind == .race ? "RACE_A" : "WORKOUT",
             "start_date_local": "\(session.day.iso)T00:00:00",
             "type": "Ride",
             "name": session.title,
-            "uid": PlanMirror.uid(for: session),
-            "external_id": session.id.uuidString.lowercased(),
-            "indoor": true,
+            "external_id": PlanMirror.externalID(for: session),
+            "indoor": session.location != .outdoor,
         ]
+        let eventID = existingEventID ?? session.intervalsEventID
+        if eventID == nil { body["uid"] = PlanMirror.uid(for: session) }
         if let workout = session.workout {
-            body["description"] = WorkoutText.render(workout)
+            body["description"] = WorkoutText.render(workout, ftp: session.location == .outdoor ? ftp : nil)
             body["moving_time"] = Int(workout.totalDuration)
         } else {
             body["description"] = session.note ?? "Session to be generated on the day from recovery data."
             body["moving_time"] = session.targetMinutes * 60
-            if let load = session.targetLoad { body["icu_training_load"] = load }
+            body["icu_training_load"] = session.targetLoad.map { $0 as Any } ?? NSNull()
         }
         let data = try JSONSerialization.data(withJSONObject: body)
-        let response = try await send(.post, "/api/v1/athlete/\(athleteID)/events", query: ["upsertOnUid": "true"], body: data, contentType: "application/json")
+        let response: HTTPResponse
+        if let eventID {
+            response = try await send(.put, "/api/v1/athlete/\(athleteID)/events/\(eventID)", body: data, contentType: "application/json")
+        } else {
+            response = try await send(.post, "/api/v1/athlete/\(athleteID)/events", query: ["upsertOnUid": "true"], body: data, contentType: "application/json")
+        }
         return try Self.decoder.decode(IntervalsEvent.self, from: response.body)
     }
 
     public func deleteEvent(id: Int) async throws {
         _ = try await send(.delete, "/api/v1/athlete/\(athleteID)/events/\(id)")
+    }
+
+    /// Official calendar export endpoint. Match by server id, never by name or date alone.
+    public func plannedWorkoutFIT(eventID: Int, day: Day) async throws -> Data {
+        struct Export: Decodable { let id: Int; let workout_file_base64: String? }
+        let exports: [Export] = try await get("/api/v1/athlete/\(athleteID)/events", query: [
+            "oldest": day.iso, "newest": day.iso, "ext": "fit", "resolve": "true"
+        ])
+        guard let encoded = exports.first(where: { $0.id == eventID })?.workout_file_base64,
+              let data = Data(base64Encoded: encoded), data.count >= 14,
+              String(data: data[8..<12], encoding: .ascii) == ".FIT" else { throw HTTPError.invalidResponse }
+        return data
+    }
+
+    /// Delete only the explicitly selected server ids. Never send external ids here: legacy copies
+    /// share them with the entry being retained.
+    public func deleteEvents(ids: [Int]) async throws -> Int {
+        let uniqueIDs = Set(ids).sorted()
+        guard !uniqueIDs.isEmpty else { return 0 }
+        let body = try JSONSerialization.data(withJSONObject: uniqueIDs.map { ["id": $0] })
+        let response = try await send(.put, "/api/v1/athlete/\(athleteID)/events/bulk-delete", body: body, contentType: "application/json")
+        struct Result: Decodable { let eventsDeleted: Int }
+        return try Self.decoder.decode(Result.self, from: response.body).eventsDeleted
     }
 
     // MARK: OAuth
@@ -211,7 +307,7 @@ public struct IntervalsClient: Sendable {
 public struct IntervalsOAuth: Sendable {
     public static let authorizeURL = URL(string: "https://intervals.icu/oauth/authorize")!
     public static let tokenURL = URL(string: "https://intervals.icu/api/oauth/token")!
-    public static let defaultScopes = ["ACTIVITY:WRITE", "WELLNESS:READ", "CALENDAR:WRITE", "SETTINGS:READ"]
+    public static let defaultScopes = ["ACTIVITY:WRITE", "WELLNESS:READ", "CALENDAR:WRITE", "SETTINGS:READ", "CHATS:WRITE"]
 
     public var clientID: String
     public var redirectURI: String

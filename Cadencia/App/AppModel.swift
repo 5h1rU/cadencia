@@ -2,6 +2,21 @@ import Foundation
 import Observation
 import CadenciaCore
 
+#if DEBUG
+private struct SyncAuditTransport: HTTPTransport {
+    let directory: URL
+
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        let response = try await URLSession.shared.send(request)
+        if request.method == .get, response.isSuccess {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try response.body.write(to: directory.appendingPathComponent(request.url.lastPathComponent + ".json"), options: .atomic)
+        }
+        return response
+    }
+}
+#endif
+
 /// Single owner of app state. Views read it through the environment; all mutation goes through methods
 /// here so persistence, Intervals sync and the coaching engines stay in one place.
 @MainActor
@@ -12,6 +27,8 @@ final class AppModel {
     private(set) var isSyncing = false
     private(set) var syncError: String?
     private(set) var coachBusy = false
+    private(set) var cyclistProfileBusy = false
+    private(set) var cyclistProfileError: String?
     private(set) var isUploading = false
 
     /// Sign in with ChatGPT. Tokens live in the Keychain; the issued client id and the per-device host id
@@ -25,6 +42,10 @@ final class AppModel {
     var showChatGPTWelcome = false
     /// Where each ride's post-ride debrief stands. No entry: not started, or done (`ride.debrief` is set).
     private(set) var debriefStatus: [UUID: DebriefStatus] = [:]
+    private(set) var debriefNoteErrors: [UUID: String] = [:]
+    private var syncingDebriefNotes: Set<UUID> = []
+    private(set) var rideRouteStatus: [UUID: RideRouteStatus] = [:]
+    enum RideRouteStatus: Equatable { case loading, unavailable, failed(String) }
 
     enum DebriefStatus: Equatable {
         /// Intervals is still processing the upload.
@@ -44,6 +65,8 @@ final class AppModel {
     private let keychain: KeychainStore
     private let transport: any HTTPTransport
     private var rideCache: [UUID: RideRecording] = [:]
+    private var isMirroring = false
+    private var calendarWaiters: [CheckedContinuation<Void, Never>] = []
 
     private static let stateFile = "state.json"
     private static let credentialAccount = "intervals.credential"
@@ -80,21 +103,45 @@ final class AppModel {
     var workingFTP: Int? { state.workingFTP }
     var readiness: Readiness? { state.today?.day == today ? state.today?.readiness : nil }
     var todayWorkout: Workout? { state.today?.day == today ? state.today?.workout : nil }
-    var plannedToday: PlannedSession? { state.plan?.sessions.first { $0.day == today } }
+    var plannedToday: PlannedSession? { state.session(on: today) }
+    var isTodayWorkoutCompleted: Bool { state.isWorkoutCompleted(on: today) || completedRideToday != nil }
+
+    func completedRide(for session: PlannedSession) -> AppState.RideIndexEntry? {
+        state.rideIndex.sorted { $0.startedAt > $1.startedAt }.first {
+            guard let ride = ride(id: $0.id), ride.athleteID == athleteID else { return false }
+            return ride.completes(session)
+        }
+    }
+
+    var completedRideToday: AppState.RideIndexEntry? {
+        if state.today?.day == today, let id = state.today?.completedRideID,
+           let entry = state.rideIndex.first(where: { $0.id == id }) { return entry }
+        if let session = plannedToday, let entry = completedRide(for: session) { return entry }
+        return state.rideIndex.sorted { $0.startedAt > $1.startedAt }.first {
+            guard Day($0.startedAt) == today, let ride = ride(id: $0.id), ride.athleteID == athleteID else { return false }
+            return ride.endedAt != nil && ride.workout.id == todayWorkout?.id
+        }
+    }
     var todayWellness: WellnessDay? { state.wellness(on: today) }
     var latestWellness: WellnessDay? { state.wellness.last }
 
-    /// Fitness, fatigue and form as the athlete starts the day: Intervals.icu's own numbers through yesterday,
-    /// one row shared by every screen. Intervals' row for today already counts today's *planned* workout
-    /// (until midnight), so reading it would make the coach's own prescription look like fatigue and the
-    /// numbers would change every time the plan was mirrored. The app never computes CTL/ATL itself.
+    /// The selected day's Intervals values, including planned load. Never substitute yesterday in the UI.
     var latestLoad: WellnessDay? {
+        state.wellness.last { $0.day <= today && $0.ctl != nil && $0.atl != nil }
+    }
+
+    /// Actual load through yesterday, kept separate from today's planned-inclusive projection.
+    var loadBeforeToday: WellnessDay? {
         state.wellness.last { $0.day < today && $0.ctl != nil && $0.atl != nil }
     }
 
     var upcomingEvent: TrainingEvent? {
-        guard let e = state.plan?.event, e.day >= today else { return nil }
-        return e
+        if let event = state.plan?.event, event.day >= today { return event }
+        // Intervals remains the source of event context when there is no local Cadencia plan.
+        return state.calendarEvents?.sorted {
+            if $0.day == $1.day { return $0.id > $1.id }
+            return ($0.day ?? today) < ($1.day ?? today)
+        }.compactMap(\.trainingEvent).first { $0.day >= today }
     }
 
     var thisWeekEvent: TrainingEvent? {
@@ -105,7 +152,9 @@ final class AppModel {
     var ftpProposal: Int? {
         guard let current = workingFTP, let estimate = state.ftpEstimate else { return nil }
         let since = today.adding(days: -estimate.windowDays)
-        let recentEFTP = state.activities.filter { $0.isCycling && $0.day >= since }.compactMap(\.estimatedFTP).max()
+        let activityEFTP = state.activities.filter { $0.isCycling && $0.day >= since && $0.day <= today }.compactMap(\.estimatedFTP).max()
+        let runningEFTP = state.wellness.last { $0.day <= today && $0.estimatedFTP != nil }?.estimatedFTP.map { Int($0.rounded()) }
+        let recentEFTP = [activityEFTP, runningEFTP].compactMap { $0 }.max()
         guard let proposal = FTPEstimator().proposal(current: current, estimate: estimate, recentEFTP: recentEFTP) else { return nil }
         return proposal == state.dismissedFTPProposal ? nil : proposal
     }
@@ -175,7 +224,31 @@ final class AppModel {
 
     func start() async {
         guard isSignedIn else { return }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--cadencia-audit-sync"), let credential {
+            let capture = SyncAuditTransport(directory: store.url("sync-audit"))
+            let audit = IntervalsClient(transport: capture, credential: credential, athleteID: athleteID)
+            do {
+                _ = try await audit.events(oldest: today, newest: today.adding(days: 365))
+                _ = try await audit.wellness(oldest: today.adding(days: -90), newest: today)
+                _ = try await audit.athlete()
+            } catch { try? store.save(error.localizedDescription, at: "sync-audit/error.json") }
+            return
+        }
+        #endif
+        await upgradeSavedRouteTerrain()
         await refresh()
+    }
+
+    /// Adds climb details to old saved routes without changing the athlete's confirmed course metrics.
+    private func upgradeSavedRouteTerrain() async {
+        guard let route = state.plan?.event?.course?.route,
+              route.climbAnalysisVersion != ClimbAnalyzer.version || route.profileSegments == nil else { return }
+        guard let upgraded = try? await Task.detached(priority: .userInitiated, operation: {
+            try route.upgradingClimbAnalysis()
+        }).value, !Task.isCancelled, state.plan?.event?.course?.route?.id == route.id,
+              state.plan?.event?.course?.route?.climbAnalysisVersion != ClimbAnalyzer.version || state.plan?.event?.course?.route?.profileSegments == nil else { return }
+        mutate { $0.plan?.event?.course?.route = upgraded }
     }
 
     private func persist() {
@@ -206,6 +279,7 @@ final class AppModel {
     }
 
     private func setCredential(_ credential: IntervalsCredential, athlete: AthleteProfile) {
+        cyclistProfileError = nil
         self.credential = credential
         keychain.writeCodable(credential, account: Self.credentialAccount)
         mutate {
@@ -228,11 +302,13 @@ final class AppModel {
     func signOut() async {
         if let client, case .oauth = client.credential { try? await client.disconnectApp() }
         credential = nil
+        cyclistProfileError = nil
         keychain.delete(Self.credentialAccount)
         bluetooth.disconnectAll()
         mutate {
             $0.wellness = []
             $0.activities = []
+            $0.calendarEvents = nil
             $0.powerCurve = []
             $0.today = nil
             $0.lastSyncAt = nil
@@ -333,6 +409,7 @@ final class AppModel {
 
     func refresh() async {
         guard let client, !isSyncing else { return }
+        let account = athleteID
         isSyncing = true
         defer { isSyncing = false }
 
@@ -343,6 +420,7 @@ final class AppModel {
 
         do {
             let athlete = try await client.athlete()
+            guard isSignedIn, athleteID == account else { return }
             mutate { $0.athlete = athlete }
         } catch { failures.append(("athlete", error)) }
 
@@ -351,20 +429,30 @@ final class AppModel {
         } else {
             do {
                 let wellness = try await client.wellness(oldest: today.adding(days: -90), newest: today)
+                guard isSignedIn, athleteID == account else { return }
                 mutate { $0.mergeWellness(wellness) }
             } catch { failures.append(("wellness", error)) }
 
             do {
                 let activities = try await client.activities(oldest: today.adding(days: -42), newest: today)
+                guard isSignedIn, athleteID == account else { return }
                 mutate { $0.activities = activities }
+                try importOutdoorRides(activities)
             } catch { failures.append(("activities", error)) }
 
             do {
                 let curve = try await client.powerCurve(newest: today)
+                guard isSignedIn, athleteID == account else { return }
                 mutate { $0.powerCurve = curve }
             } catch { failures.append(("power curve", error)) }
 
-            if failures.count < 4 {
+            do {
+                let events = try await client.events(oldest: today, newest: today.adding(days: 42))
+                guard isSignedIn, athleteID == account else { return }
+                mutate { $0.calendarEvents = events }
+            } catch { failures.append(("calendar", error)) }
+
+            if failures.count < 5 {
                 mutate { $0.lastSyncAt = Date() }
             }
             syncError = failures.first.map { "Intervals \($0.0): \($0.1.localizedDescription)" }
@@ -407,37 +495,36 @@ final class AppModel {
     // MARK: Today
 
     /// Today's wellness against the athlete's own range: measurements for the model and for the Recovery row.
-    private func measuredToday() -> Readiness {
+    private func measuredToday(in snapshot: AppState? = nil) -> Readiness {
+        let state = snapshot ?? self.state
         let day = today
         var todayWellness = state.wellness(on: day) ?? WellnessDay(day: day)
-        // Judge on the load before today's session (see `latestLoad`), not on Intervals' planned-inclusive row.
-        todayWellness.ctl = latestLoad?.ctl
-        todayWellness.atl = latestLoad?.atl
+        // Today's projected load is displayed separately; it is not fatigue already accumulated.
+        todayWellness.ctl = loadBeforeToday?.ctl
+        todayWellness.atl = loadBeforeToday?.atl
         return ReadinessEngine().evaluate(today: todayWellness, history: state.wellness, feedback: state.feedback(for: day))
     }
 
     /// Everything the AI coach is shown. Built fresh each time so the fingerprint tracks the real inputs.
-    private func coachBrief() -> CoachBrief {
-        let recentNotes = state.coachMessages.filter { $0.role == .athlete && $0.sentAt > today.adding(days: -7).date() }.suffix(5).map(\.text)
-        return CoachBrief(today: today, locale: coachLocale,
+    private func coachBrief(applying intent: CoachIntent? = nil) -> CoachBrief {
+        var state = self.state
+        if let intent { state.applyCoachIntent(intent, on: today) }
+        let available = state.plan?.availability.minutesByWeekday[today.weekday()]
+        let requestedLimit = state.workoutRequests?[today.iso]?.maxMinutes ?? intent?.constraints.first { $0.day == today }?.maxMinutes
+        let feedback = Dictionary(uniqueKeysWithValues: state.feedbackByDay.values.map { ($0.day, $0) })
+        let event = state.plan?.event.flatMap { $0.day >= today ? $0 : nil } ?? upcomingEvent
+        var brief = CoachBrief(today: today, locale: coachLocale,
                           athlete: .init(ftp: workingFTP ?? 200, weightKg: state.athlete?.weightKg ?? latestWellness?.weightKg,
                                          maxHR: state.athlete?.maxHR, lthr: state.athlete?.lthr),
                           ftpEstimate: state.ftpEstimate, powerCurve: state.powerCurve,
-                          wellness: wellnessForCoaching, feedback: feedbackIndex, activities: state.activities,
-                          plan: state.plan, upcomingEvent: upcomingEvent, availableMinutes: nil, recentCoachNotes: Array(recentNotes),
-                          measured: measuredToday())
-    }
-
-    /// The brief's rows, with today's load replaced by the pre-session numbers the rest of the app uses,
-    /// so the coach never quotes a fatigue that includes the workout it is about to prescribe.
-    private var wellnessForCoaching: [WellnessDay] {
-        state.wellness.map { row in
-            guard row.day == today else { return row }
-            var r = row
-            r.ctl = latestLoad?.ctl
-            r.atl = latestLoad?.atl
-            return r
-        }
+                          wellness: state.wellness, feedback: feedback, activities: state.activities,
+                          plan: state.plan, upcomingEvent: event,
+                          availableMinutes: [available, requestedLimit].compactMap { $0 }.min(), recentCoachNotes: state.appliedCoachNotes(on: today),
+                          measured: measuredToday(in: state))
+        brief.workoutRequest = state.workoutRequests?[today.iso]
+        brief.ftpReviewWatts = ftpProposal
+        brief.plannedRoutes = calendarSessions.filter { $0.route != nil && $0.day >= today && $0.day <= today.adding(days: 7) }.map(CoachBrief.PlannedRow.init)
+        return brief
     }
 
     private var feedbackIndex: [Day: SubjectiveFeedback] {
@@ -446,8 +533,12 @@ final class AppModel {
 
     private var coachLocale: String { Locale.current.language.languageCode?.identifier ?? "es" }
 
+    func isWorkoutProposalCurrent(_ proposal: AppState.WorkoutProposal) -> Bool {
+        proposal.basisFingerprint == coachBrief().fingerprint
+    }
+
     /// Today's measured signals even before the coach has answered (the Recovery row shows them).
-    var measuredSignals: Readiness { state.today?.day == today ? state.today!.readiness : measuredToday() }
+    var measuredSignals: Readiness { measuredToday() }
 
     /// Asks the coach again from synchronous call sites (feedback, FTP change, plan change).
     private func reaskCoach() {
@@ -457,23 +548,29 @@ final class AppModel {
     /// Asks the language model for today's decision when the inputs changed since the last answer
     /// (or always, with `force`). Keeps the rule-based baseline on any failure; plan problems become `coachIssue`.
     func askCoachForToday(force: Bool = false) async {
-        guard !coachThinking else { return }
+        guard !coachThinking, !coachBusy, !isTodayWorkoutCompleted else { return }
         let day = today
         let brief = coachBrief()
-        if !force, let current = state.today, current.day == day, current.aiFingerprint == brief.fingerprint { return }
+        if !force, let current = state.today, current.day == day, current.aiFingerprint == brief.fingerprint {
+            coachNotice = nil
+            return
+        }
 
+        // Claim the request before token refresh can suspend and let another caller enter.
+        coachThinking = true
+        coachNotice = nil
+        defer { coachThinking = false }
         guard let engine = await coachEngine() else {
             coachNotice = coachSource == nil ? nil : String(localized: "ChatGPT no longer accepts this sign-in. Sign in again in Settings → Coach.")
             return
         }
-        coachThinking = true
-        defer { coachThinking = false }
         do {
+            let prescriptionFTP = workingFTP
             let prescription = try await engine.prescribe(brief: brief)
-            guard today == day else { return }
+            try Task.checkCancellation()
+            guard today == day, !isTodayWorkoutCompleted, coachBrief().fingerprint == brief.fingerprint else { return }
             mutate { s in
-                s.today = AppState.TodayState(day: day, workout: prescription.workout, readiness: prescription.readiness, ai: prescription)
-                s.attachTodayWorkout(prescription.workout, day: day)
+                s.acceptPrescription(prescription, day: day, ftp: prescriptionFTP)
             }
             let dropped = mergeWeekOutlook(prescription.week)
             // The merged week is itself an input to the brief; the fingerprint must describe the merged state
@@ -486,6 +583,8 @@ final class AppModel {
                 for id in dropped { try? await client.deleteEvent(id: id) }
             }
             await pushWeekToIntervals()
+        } catch is CancellationError {
+            return
         } catch let error as LLMCoachError {
             switch error {
             case .usageLimitReached: coachIssue = .usageLimit
@@ -495,10 +594,31 @@ final class AppModel {
         } catch let error as DailyPrescription.ValidationError {
             coachNotice = String(localized: "The coach's answer failed a safety check (\(String(describing: error))). Ask again.")
         } catch let error as LLMCoach.CompletionError {
-            coachNotice = String(localized: "The coach could not be reached (\(error.description)). Ask again.")
+            coachNotice = coachFailureNotice(error)
         } catch {
-            coachNotice = String(localized: "The coach could not be reached (\(error.localizedDescription)). Ask again.")
+            coachNotice = coachFailureNotice(error)
         }
+    }
+
+    /// Diagnostics stay out of the riding interface. A failed refresh does not replace the saved session.
+    private func coachFailureNotice(_ error: Error, preservingSession: Bool = true) -> String {
+        let message: String
+        switch error as? LLMCoach.CompletionError {
+        case .connection(let code) where code == URLError.notConnectedToInternet.rawValue:
+            message = String(localized: "You're offline. Reconnect and ask the coach again.")
+        case .connection(let code) where code == URLError.timedOut.rawValue:
+            message = String(localized: "The coach took too long to respond. Please try again.")
+        case .connection, .interruptedResponse:
+            message = String(localized: "The coach's response was interrupted. Please try again.")
+        case .httpStatus(let status) where status >= 500:
+            message = String(localized: "The coach is temporarily unavailable. Please try again.")
+        case .emptyResponse, .unusableAnswer:
+            message = String(localized: "The coach couldn't finish a usable response. Please try again.")
+        default:
+            message = String(localized: "Couldn't reach the coach. Please try again.")
+        }
+        guard preservingSession, state.today?.day == today else { return message }
+        return message + " " + String(localized: "Your saved session is still available.")
     }
 
     /// Folds the AI's week into the plan: today and the next seven days take the coach's kind, title and
@@ -518,15 +638,20 @@ final class AppModel {
                     plan.sessions.remove(at: i)
                     continue
                 }
-                if session.kind != outlook.kind, session.day != today { session.workout = nil; session.status = .provisional }
+                if session.day != today, session.kind != outlook.kind || session.targetMinutes != outlook.minutes {
+                    session.workout = nil
+                    session.status = .provisional
+                }
                 session.kind = outlook.kind
                 session.title = outlook.title
                 session.targetMinutes = outlook.minutes
+                session.targetLoad = session.workout?.estimatedLoad ?? PlanBuilder.provisionalLoad(kind: outlook.kind, minutes: outlook.minutes)
                 session.note = outlook.note
                 plan.sessions[i] = session
             } else if outlook.kind != .rest, outlook.minutes > 0 {
                 plan.sessions.append(PlannedSession(day: outlook.day, kind: outlook.kind, title: outlook.title,
-                                                    targetMinutes: outlook.minutes, note: outlook.note))
+                                                    targetMinutes: outlook.minutes,
+                                                    targetLoad: PlanBuilder.provisionalLoad(kind: outlook.kind, minutes: outlook.minutes), note: outlook.note))
             }
         }
         plan.sessions.sort { $0.day < $1.day }
@@ -588,21 +713,38 @@ final class AppModel {
     }
 
     func applyIntent(_ intent: CoachIntent, messageID: UUID?) async {
-        guard var plan = state.plan ?? intent.event.map({ event in
-            PlanBuilder().build(.init(goal: .event, startDay: today, endDay: event.day, event: event, availability: .typical))
-        }) else { return }
-        plan.isActive = true
-        let revision = WeekReviser().apply(intent, to: plan, today: today)
-        mutate {
-            $0.plan = revision.plan
-            if let messageID, let i = $0.coachMessages.firstIndex(where: { $0.id == messageID }) { $0.coachMessages[i].applied = true }
+        guard intent.needsClarification.isEmpty, !coachBusy, !coachThinking,
+              let messageID, let message = state.coachMessages.first(where: { $0.id == messageID }),
+              message.intent == intent, !message.applied else { return }
+        var updated = state
+        if let request = intent.workoutRequest {
+            guard request.day >= today, !state.isWorkoutCompleted(on: request.day) else { return }
+            if request.day == today {
+                guard !isTodayWorkoutCompleted, let proposal = message.workoutProposal,
+                      proposal.basisFingerprint == coachBrief().fingerprint else {
+                    coachNotice = String(localized: "Your training context changed. Ask the coach for an updated workout preview.")
+                    return
+                }
+                updated.applyCoachIntent(intent, on: today)
+                updated.acceptPrescription(proposal.prescription, day: today, ftp: proposal.ftp)
+            } else {
+                updated.applyCoachIntent(intent, on: today)
+                // A future request changes the day's intent, not a previously generated concrete workout.
+                if let i = updated.plan?.sessions.firstIndex(where: { $0.day == request.day && $0.status != .completed && $0.status != .skipped }) {
+                    updated.plan?.sessions[i].workout = nil
+                    updated.plan?.sessions[i].status = .provisional
+                }
+            }
+        } else {
+            updated.applyCoachIntent(intent, on: today)
         }
-        if let legs = intent.feeling {
-            var fb = state.feedback(for: today) ?? SubjectiveFeedback(day: today)
-            fb.legs = legs
-            mutate { $0.setFeedback(fb) }
-        }
-        await askCoachForToday()
+        if let i = updated.coachMessages.firstIndex(where: { $0.id == messageID }) { updated.coachMessages[i].applied = true }
+        mutate { $0 = updated }
+        if intent.workoutRequest?.day == today {
+            let fingerprint = coachBrief().fingerprint
+            mutate { $0.today?.aiFingerprint = fingerprint }
+            coachNotice = nil
+        } else { await askCoachForToday() }
         await pushWeekToIntervals()
     }
 
@@ -611,33 +753,254 @@ final class AppModel {
     /// Leftover Cadencia events (from a reinstall or an earlier plan) are deleted first, because Intervals
     /// counts every planned workout dated today in today's fitness and fatigue.
     func pushWeekToIntervals() async {
-        guard let client else { return }
+        await acquireCalendar()
+        defer { releaseCalendar() }
+        guard !Task.isCancelled, let client, let ftp = workingFTP else { return }
+        let account = athleteID
+        let allSessions = calendarSessions
+        guard !allSessions.isEmpty else { return }
         let horizon = today.adding(days: 7)
-        if let events = try? await client.events(oldest: today, newest: today.adding(days: 14)) {
-            for stale in PlanMirror.staleEvents(events, sessions: state.plan?.sessions ?? []) {
-                try? await client.deleteEvent(id: stale.id)
+        let retained = allSessions.filter { $0.day >= today && $0.kind != .rest && $0.status != .skipped }
+        let sessions = retained.filter { $0.day <= horizon && $0.status != .completed }
+        do {
+            // A failed read aborts the write pass. Never blindly create when reconciliation failed.
+            let events = try await client.events(oldest: today, newest: today.adding(days: 14))
+            guard athleteID == account, isSignedIn else { return }
+            for stale in PlanMirror.staleEvents(events, sessions: retained) {
+                try await client.deleteEvent(id: stale.id)
+            }
+            for session in sessions {
+                guard athleteID == account, isSignedIn, !Task.isCancelled else { return }
+                let existing = PlanMirror.existingEvent(for: session, in: events)
+                let (prepared, targetFTP) = calendarSession(session, fallbackFTP: ftp)
+                var reconciled = prepared
+                // A stored id may have been removed externally; the fresh calendar read wins.
+                reconciled.intervalsEventID = existing?.id
+                let event = try await client.upsertPlannedWorkout(reconciled, ftp: targetFTP, existingEventID: existing?.id)
+                guard athleteID == account, isSignedIn else { return }
+                saveCalendarEvent(event.id, session: prepared, ftp: targetFTP)
+            }
+            // Mirroring changes today's projected load. Refresh it before displaying the result.
+            let days = try await client.wellness(oldest: today, newest: today)
+            if athleteID == account, isSignedIn { mutate { $0.mergeWellness(days) } }
+        } catch {
+            syncError = "Intervals calendar: \(error.localizedDescription)"
+            return
+        }
+    }
+
+    /// All calendar writes share this lock, including explicit outdoor sends. A queued send must
+    /// wait for the fresh reconciliation read, rather than treating an in-flight mirror as success.
+    private func acquireCalendar() async {
+        if isMirroring {
+            await withCheckedContinuation { calendarWaiters.append($0) }
+        } else { isMirroring = true }
+    }
+
+    private func releaseCalendar() {
+        if calendarWaiters.isEmpty { isMirroring = false }
+        else { calendarWaiters.removeFirst().resume() }
+    }
+
+    private var calendarSessions: [PlannedSession] {
+        var sessions = state.plan?.sessions ?? []
+        let planDays = Set(sessions.map(\.day))
+        sessions.append(contentsOf: (state.standaloneSessions ?? []).filter { !planDays.contains($0.day) })
+        return sessions.map { state.session(on: $0.day) ?? $0 }
+    }
+
+    var todayRideLocation: RideLocation { state.today?.rideLocation ?? plannedToday?.location ?? .indoor }
+    var outdoorFTP: Int? { state.acceptedFTP ?? state.athlete?.ftp ?? workingFTP }
+
+    var outdoorWorkout: OutdoorWorkout? {
+        guard let workout = todayWorkout, !workout.steps.isEmpty, workout.kind != .rest, workout.kind != .strength,
+              let ftp = outdoorFTP, ftp > 0 else { return nil }
+        return OutdoorWorkout(workout: workout, prescriptionFTP: state.today?.prescriptionFTP ?? workingFTP ?? ftp, outdoorFTP: ftp)
+    }
+
+    var outdoorRevision: String? { outdoorWorkout?.revision(on: today) }
+    var currentOutdoorHandoff: AppState.OutdoorHandoff? {
+        guard todayRideLocation == .outdoor, let handoff = state.today?.outdoorHandoff,
+              handoff.revision == outdoorRevision else { return nil }
+        return handoff
+    }
+
+    func setTodayRideLocation(_ location: RideLocation) {
+        guard todayWorkout != nil, !isTodayWorkoutCompleted else { return }
+        mutate { s in
+            s.today?.rideLocation = location
+            if let i = s.plan?.sessions.firstIndex(where: { $0.day == today }) {
+                s.plan?.sessions[i].location = location
+            } else if let i = s.standaloneSessions?.firstIndex(where: { $0.day == today }) {
+                s.standaloneSessions?[i].location = location
+            } else if let workout = s.today?.workout {
+                let ftp = s.today?.prescriptionFTP ?? s.workingFTP
+                let session = PlannedSession(day: today, kind: workout.kind, title: workout.name,
+                    targetMinutes: Int(workout.totalDuration / 60), status: .generated, workout: workout, location: location,
+                    prescriptionFTP: ftp)
+                if s.standaloneSessions == nil { s.standaloneSessions = [] }
+                s.standaloneSessions?.append(session)
             }
         }
-        guard let plan = state.plan, let ftp = workingFTP else { return }
-        for session in plan.sessions where session.day >= today && session.day <= horizon && session.status != .completed {
-            if let event = try? await client.upsertPlannedWorkout(session, ftp: ftp) {
-                mutate {
-                    if let i = $0.plan?.sessions.firstIndex(where: { $0.id == session.id }) { $0.plan?.sessions[i].intervalsEventID = event.id }
+        Task { await pushWeekToIntervals() }
+    }
+
+    private func calendarSession(_ raw: PlannedSession, fallbackFTP: Int) -> (PlannedSession, Int) {
+        var session = raw
+        if raw.day == today, let workout = todayWorkout {
+            session.workout = workout
+            session.title = workout.name
+            session.location = todayRideLocation
+            session.prescriptionFTP = state.today?.prescriptionFTP ?? raw.prescriptionFTP ?? fallbackFTP
+        }
+        guard session.location == .outdoor, let workout = session.workout else { return (session, fallbackFTP) }
+        let ftp = outdoorFTP ?? fallbackFTP
+        let prepared = OutdoorWorkout(workout: workout, prescriptionFTP: session.prescriptionFTP ?? fallbackFTP, outdoorFTP: ftp)
+        session.workout = prepared.workout
+        return (session, ftp)
+    }
+
+    private func saveCalendarEvent(_ id: Int, session: PlannedSession, ftp: Int) {
+        mutate { s in
+            if let i = s.plan?.sessions.firstIndex(where: { $0.id == session.id }) {
+                s.plan?.sessions[i].intervalsEventID = id
+                if session.location == .outdoor {
+                    s.plan?.sessions[i].deliveredWorkout = session.workout
+                    s.plan?.sessions[i].deliveredFTP = ftp
                 }
+            }
+            if let i = s.standaloneSessions?.firstIndex(where: { $0.id == session.id }) {
+                s.standaloneSessions?[i].intervalsEventID = id
+                if session.location == .outdoor {
+                    s.standaloneSessions?[i].deliveredWorkout = session.workout
+                    s.standaloneSessions?[i].deliveredFTP = ftp
+                }
+            }
+        }
+    }
+
+    /// Saves the latest concrete session. This acknowledges Intervals only, never receipt by Garmin.
+    func sendOutdoorWorkout() async throws {
+        await acquireCalendar()
+        defer { releaseCalendar() }
+        try Task.checkCancellation()
+        guard !isTodayWorkoutCompleted, let client, let prepared = outdoorWorkout, todayRideLocation == .outdoor,
+              let session = calendarSessions.first(where: { $0.day == today && $0.status != .completed && $0.status != .skipped }) else {
+            throw OutdoorError.noSession
+        }
+        let account = athleteID, day = today, revision = prepared.revision(on: day)
+        let events = try await client.events(oldest: day, newest: day)
+        guard athleteID == account, isSignedIn, today == day, outdoorRevision == revision,
+              !isTodayWorkoutCompleted else { throw OutdoorError.changed }
+        var wire = session
+        wire.workout = prepared.workout
+        wire.title = prepared.workout.name
+        wire.location = .outdoor
+        wire.intervalsEventID = PlanMirror.existingEvent(for: session, in: events)?.id
+        let event = try await client.upsertPlannedWorkout(wire, ftp: prepared.ftp, existingEventID: wire.intervalsEventID)
+        guard athleteID == account, isSignedIn else { throw OutdoorError.changed }
+        // Persist the server id even if the coach changed the workout while the write was in flight.
+        saveCalendarEvent(event.id, session: wire, ftp: prepared.ftp)
+        guard today == day, outdoorRevision == revision, todayRideLocation == .outdoor,
+              !isTodayWorkoutCompleted else { throw OutdoorError.changed }
+        mutate { $0.today?.outdoorHandoff = .init(revision: revision, eventID: event.id, savedAt: Date()) }
+    }
+
+    func exportOutdoorFIT() async throws -> URL {
+        try await sendOutdoorWorkout()
+        guard let handoff = currentOutdoorHandoff, let client else { throw OutdoorError.changed }
+        let account = athleteID, day = today
+        let data = try await client.plannedWorkoutFIT(eventID: handoff.eventID, day: day)
+        guard athleteID == account, isSignedIn, today == day,
+              currentOutdoorHandoff?.revision == handoff.revision, !isTodayWorkoutCompleted else { throw OutdoorError.changed }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appendingPathComponent("Cadencia-\(day.iso).fit")
+        try data.write(to: url, options: [.atomic, .completeFileProtection])
+        return url
+    }
+
+    enum OutdoorError: LocalizedError {
+        case noSession, changed
+        var errorDescription: String? {
+            switch self {
+            case .noSession: return String(localized: "Choose Outdoor for an unfinished cycling workout and connect Intervals.icu first.")
+            case .changed: return String(localized: "The workout or account changed. Prepare the latest session again.")
             }
         }
     }
 
     // MARK: Coach
 
+    /// The only automatic caller is the Home screen's first appearance with both connections.
+    /// Sync, daily prescriptions, plan changes and model changes never regenerate this snapshot.
+    func generateCyclistProfile(automatically: Bool = false) async {
+        guard !cyclistProfileBusy else { return }
+        if automatically {
+            guard CyclistProfile.shouldGenerateAutomatically(hasReport: state.cyclistProfile != nil,
+                                                              attemptedAt: state.cyclistProfileAutomaticAttemptedAt),
+                  client != nil, aiCoachAvailable else { return }
+        }
+        guard let client, let account = state.athlete?.id, let connection = credential else {
+            cyclistProfileError = String(localized: "Connect Intervals.icu in Settings to build your cyclist profile.")
+            return
+        }
+        guard aiCoachAvailable else {
+            cyclistProfileError = String(localized: "Connect ChatGPT (or an API key) in Settings → Coach first.")
+            return
+        }
+        cyclistProfileBusy = true
+        cyclistProfileError = nil
+        if automatically { mutate { $0.cyclistProfileAutomaticAttemptedAt = Date() } }
+        defer { cyclistProfileBusy = false }
+        func sameAccount() -> Bool { athleteID == account && credential == connection }
+        do {
+            let brief = try await client.cyclistProfileBrief(newest: today, locale: coachLocale)
+            try Task.checkCancellation()
+            guard sameAccount() else { return }
+            guard let engine = await coachEngine() else {
+                if sameAccount() { cyclistProfileError = String(localized: "Connect ChatGPT (or an API key) in Settings → Coach first.") }
+                return
+            }
+            guard sameAccount() else { return }
+            let report = try await engine.cyclistProfile(brief)
+            try Task.checkCancellation()
+            guard sameAccount() else { return }
+            mutate { $0.cyclistProfile = report }
+        } catch is CancellationError {
+            return
+        } catch let error as LLMCoachError {
+            guard sameAccount() else { return }
+            switch error {
+            case .usageLimitReached: coachIssue = .usageLimit
+            case .notEligible: coachIssue = .notEligible
+            case .unauthorized: coachIssue = .signInAgain
+            }
+            cyclistProfileError = String(localized: "The coach connection needs attention. Your saved profile is still available if you have one.")
+        } catch let error as HTTPError {
+            guard sameAccount() else { return }
+            cyclistProfileError = error.isAuthFailure
+                ? String(localized: "Intervals rejected the credential. Reconnect in Settings.")
+                : String(localized: "Couldn't read your Intervals.icu history. Try generating your profile again.")
+        } catch {
+            guard sameAccount() else { return }
+            cyclistProfileError = coachFailureNotice(error, preservingSession: false)
+        }
+    }
+
     func sendToCoach(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !coachBusy else { return }
         coachBusy = true
+        coachNotice = nil
         defer { coachBusy = false }
-        mutate { $0.coachMessages.append(.init(role: .athlete, text: trimmed)) }
+        let source = AppState.CoachMessage(role: .athlete, text: trimmed)
+        let account = athleteID
+        let day = today
         let context = CoachContext(today: today, locale: Locale.current.language.languageCode?.identifier ?? "es",
-                                   readiness: readiness, plan: state.plan, recentActivities: Array(state.activities.suffix(10)), ftp: workingFTP)
+                                   readiness: readiness, plan: state.plan, recentActivities: Array(state.activities.suffix(10)), ftp: workingFTP,
+                                   workout: todayWorkout, recentConversation: state.coachMessages.suffix(8).map { "\($0.role.rawValue): \($0.text)" })
+        mutate { $0.coachMessages.append(source) }
         // When the ChatGPT refresh token is dead `freshChatGPTCredential` sets `coachIssue = .signInAgain`;
         // the Coach screen shows that as a banner with a sign-in action.
         guard let engine = await coachEngine() else {
@@ -646,8 +1009,18 @@ final class AppModel {
         }
         do {
             let intent = try await engine.interpret(trimmed, context: context)
-            mutate { $0.coachMessages.append(.init(role: .coach, text: intent.reply, intent: intent)) }
+            var proposal: AppState.WorkoutProposal?
+            if let request = intent.workoutRequest, request.day == day, !isTodayWorkoutCompleted {
+                let basis = coachBrief().fingerprint
+                let brief = coachBrief(applying: intent)
+                let prescription = try await engine.prescribe(brief: brief)
+                proposal = .init(prescription: prescription, basisFingerprint: basis, ftp: brief.athlete.ftp)
+            }
+            guard athleteID == account, today == day else { return }
+            mutate { $0.coachMessages.append(.init(role: .coach, text: proposal?.prescription.note.session ?? intent.reply, intent: intent,
+                                                  sourceMessageID: source.id, workoutProposal: proposal)) }
         } catch let error as LLMCoachError {
+            guard athleteID == account, today == day else { return }
             let text: String
             switch error {
             case .usageLimitReached:
@@ -661,14 +1034,141 @@ final class AppModel {
                 text = String(localized: "ChatGPT no longer accepts this sign-in. Sign in again in Settings → Coach.")
             }
             mutate { $0.coachMessages.append(.init(role: .coach, text: text)) }
+        } catch is DailyPrescription.ValidationError {
+            guard athleteID == account, today == day else { return }
+            let notice = String(localized: "The coach couldn't produce a valid workout for this request. Your current workout is unchanged. Try rephrasing the request.")
+            mutate { $0.coachMessages.append(.init(role: .coach, text: notice)) }
+        } catch is CancellationError {
+            return
         } catch {
-            mutate { $0.coachMessages.append(.init(role: .coach, text: String(localized: "I could not reach the coach right now (\(error.localizedDescription)). Try again."))) }
+            guard athleteID == account, today == day else { return }
+            let notice = coachFailureNotice(error, preservingSession: false)
+            mutate { $0.coachMessages.append(.init(role: .coach, text: notice)) }
         }
     }
 
     func clearCoachHistory() { mutate { $0.coachMessages = [] } }
 
     // MARK: Rides
+
+    /// Navigation data is local; only compact course metrics are passed to the coach.
+    func attachRideRoute(_ route: GPXRoute, source: Data, fileName: String, sourceIndex: Int, day: Day, minutes: Int) async throws {
+        let account = athleteID
+        let sessionID = state.session(on: day)?.id
+        guard day >= today, !state.isWorkoutCompleted(on: day),
+              state.session(on: day).map({ $0.kind != .rest && $0.kind != .strength && $0.status != .skipped }) ?? true else { throw OutdoorError.changed }
+        let sourceURL = store.url("routes/\(route.id.uuidString).gpx")
+        try await Task.detached(priority: .userInitiated) {
+            try FileManager.default.createDirectory(at: sourceURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try source.write(to: sourceURL, options: [.atomic, .completeFileProtection])
+        }.value
+        try Task.checkCancellation()
+        guard athleteID == account, !state.isWorkoutCompleted(on: day), day >= today,
+              state.session(on: day)?.id == sessionID,
+              state.session(on: day).map({ $0.kind != .rest && $0.kind != .strength && $0.status != .skipped }) ?? true else { throw OutdoorError.changed }
+        mutate { state in
+            if state.rideRoutePlans == nil { state.rideRoutePlans = [:] }
+            state.rideRoutePlans?[day.iso] = .init(route: route, fileName: fileName, sourceIndex: sourceIndex, minutes: minutes)
+            var session = state.session(on: day) ?? PlannedSession(day: day, kind: .endurance, title: route.name.isEmpty ? String(localized: "Outdoor ride") : route.name,
+                targetMinutes: minutes, location: .outdoor)
+            // The day attachment owns the measured profile once. session(on:) supplies it to readers.
+            session.route = nil; session.routeFileName = nil; session.routeSourceIndex = nil; session.location = .outdoor
+            if let i = state.plan?.sessions.firstIndex(where: { $0.id == session.id }) { state.plan?.sessions[i] = session }
+            else {
+                if state.standaloneSessions == nil { state.standaloneSessions = [] }
+                if let i = state.standaloneSessions?.firstIndex(where: { $0.id == session.id }) { state.standaloneSessions?[i] = session }
+                else { state.standaloneSessions?.append(session) }
+            }
+            if day == today { state.today?.rideLocation = .outdoor }
+        }
+        Task { await askCoachForToday(); await pushWeekToIntervals() }
+    }
+
+    func removeRideRoute(on day: Day) {
+        guard !state.isWorkoutCompleted(on: day) else { return }
+        mutate { state in
+            state.rideRoutePlans?[day.iso] = nil
+            if let i = state.plan?.sessions.firstIndex(where: { $0.day == day }) {
+                state.plan?.sessions[i].route = nil; state.plan?.sessions[i].routeFileName = nil; state.plan?.sessions[i].routeSourceIndex = nil
+            }
+            if let i = state.standaloneSessions?.firstIndex(where: { $0.day == day }) {
+                state.standaloneSessions?[i].route = nil; state.standaloneSessions?[i].routeFileName = nil; state.standaloneSessions?[i].routeSourceIndex = nil
+            }
+        }
+    }
+
+    func exportRideRoute(on day: Day) async throws -> URL {
+        guard let attachment = state.routePlan(on: day) else { throw OutdoorError.noSession }
+        let route = attachment.route
+        let account = athleteID, sourceURL = store.url("routes/\(route.id.uuidString).gpx"), index = attachment.sourceIndex
+        let url = try await Task.detached(priority: .userInitiated) {
+            let data = try GPXExporter.selectedRoute(from: Data(contentsOf: sourceURL), index: index)
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("Cadencia-route-\(day.iso).gpx")
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
+            return url
+        }.value
+        guard athleteID == account, state.routePlan(on: day)?.route.id == route.id else { throw OutdoorError.changed }
+        return url
+    }
+
+    /// Fetch actual GPS automatically on review, cache locally, and keep failures independent of AI notes.
+    func loadRideRoute(_ rideID: UUID, retry: Bool = false) async {
+        guard let ride = ride(id: rideID), ride.athleteID == athleteID, ride.sourceActivity != nil,
+              ride.recordedRoute == nil, rideRouteStatus[rideID] != .loading else { return }
+        if !retry, ride.recordedRouteCheckedAt != nil { rideRouteStatus[rideID] = .unavailable; return }
+        guard let client, let activityID = ride.sourceActivity?.id else {
+            rideRouteStatus[rideID] = .failed(String(localized: "Connect Intervals.icu to load the recorded GPS route.")); return
+        }
+        let account = athleteID
+        rideRouteStatus[rideID] = .loading
+        defer { if rideRouteStatus[rideID] == .loading { rideRouteStatus[rideID] = nil } }
+        do {
+            let source = try await client.activityGPX(id: activityID)
+            let routes = try await Task.detached(priority: .userInitiated) { try GPXImporter().parse(source, combineTracks: true) }.value
+            try Task.checkCancellation()
+            guard athleteID == account, isSignedIn, var latest = self.ride(id: rideID) else { return }
+            // One provider activity; preserve separate recording segments across pauses/gaps.
+            guard routes.count == 1 else { throw GPXImporter.ImportError.noRoute }
+            latest.recordedRoute = routes[0]; latest.recordedRouteCheckedAt = Date()
+            try store.save(latest, at: "rides/\(rideID.uuidString).json")
+            rideCache[rideID] = latest; rideRouteStatus[rideID] = nil
+        } catch is CancellationError {
+            rideRouteStatus[rideID] = nil
+        } catch {
+            guard athleteID == account else { rideRouteStatus[rideID] = nil; return }
+            rideRouteStatus[rideID] = .failed(String(localized: "The recorded GPS route is not available from Intervals.icu. Retry after the activity finishes syncing, or import its recorded GPX."))
+        }
+    }
+
+    func attachRecordedRoute(_ route: GPXRoute, to rideID: UUID) throws {
+        guard var ride = ride(id: rideID), ride.athleteID == athleteID else { throw OutdoorError.changed }
+        ride.recordedRoute = route; ride.recordedRouteCheckedAt = Date()
+        try store.save(ride, at: "rides/\(rideID.uuidString).json")
+        rideCache[rideID] = ride; rideRouteStatus[rideID] = nil
+    }
+
+    /// Head-unit rides are already in Intervals. Save a local review record without ever enqueuing
+    /// an upload or writing another Health workout. Stable ids make repeated refreshes idempotent.
+    private func importOutdoorRides(_ activities: [ActivitySummary]) throws {
+        let sessions = calendarSessions
+        for activity in activities {
+            guard activity.externalID?.hasPrefix("cadencia-") != true,
+                  !state.ledger.entries.contains(where: { $0.intervalsActivityID == activity.id }) else { continue }
+            let id = OutdoorRideImport.recordingID(athleteID: athleteID, activityID: activity.id)
+            let previous = ride(id: id)
+            guard let ride = OutdoorRideImport.recording(activity: activity, sessions: sessions, athleteID: athleteID,
+                fallbackFTP: outdoorFTP ?? 200, existing: previous) else { continue }
+            if previous == ride { continue }
+            try store.save(ride, at: "rides/\(id.uuidString).json")
+            rideCache[id] = ride
+            mutate { s in
+                let entry = AppState.RideIndexEntry(id: id, name: activity.name, kind: ride.workout.kind, startedAt: activity.startDateLocal,
+                    duration: activity.movingTime, averageWatts: activity.averageWatts, load: activity.trainingLoad)
+                if let i = s.rideIndex.firstIndex(where: { $0.id == id }) { s.rideIndex[i] = entry } else { s.rideIndex.append(entry) }
+                s.completeSession(for: ride)
+            }
+        }
+    }
 
     func ride(id: UUID) -> RideRecording? {
         if let r = rideCache[id] { return r }
@@ -678,16 +1178,17 @@ final class AppModel {
     }
 
     func finishRide(_ recording: RideRecording) async {
+        guard recording.sourceActivity == nil else { return }
         rideCache[recording.id] = recording
         do { try store.save(recording, at: "rides/\(recording.id.uuidString).json") } catch { syncError = error.localizedDescription }
         let ftp = workingFTP ?? 200
         mutate {
-            $0.rideIndex.append(.init(id: recording.id, name: recording.workout.name, kind: recording.workout.kind, startedAt: recording.startedAt,
+            if !$0.rideIndex.contains(where: { $0.id == recording.id }) {
+                $0.rideIndex.append(.init(id: recording.id, name: recording.workout.name, kind: recording.workout.kind, startedAt: recording.startedAt,
                                       duration: recording.duration, averageWatts: recording.averageWatts, load: recording.trainingLoad(ftp: ftp)))
-            $0.ledger.enqueue(rideID: recording.id, athleteID: recording.athleteID)
-            if let sid = recording.plannedSessionID, let i = $0.plan?.sessions.firstIndex(where: { $0.id == sid }) {
-                $0.plan?.sessions[i].status = .completed
             }
+            $0.ledger.enqueue(rideID: recording.id, athleteID: recording.athleteID)
+            $0.completeSession(for: recording)
         }
         if state.settings.writeWorkoutsToHealth {
             try? await health.saveWorkout(recording, ftp: ftp)
@@ -722,19 +1223,10 @@ final class AppModel {
         defer { isUploading = false }
         let now = Date()
         for entry in state.ledger.due(for: athleteID, now: now) {
-            guard let ride = ride(id: entry.rideID) else { continue }
+            guard let ride = ride(id: entry.rideID), ride.sourceActivity == nil else { continue }
             mutate { $0.ledger.markAttempt(entry.rideID, at: now) }
-            if entry.state == .uncertain {
-                if let existing = try? await client.activity(externalID: ride.externalID, around: Day(ride.startedAt)) {
-                    mutate { $0.ledger.markConfirmed(entry.rideID, activityID: existing.id, at: Date()) }
-                    await syncFeedback(for: entry.rideID)
-                    Task { await debriefRide(entry.rideID) }
-                    continue
-                }
-            }
             do {
-                let result = try await client.uploadActivity(tcx: TCXEncoder.encode(ride, name: ride.workout.name), name: ride.workout.name,
-                                                             externalID: ride.externalID, pairedEventID: ride.intervalsEventID)
+                let result = try await client.uploadActivity(ride)
                 mutate { $0.ledger.markConfirmed(entry.rideID, activityID: result.activityID, at: Date()) }
                 await syncFeedback(for: entry.rideID)
                 Task { await debriefRide(entry.rideID) }
@@ -751,17 +1243,57 @@ final class AppModel {
     /// The most recent ride on this phone from the last few days, for the "Last session" card on Today.
     var lastRide: AppState.RideIndexEntry? {
         let cutoff = today.adding(days: -3).date()
-        return state.rideIndex.last { $0.startedAt >= cutoff }
+        return state.rideIndex.filter { $0.startedAt >= cutoff }.max { $0.startedAt < $1.startedAt }
     }
 
     /// Debriefs confirmed rides that never got one (the app was closed while the coach was writing, or
     /// the upload only went through on a later refresh).
     private func debriefRecentRides() {
         let cutoff = today.adding(days: -3).date()
-        for entry in state.rideIndex where entry.startedAt >= cutoff {
-            guard state.ledger.entry(for: entry.id)?.state == .confirmed, debriefStatus[entry.id] == nil,
-                  ride(id: entry.id)?.debrief == nil else { continue }
-            Task { await debriefRide(entry.id) }
+        for entry in state.rideIndex {
+            guard let ride = ride(id: entry.id), ride.athleteID == athleteID,
+                  state.ledger.entry(for: entry.id)?.state == .confirmed || ride.sourceActivity != nil else { continue }
+            if RideDebrief.requiresRefresh(ride) {
+                if entry.startedAt >= cutoff { Task { await debriefRide(entry.id) } }
+            } else if ride.debrief != nil, ride.debriefNote == nil {
+                // Retry pending Notes even when the original session is older than the debrief window.
+                Task { await syncDebriefNote(for: entry.id) }
+            } else if entry.startedAt >= cutoff, (ride.sourceActivity == nil || ride.plannedSessionID != nil), debriefStatus[entry.id] == nil, ride.debrief == nil, ride.debriefNote == nil {
+                Task { await debriefRide(entry.id) }
+            }
+        }
+    }
+
+    /// Read Notes back for details, or save a pending local debrief. A saved report never needs
+    /// another AI request just because its Intervals write failed or the app was closed.
+    func syncDebriefNote(for rideID: UUID) async {
+        guard !syncingDebriefNotes.contains(rideID), let client, let ride = ride(id: rideID),
+              ride.athleteID == athleteID, !RideDebrief.requiresRefresh(ride) else { return }
+        let entry = state.ledger.entry(for: rideID)
+        guard let activityID = ride.sourceActivity?.id ?? (entry?.state == .confirmed ? entry?.intervalsActivityID : nil) else { return }
+        syncingDebriefNotes.insert(rideID)
+        defer { syncingDebriefNotes.remove(rideID) }
+        do {
+            let note: IntervalsActivityNote?
+            if let report = ride.debrief {
+                note = try await client.saveDebriefNote(activityID: activityID, report: report)
+            } else {
+                note = try await client.activityNotes(activityID: activityID).filter(\.isCoachDebrief).max { $0.id < $1.id }
+            }
+            guard isSignedIn, athleteID == ride.athleteID, var latest = self.ride(id: rideID) else { return }
+            // A report may have been refreshed while Notes were being read. Never attach an old note to it.
+            if let report = latest.debrief, note?.content != report.noteContent { return }
+            latest.debriefNote = note
+            try store.save(latest, at: "rides/\(rideID.uuidString).json")
+            rideCache[rideID] = latest
+            debriefNoteErrors[rideID] = nil
+        } catch {
+            guard isSignedIn, athleteID == ride.athleteID else { return }
+            if (error as? HTTPError)?.isAuthFailure == true {
+                debriefNoteErrors[rideID] = String(localized: "Reconnect Intervals.icu in Settings to allow access to activity Notes. Your saved debrief is still available.")
+            } else {
+                debriefNoteErrors[rideID] = String(localized: "The coach note could not sync with Intervals. Your saved debrief is still available. Try again when connected.")
+            }
         }
     }
 
@@ -769,28 +1301,56 @@ final class AppModel {
     /// fetches its analysis, then hands the recording and that analysis to the coach. The answer is kept
     /// on the ride file; failures are kept in `debriefStatus` so the screen can offer a retry.
     func debriefRide(_ rideID: UUID) async {
-        guard let client, let entry = state.ledger.entry(for: rideID), entry.state == .confirmed,
-              let activityID = entry.intervalsActivityID, var ride = ride(id: rideID) else { return }
+        guard let client, var ride = ride(id: rideID), ride.athleteID == athleteID else { return }
+        let entry = state.ledger.entry(for: rideID)
+        guard let activityID = ride.sourceActivity?.id ?? (entry?.state == .confirmed ? entry?.intervalsActivityID : nil) else { return }
         switch debriefStatus[rideID] {
         case .waitingForIntervals, .reading: return
         case .failed, nil: break
         }
+        let refreshing = RideDebrief.requiresRefresh(ride)
+        if !refreshing, ride.debrief != nil || ride.debriefNote != nil {
+            await syncDebriefNote(for: rideID)
+            return
+        }
         debriefStatus[rideID] = .waitingForIntervals
+        if !refreshing { await syncDebriefNote(for: rideID) }
+        guard isSignedIn, athleteID == ride.athleteID else { debriefStatus[rideID] = nil; return }
+        if !refreshing, self.ride(id: rideID)?.debriefNote != nil { debriefStatus[rideID] = nil; return }
 
         // Intervals analyses an upload within seconds; the numbers are only there once `analyzed` flips.
-        var analysis: ActivityDetail? = ride.analysis?.analyzed == true ? ride.analysis : nil
+        var analysis: ActivityDetail?
+        var analysisReadFailed = false
         var attempt = 0
         while analysis == nil, attempt < 8 {
             if attempt > 0 { try? await Task.sleep(for: .seconds(3)) }
             attempt += 1
-            if let detail = try? await client.activityDetail(id: activityID), detail.analyzed { analysis = detail }
+            do {
+                let detail = try await client.activityDetail(id: activityID)
+                analysisReadFailed = false
+                if detail.analyzed { analysis = detail }
+            } catch {
+                analysisReadFailed = true
+                if (error as? HTTPError)?.isAuthFailure == true { break }
+            }
+        }
+        guard let analysis else {
+            debriefStatus[rideID] = .failed(analysisReadFailed
+                ? String(localized: "The Intervals.icu analysis could not be read. Check your connection and try again.")
+                : String(localized: "Intervals.icu hasn't finished analyzing this ride. Try again shortly."))
+            return
         }
         // Re-read before writing: the review sheet may have saved RPE/legs while we waited.
+        guard isSignedIn, athleteID == ride.athleteID else { debriefStatus[rideID] = nil; return }
         ride = self.ride(id: rideID) ?? ride
-        if let analysis {
-            ride.analysis = analysis
-            rideCache[rideID] = ride
-            try? store.save(ride, at: "rides/\(rideID.uuidString).json")
+        ride.analysis = analysis
+        rideCache[rideID] = ride
+        try? store.save(ride, at: "rides/\(rideID.uuidString).json")
+
+        if ride.sourceActivity != nil, ride.recordedRoute == nil {
+            await loadRideRoute(rideID)
+            guard isSignedIn, athleteID == ride.athleteID else { debriefStatus[rideID] = nil; return }
+            ride = self.ride(id: rideID) ?? ride
         }
 
         guard let coach = await coachEngine() else {
@@ -799,18 +1359,27 @@ final class AppModel {
         }
         debriefStatus[rideID] = .reading
         let day = Day(ride.startedAt)
-        let brief = RideDebrief.Brief(locale: coachLocale, ride: ride, ftp: workingFTP ?? 200,
-                                      athlete: .init(ftp: workingFTP ?? 200, weightKg: state.athlete?.weightKg ?? latestWellness?.weightKg,
-                                                     maxHR: state.athlete?.maxHR, lthr: state.athlete?.lthr),
-                                      readiness: state.today?.day == day ? state.today?.readiness : nil,
-                                      plan: state.plan, recentActivities: state.activities, analysis: analysis)
+        let brief = RideDebrief.Brief(
+            locale: coachLocale,
+            ride: ride,
+            ftp: ride.ftpUsed ?? workingFTP ?? 200,
+            readiness: (state.today?.day == day) ? state.today?.readiness : nil,
+            plan: state.plan,
+            recentActivities: state.activities,
+            analysis: analysis
+        )
         do {
-            let report = try await coach.debrief(brief)
-            guard var latest = self.ride(id: rideID) else { return }
+            var report = try await coach.debrief(brief)
+            guard isSignedIn, athleteID == ride.athleteID, var latest = self.ride(id: rideID) else { debriefStatus[rideID] = nil; return }
+            if refreshing {
+                report.correctionNotice = String(localized: "Updated analysis from Intervals.icu results. This replaces the earlier assessment.")
+                latest.debriefNote = nil
+            }
             latest.debrief = report
+            try store.save(latest, at: "rides/\(rideID.uuidString).json")
             rideCache[rideID] = latest
-            try? store.save(latest, at: "rides/\(rideID.uuidString).json")
             debriefStatus[rideID] = nil
+            await syncDebriefNote(for: rideID)
         } catch let error as LLMCoachError {
             switch error {
             case .usageLimitReached: coachIssue = .usageLimit
@@ -818,10 +1387,12 @@ final class AppModel {
             case .unauthorized: coachIssue = .signInAgain
             }
             debriefStatus[rideID] = .failed(String(localized: "The coach could not be reached. Check the coach connection in Settings and try again."))
+        } catch is CancellationError {
+            debriefStatus[rideID] = nil
         } catch let error as LLMCoach.CompletionError {
-            debriefStatus[rideID] = .failed(String(localized: "The coach could not be reached (\(error.description)). Try again."))
+            debriefStatus[rideID] = .failed(coachFailureNotice(error, preservingSession: false))
         } catch {
-            debriefStatus[rideID] = .failed(String(localized: "The coach could not be reached (\(error.localizedDescription)). Try again."))
+            debriefStatus[rideID] = .failed(coachFailureNotice(error, preservingSession: false))
         }
     }
 

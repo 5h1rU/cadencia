@@ -1,0 +1,22 @@
+Cadencia brand artwork
+Generator: built-in image_gen tool (no CLI/API fallback).
+Selected artwork: Cadencia/Assets.xcassets/AppIcon.appiconset/AppIcon.png
+Launch image: Cadencia/Assets.xcassets/BrandIcon.imageset/BrandIcon.png
+The icon was resized for the iOS asset catalog; its artwork is unchanged. The
+launch badge uses the selected rounding edit below, with its alpha preserved.
+
+Final selected prompt:
+Use case: logo-brand. Asset type: final production iOS app icon for Cadencia, a native iPhone adaptive cycling coach. Create ONE full-bleed square app icon, 1024 by 1024. Existing product palette is native iOS blue (#007AFF), white, and cool charcoal. A striking, minimal, proprietary white symbol: a strong open circular C suggesting a bicycle crank and a smooth cadence loop, with a short rising rhythmic stroke integrated into the opening to imply forward momentum. Extremely simple and legible, optically centered, bold flowing geometry with beautifully rounded terminals and generous negative space. Icon mark occupies about 62% of square width. Background is rich saturated cobalt/iOS blue, with an exceptionally subtle lighter-blue lift at the upper left, polished flat vector-like visual finish. The icon should feel at home next to Apple Fitness and premium cycling tools. Text: none. Constraints: square edge-to-edge color; NO pre-rounded outer corners, NO frame, NO border, NO surrounding padding or mockup, NO additional icons, NO lettering or wordmark, NO bike illustration, NO sparkle, NO tiny details, NO dimensional extrusion, NO watermark. Output the actual square artwork only.
+
+Launch badge prompt (built-in tool, original icon supplied as the edit target):
+Use case: precise-object-edit. Edit target: image 1. Make a reusable launch-screen badge of this EXACT blue app icon by rounding ONLY the four outer square corners with a generous iOS continuous corner radius of 22% of the square side. Everything inside the rounded square MUST remain OPAQUE, including the saturated BLUE background and the entire white C symbol, unchanged. Only the small cut-away OUTER CORNERS become transparent. This is a BLUE rounded-square TILE, NOT a white-symbol cutout: preserve all blue and all white inside the tile. Keep the tile edge-to-edge at the same square dimensions, with transparent corner regions only. No shadow, no text, no outline, no new design, no texture, no speckles.
+
+The transparent white-mark extraction variants were discarded.
+
+Loading implementation:
+- LaunchScreen.storyboard displays the icon and Cadencia name on a semantic
+  background that adapts to light and dark appearance.
+- LoadingView adds native progress and an Open Cadencia action during an account's
+  first sync. It does not hold the launch screen for an artificial minimum time.
+- Returning accounts show saved training immediately and continue normal syncing.
+- New loading copy is localized in English and Spanish.

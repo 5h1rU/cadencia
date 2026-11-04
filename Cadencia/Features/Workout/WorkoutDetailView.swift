@@ -3,6 +3,7 @@ import CadenciaCore
 
 /// A structured session block by block, with the reasoning that produced it.
 struct WorkoutDetailView: View {
+    @Environment(AppModel.self) private var model
     let workout: Workout
     let ftp: Int
 
@@ -10,7 +11,7 @@ struct WorkoutDetailView: View {
 
     var body: some View {
         List {
-            Section {
+            InfoSection {
                 VStack(alignment: .leading, spacing: 12) {
                     WorkoutProfileView(workout: workout, ftp: ftp, ceilingWatts: ceilingWatts)
                         .frame(height: 200)
@@ -23,7 +24,9 @@ struct WorkoutDetailView: View {
                     }
                 }
                 .padding(.vertical, 4)
-            } footer: {
+            } header: {
+                Text("Workout profile")
+            } information: {
                 Text("Dashed line: FTP \(ftp) W. Red line: today's ceiling; ERG never pushes above it. Colors are power zones.")
             }
 
@@ -31,7 +34,19 @@ struct WorkoutDetailView: View {
                 Text(workout.rationale)
             }
 
-            Section {
+            if model.todayWorkout?.id == workout.id, !model.isTodayWorkoutCompleted,
+               workout.kind != .rest, workout.kind != .strength, !workout.steps.isEmpty {
+                Section {
+                    NavigationLink { PlannedRideRouteView(day: model.today) } label: {
+                        Label(model.plannedToday?.route == nil ? "Add a route (optional)" : "Review planned route", systemImage: "map")
+                    }
+                    NavigationLink { OutdoorWorkoutView() } label: {
+                        Label("Ride outdoors", systemImage: "bicycle")
+                    }
+                }
+            }
+
+            InfoSection(hasInformation: workout.steps.contains(where: \.isRamp)) {
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 8) {
                     GridRow {
                         Text("At").gridColumnAlignment(.trailing)
@@ -66,7 +81,7 @@ struct WorkoutDetailView: View {
                 }
             } header: {
                 Text("Blocks")
-            } footer: {
+            } information: {
                 if workout.steps.contains(where: \.isRamp) {
                     Text("Ramps show start→end watts; the trainer moves the target every second between them.")
                 }

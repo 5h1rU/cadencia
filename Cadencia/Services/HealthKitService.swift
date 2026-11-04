@@ -105,7 +105,7 @@ final class HealthKitService {
 
         var samples: [HKSample] = []
         let bpmUnit = HKUnit.count().unitDivided(by: .minute())
-        // Every 5th second is plenty for Health; 1 Hz stays in the TCX sent to Intervals.
+        // Every 5th second is plenty for Health; 1 Hz stays in the FIT sent to Intervals.
         let stride = ride.samples.enumerated().filter { $0.offset % 5 == 0 }.map(\.element)
         for (i, s) in stride.enumerated() {
             let next = i + 1 < stride.count ? stride[i + 1].time : end

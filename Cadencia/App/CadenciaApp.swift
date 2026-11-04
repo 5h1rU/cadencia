@@ -2,13 +2,13 @@ import SwiftUI
 
 @main
 struct CadenciaApp: App {
+    @UIApplicationDelegateAdaptor(CadenciaAppDelegate.self) private var appDelegate
     @State private var model = AppModel.live()
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            StartupView()
                 .environment(model)
-                .task { await model.start() }
         }
     }
 }

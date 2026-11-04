@@ -56,33 +56,48 @@ public enum RideCommentary {
         public var avgHeartRate: Int?
         public var maxHeartRate: Int?
         public var avgCadence: Int?
-        /// Share of samples within `zoneTolerance` of their own target, 0–100.
+        /// Share of observed riding time within `zoneTolerance` of its recorded target, 0–100.
         public var inZonePercent: Int?
 
-        /// Samples are one per second of riding time, so the block's samples are the slice at its offset.
-        public static func compute(index: Int, workout: Workout, ftp: Int, samples: [RideSample], upTo elapsed: TimeInterval? = nil) -> BlockStats {
+        /// Fraction of the ridden block backed by fresh power observations. Missing data is unknown, never failure.
+        public var powerCoveragePercent: Int?
+        /// Time-weighted target actually sent to the trainer, including manual intensity changes.
+        public var recordedTargetWatts: Int?
+
+        public static func compute(index: Int, workout: Workout, ftp: Int, samples: [RideSample], upTo elapsed: TimeInterval? = nil,
+                                   startedAt: Date? = nil, timerEvents: [RideTimerEvent]? = nil, endedAt: Date? = nil) -> BlockStats {
+            let timeline = RideTimeline(samples: samples, startedAt: startedAt, timerEvents: timerEvents, endedAt: endedAt)
+            return compute(index: index, workout: workout, ftp: ftp, timeline: timeline, upTo: elapsed)
+        }
+
+        public static func compute(index: Int, workout: Workout, ftp: Int, timeline: RideTimeline, upTo elapsed: TimeInterval? = nil) -> BlockStats {
             let step = workout.steps[index]
             let start = workout.steps[..<index].reduce(0) { $0 + $1.duration }
-            let end = min(elapsed ?? (start + step.duration), start + step.duration)
-            let lo = min(Int(start), samples.count)
-            let hi = min(max(Int(end), lo), samples.count)
-            let slice = samples[lo..<hi]
-            let watts = slice.compactMap(\.watts)
-            let hr = slice.compactMap(\.heartRate)
-            let cadence = slice.compactMap(\.cadence)
-            let judged = slice.compactMap { s -> Bool? in
-                guard let w = s.watts, let t = s.targetWatts, t > 0 else { return nil }
-                return abs(Double(w) / Double(t) - 1) <= RideCommentary.zoneTolerance
+            let end = max(start, min(elapsed ?? .infinity, timeline.duration, start + step.duration))
+            let selected = timeline.observations.compactMap { observation -> (RideSample, Double)? in
+                let seconds = min(end, observation.end) - max(start, observation.start)
+                return seconds > 0 ? (observation.sample, seconds) : nil
             }
-            let midpoint = step.intensity(at: step.duration / 2)
-            return BlockStats(index: index, name: step.name, seconds: hi - lo,
-                              targetWatts: Int((midpoint * Double(ftp)).rounded()),
-                              avgWatts: watts.isEmpty ? nil : watts.reduce(0, +) / watts.count,
-                              maxWatts: watts.max(),
-                              avgHeartRate: hr.isEmpty ? nil : hr.reduce(0, +) / hr.count,
-                              maxHeartRate: hr.max(),
-                              avgCadence: cadence.isEmpty ? nil : cadence.reduce(0, +) / cadence.count,
-                              inZonePercent: judged.isEmpty ? nil : Int((Double(judged.filter { $0 }.count) / Double(judged.count) * 100).rounded()))
+            func average(_ key: KeyPath<RideSample, Int?>) -> Int? {
+                let values = selected.compactMap { sample, seconds in sample[keyPath: key].map { (Double($0), seconds) } }
+                let duration = values.reduce(0) { $0 + $1.1 }
+                return duration > 0 ? Int((values.reduce(0) { $0 + $1.0 * $1.1 } / duration).rounded()) : nil
+            }
+            let judged = selected.compactMap { sample, seconds -> (Bool, Double)? in
+                guard let watts = sample.watts, let target = sample.targetWatts, target > 0 else { return nil }
+                return (abs(Double(watts) / Double(target) - 1) <= RideCommentary.zoneTolerance, seconds)
+            }
+            let judgedSeconds = judged.reduce(0) { $0 + $1.1 }
+            let powerSeconds = selected.filter { $0.0.watts != nil }.reduce(0) { $0 + $1.1 }
+            let duration = end - start
+            let midpoint = min(step.intensity(at: step.duration / 2), workout.intensityCeiling ?? .infinity)
+            return BlockStats(index: index, name: step.name, seconds: Int(duration.rounded()),
+                              targetWatts: Int((midpoint * Double(ftp)).rounded()), avgWatts: average(\.watts),
+                              maxWatts: selected.compactMap { $0.0.watts }.max(), avgHeartRate: average(\.heartRate),
+                              maxHeartRate: selected.compactMap { $0.0.heartRate }.max(), avgCadence: average(\.cadence),
+                              inZonePercent: judgedSeconds > 0 ? Int((judged.filter { $0.0 }.reduce(0) { $0 + $1.1 } / judgedSeconds * 100).rounded()) : nil,
+                              powerCoveragePercent: duration > 0 ? Int((powerSeconds / duration * 100).rounded()) : nil,
+                              recordedTargetWatts: average(\.targetWatts))
         }
     }
 
@@ -134,7 +149,8 @@ public enum RideCommentary {
         public var rideSoFar: BlockStats?
 
         public init(locale: String, moment: Moment, workout: Workout, ftp: Int, stepIndex: Int?, elapsed: TimeInterval,
-                    intensityScale: Double, samples: [RideSample], liveHeartRate: Int? = nil, liveCadence: Int? = nil) {
+                    intensityScale: Double, samples: [RideSample], liveHeartRate: Int? = nil, liveCadence: Int? = nil,
+                    startedAt: Date? = nil, timerEvents: [RideTimerEvent]? = nil) {
             self.locale = locale
             self.moment = moment.wire
             self.workoutName = workout.name
@@ -148,6 +164,7 @@ public enum RideCommentary {
             self.liveHeartRate = liveHeartRate
             self.liveCadence = liveCadence
 
+            let timeline = RideTimeline(samples: samples, startedAt: startedAt, timerEvents: timerEvents)
             func block(_ i: Int) -> Block? {
                 guard workout.steps.indices.contains(i) else { return nil }
                 let step = workout.steps[i]
@@ -157,17 +174,17 @@ public enum RideCommentary {
             }
             if case .finish = moment {
                 if let last = workout.steps.indices.last {
-                    previousBlock = BlockStats.compute(index: last, workout: workout, ftp: ftp, samples: samples)
+                    previousBlock = BlockStats.compute(index: last, workout: workout, ftp: ftp, timeline: timeline)
                 }
             } else if let i = stepIndex {
                 currentBlock = block(i)
                 nextBlock = block(i + 1)
-                if i > 0 { previousBlock = BlockStats.compute(index: i - 1, workout: workout, ftp: ftp, samples: samples) }
-                if case .midBlock = moment { currentSoFar = BlockStats.compute(index: i, workout: workout, ftp: ftp, samples: samples, upTo: elapsed) }
+                if i > 0 { previousBlock = BlockStats.compute(index: i - 1, workout: workout, ftp: ftp, timeline: timeline) }
+                if case .midBlock = moment { currentSoFar = BlockStats.compute(index: i, workout: workout, ftp: ftp, timeline: timeline, upTo: elapsed) }
             }
             if !samples.isEmpty {
                 let whole = Workout(name: workout.name, kind: workout.kind, steps: [WorkoutStep(name: "ride", duration: workout.totalDuration, intensity: 0)])
-                var all = BlockStats.compute(index: 0, workout: whole, ftp: ftp, samples: samples, upTo: elapsed)
+                var all = BlockStats.compute(index: 0, workout: whole, ftp: ftp, timeline: timeline, upTo: elapsed)
                 all.targetWatts = nil
                 rideSoFar = all
             }

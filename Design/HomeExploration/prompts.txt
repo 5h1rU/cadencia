@@ -1,0 +1,76 @@
+Coach option 1
+
+Use case: ui-mockup. Direction name: Header status.
+Create realistic, production-quality native iOS UI with clear hierarchy, strong San Francisco typography, purposeful spacing.
+Reference attached is the actual Cadencia home screen. Preserve its light grouped iOS visual language: #F2F2F7 background, white grouped surfaces, black text, secondary gray, system blue actions, SF Symbols. Change ONLY the Your coach section's internal layout. Output one focused component at natural logical size 390x560, rendered crisp at high resolution. Component only, no device, status bar, navigation, notch, tabs, home indicator or surrounding screen. Show no multiple alternatives and no numbered labels.
+Today's date anchor Friday October 30, 2026.
+STRUCTURE: One white rounded 24pt container with 20pt padding. Top line small bold "Your coach" left, compact green check circle and plain text "Ready" aligned at trailing side of that SAME header row. No capsule or tinted pill for Ready anywhere. Second line "Friday, October 30" in small gray. Generous 20pt gap then large 22pt semibold editorial headline "A good day to push a little". Main read supports 3 short labeled paragraphs "YOUR BODY": "Your recovery is in its usual range and last week's load is absorbed." "TODAY": "Three 12-minute sweet spot efforts at 210 W." "KEEP IN MIND": "Heavy legs? Skip the last effort." Thin divider above footer with blue "Ask the coach again" and simple blue refresh symbol. A discreet information icon belongs beside section date, not next to Ready. All content same width and left aligned, no DisclosureGroup indentation. Make the header readiness beautifully restrained, headline primary. No nested cards, no gradients, no shadows. Readable body 16pt, captions 12pt. Preserve current product's simple native style.
+
+========================================================================
+
+Coach option 2
+
+Use case: ui-mockup. Direction name: Readiness sentence.
+Create realistic production-quality native iOS UI with strong hierarchy, San Francisco typography, intentional spacing.
+Use attached actual Cadencia screen as visual grounding. Preserve #F2F2F7 background, white grouped surfaces, black text, system blue controls. Redesign ONLY Your coach component, natural logical size 390x560. Single component, high resolution. App content only, no device bezel, OS chrome, nav, tabs, home indicator. No multi-idea board or numeric labels. Today is Friday October 30, 2026.
+A white 24pt rounded container, 20pt inset. Header "Your coach" with small information icon at trailing edge. Gray date "Friday, October 30". Main headline "A good day to push a little" in 22pt semibold, first visually dominant content. DIRECTLY BELOW HEADLINE place a muted 14pt one-line sentence with a small green dot: "You're ready for today's session." Readiness becomes part of the coach's natural message, no pill or badge anywhere, no separate status header. Then 18pt gap. Short clearly grouped paragraphs: gray uppercase "YOUR BODY" and "Your recovery is in its usual range and last week's load is absorbed." Gray uppercase "TODAY" and "Three 12-minute sweet spot efforts at 210 W." Gray uppercase "KEEP IN MIND" and "Heavy legs? Skip the last effort." Footer simple thin divider then blue refresh icon and "Ask the coach again". Use full content width, no disclosure indentation or chevron halfway down. Prefer whitespace then dividers over borders, no nested cards, no shadows. Body16 captions12. Calm native iOS design.
+
+========================================================================
+
+Coach option 3
+
+Use case: ui-mockup. Direction name: Body context.
+Create realistic production-quality native iOS UI, sharp San Francisco type, purposeful spacing.
+Attached actual Cadencia home screenshot defines established native iOS light style. Retain #F2F2F7 background white round grouped section, black text, blue controls, gray captions. Redesign only Your coach section, one focused component logical 390x560 at high resolution. No device, OS chrome, status bar, nav bar, tabs, home indicator, multiple options or numbered labels. Date today Friday October 30, 2026.
+Single white rounded24 container padded20. Header "Your coach" left and discreet information icon right, below gray "Friday, October 30". Then large22 semibold "A good day to push a little". Below 20pt space start three editorial groups. First group header is "YOUR BODY" on left and a small green check + plain word "Ready" at trailing side OF THE YOUR BODY LABEL ROW. This locates readiness with its physiological context. No capsule, badge, tinted surface, or Ready above headline. Body under this row "Your recovery is in its usual range and last week's load is absorbed." Second group "TODAY" body "Three 12-minute sweet spot efforts at 210 W." Third "KEEP IN MIND" body "Heavy legs? Skip the last effort." All content flush aligned, no nested disclosure indentation. Blue footer action "Ask the coach again" after thin divider. Body16 captions12. Calm and beautifully balanced; no extra metrics, buttons, features, gradients or shadows.
+
+========================================================================
+
+Coach option 4
+
+Use case: ui-mockup. Direction name: Compact briefing.
+Create realistic production-quality native iOS UI with strong hierarchy and purposeful spacing.
+Attached actual Cadencia home is reference for native iOS grouped light style (#F2F2F7 page, white grouped surface, black SF typography, blue controls). Redesign ONLY Your coach section using a more compact progressive-disclosure approach, not merely status repositioning. Output a single focused component at natural logical 390x350, rendered high resolution. App content only no device hardware, OS status bar, navigation, tabs, home indicator, multiple ideas, numeric labels. Today Friday October30 2026.
+One white rounded24 surface with20 inset. Header "Your coach" left and tiny info circle right. Gray date "Friday, October 30" underneath. Then22 semibold headline "A good day to push a little". Below it16 body "Three 12-minute sweet spot efforts at 210 W. Your recovery supports the plan." Do not render the long expanded YOUR BODY / TODAY / KEEP IN MIND text blocks: details are behind a real-looking row "Read your briefing" with down chevron. This row below summary has 44pt target. Final bottom horizontal divider, green check circle and gray plain "Ready for today's session" left, small blue refresh icon-only button right44pt. Readiness is secondary metadata at the FOOT of the coach section, never before headline. No Ready pill or capsule, nested cards, invented chart, shadows, gradient. Comfortably spaced, beautifully composed, consistent with current product.
+
+========================================================================
+
+Recovery option 1
+
+Use case: ui-mockup. Direction name: Two native lists.
+Create a realistic production-quality native iOS section design with clear hierarchy, strong SF typography, purposeful spacing. Attached screenshot is actual Cadencia Home recovery and profile. Preserve its native light grouped visual language: #F2F2F7 background, white round grouped containers, black labels, gray secondary, blue controls. Current date anchor Friday October30 2026. Output one focused component arrangement logical390x600, high resolution, no device hardware, OS chrome, nav, tabs, home indicator. Only one alternative, no numeric labels or option name in artwork.
+REARRANGE recovery into TWO PHYSICALLY SEPARATE full-width white rounded24 blocks with24pt vertical gap. First block "Training load" header left and blue small information icon right. Three ordinary native44pt rows separated by subtle thin rules: "Fitness (CTL)" value "62"; "Fatigue (ATL)" value "78"; "Form (TSB)" value "−16". Values right-aligned in black tabular digits. Second block "Recovery signals" header left blue small info icon right. Three native rows: "HRV" "37 ms" orange "Below usual"; "Sleep" "6.4 h" green "In range"; "Resting HR" "47 bpm" green "Below usual". Small colored dots supplement text, not replace it. Values and verdicts align consistently, verdicts may occupy small secondary line to avoid crowding. Each block has independent subtle navigation chevron at far edge of its header. Headings17 semibold body16.
+Below the two blocks, one SMALL independent white native NavigationLink row with blue bicycle icon, bold "Your cyclist profile", gray "View your full profile", and right chevron. Do NOT show any rider profile biography, rider category, Generate/Update button or long disclaimer. This profile row is compact supporting navigation only. All generous whitespace, no nested cards, shadows, gradients, charts, buttons or extra features.
+
+========================================================================
+
+Recovery option 2
+
+Use case: ui-mockup. Direction name: Two metric strips.
+Create realistic production-quality native iOS design with clear hierarchy, SF typography, precise spacing. Attached current Cadencia recovery screenshot is grounding; retain native iOS light #F2F2F7 backdrop, white grouped surfaces with24 radius, black type, gray captions, system blue control tint. Date anchor Friday October30 2026. Output ONE alternative consisting of two separate metric blocks and supporting profile nav row, logical390x470 at high resolution. Component arrangement only, no phone body, OS chrome, nav bar, tabs, home indicator, numeric labels or multi-option collage.
+First physically separate fullwidth white block heading "Training load" with small blue info circle trailing. Below header use THREE EQUAL COLUMNS: huge26 black tabular values "62", "78", "−16"; below them readable labels "Fitness", "Fatigue", "Form"; below labels tiny neutral "CTL", "ATL", "TSB". Columns are open, separated only by short faint vertical rules, no nested cards.
+24pt gap then second fullwidth white block heading "Recovery signals" with small blue info circle trailing. Three equal open columns with simple SF Symbols waveform, moon, heart in gray; values "37" tiny"ms", "6.4" tiny"h", "47" tiny"bpm"; below values "HRV", "Sleep", "Resting HR"; bottom status captions "Below usual" orange, "In range" green, "Below usual" green. Status may break in two lines naturally; keep all column edges aligned. All six metric values equally weighted; type NOT tiny. Each header can have blue small trailing chevron to detail.
+Then supporting compact white NavigationLink row: blue bicycle symbol, "Your cyclist profile" bold16 and "View your full profile" gray13 underneath; right chevron. Do not display profile biography, category, Generate/Update buttons or long explanatory copy. Prefer grouping spacing dividers; no graphs, nested cards, shadows, gradients or extra features.
+
+========================================================================
+
+Recovery option 3
+
+Use case: ui-mockup. Direction name: Load overview and signal rows.
+Create realistic production-quality native iOS UI. Attached Cadencia screenshot is actual reference, maintain SF typography, #F2F2F7 background, white round grouped blocks, black primary, gray captions and native system blue controls. Date anchor Friday October30 2026. Output ONE focused arrangement logical390x540 high resolution. App component only, no hardware, OS chrome, nav, tabs, home indicator, numbered labels or multiple alternatives.
+User wants Fitness, Fatigue, Form separated from HRV, Sleep, Resting HR. Create two distinct white24radius fullwidth blocks24pt apart with generous20pt inset.
+First block is compact Training load numerical overview: top header "Training load" plus tiny info and chevron trailing. Second line small gray "Including planned workouts". Below header THREE EQUAL open columns values26pt semibold "62", "78", "−16" then captions "Fitness", "Fatigue", "Form" and small gray CTL ATL TSB. No trend graphs or invented comparisons.
+Second block "Recovery signals" with small blue info trailing uses three comfortably spaced horizontal LIST ROWS, not columns. Each row has SF symbol in gray on left (waveform.path.ecg, moon.zzz, heart), a middle two-line label and verdict, and strong right aligned value. HRV value"37 ms" verdict"Below usual"orange; Sleep value"6.4 h" verdict"In range"green; Resting HR value"47 bpm" verdict"Below usual"green. Subtle row dividers, single chevron at far header.
+Third supporting very compact white NavigationLink row: bicycle icon blue, "Your cyclist profile" bold16 over gray13 "View your full profile", right chevron. No long profile, no Generate/Update controls. Use16body12captions, no nested cards, shadows, gradients, graphics, extra features. A clear asymmetric hierarchy: quick numeric training strip, detailed physiological list.
+
+========================================================================
+
+Recovery option 4
+
+Use case: ui-mockup. Direction name: Compact detail links.
+Create realistic production-quality native iOS UI, strong hierarchy San Francisco typography purposeful spacing. Actual attached Cadencia home recovery screenshot is grounding. Keep #F2F2F7 background, white grouped surfaces, black labels, gray secondary, system blue icons. Date anchor Friday October30 2026. Output one focused arrangement logical390x360 high resolution. No device bezel, phone hardware, OS chrome, nav bar, tabs, home indicator, option name, numbered labels or multiple ideas.
+Create shortest useful Home arrangement of TWO INDEPENDENT FULLWIDTH WHITE rounded20 navigation blocks, separated16pt, plus compact profile link below. No enclosing white card behind these blocks.
+FIRST independently tappable block: leading gray SF chart.line.uptrend.xyaxis symbol, bold17 "Training load" header, trailing blue rightchevron. Under header one short neutral inline line "Fitness 62 · Fatigue 78 · Form −16" in14pt; no three-row table, no individual metric cards, no chart. All values visible in just two text lines total within block.
+SECOND independently tappable block: leading gray heart.text.square SF symbol, bold17 "Recovery signals" header, trailing blue rightchevron. Under header a neutral inline line "HRV 37 ms · Sleep 6.4 h · RHR 47 bpm" in14pt. A second short contextual status line orange dot plus "HRV below usual"12pt. Details and other individual verdicts open on tap; no giant values, no list of three rows, no graphs. Do not label overall Ready or Reduced.
+THIRD supporting simple compact independently tappable white row: bicycle symbol blue, bold16 "Your cyclist profile", gray13 "View your full profile" underneath, gray rightchevron. No profile biography, Generate/Update buttons, or long copy.
+Precisely align icon column and text column across all three blocks.20pt padding,44pt minimum taps, use whitespace/dividers, no nested cards shadows gradients and no other features.

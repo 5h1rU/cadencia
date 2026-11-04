@@ -30,6 +30,7 @@ final class RideCommentator {
     private(set) var thinking = false
     var voiceEnabled: Bool { didSet { if !voiceEnabled { silence() } } }
     var captionsEnabled: Bool
+    let audio = RideAudio()
 
     private let coach: LLMCoach
     private let locale: String
@@ -50,11 +51,31 @@ final class RideCommentator {
         self.openAISpeech = openAISpeech
         self.voiceEnabled = voiceEnabled
         self.captionsEnabled = captionsEnabled
+        playbackEnd.onEnd = { [weak self] in
+            guard let self, !self.synthesizer.isSpeaking, self.player?.isPlaying != true else { return }
+            self.audio.deactivateVoice()
+        }
         synthesizer.delegate = playbackEnd
     }
 
     /// Which engine will speak: the OpenAI voice name, or nil for the phone's voice.
     var openAIVoice: String? { openAISpeech?.voice }
+
+    #if DEBUG
+    static func hudPreview() -> RideCommentator {
+        struct OfflineTransport: HTTPTransport {
+            func send(_ request: HTTPRequest) async throws -> HTTPResponse { throw HTTPError.invalidResponse }
+        }
+        let coach = LLMCoach(transport: OfflineTransport(), backend: .chatGPTPlan(accessToken: "preview"))
+        let commentator = RideCommentator(coach: coach, locale: "en", openAISpeech: nil,
+                                          voiceEnabled: false, captionsEnabled: true)
+        let text = Locale.current.language.languageCode?.identifier == "es"
+            ? "Mantén las piernas relajadas durante el calentamiento. Estás aumentando el flujo sanguíneo sin acumular fatiga; busca una cadencia cómoda y deja que la potencia suba poco a poco."
+            : "Ease into your warm-up with relaxed legs. You're increasing blood flow without adding fatigue; find a comfortable cadence and let the power rise gradually."
+        commentator.caption = Caption(line: .init(caption: text, mood: .calm), moment: .blockStart(0), at: Date())
+        return commentator
+    }
+    #endif
 
     /// Called by `RideSession` after every tick and once on finish.
     func observe(_ engine: RideEngine, live: BluetoothManager.Live) {
@@ -65,7 +86,8 @@ final class RideCommentator {
                                          stepDuration: engine.currentStep?.duration ?? 0, finished: finished) else { return }
         let brief = RideCommentary.Brief(locale: locale, moment: moment, workout: engine.workout, ftp: engine.ftp,
                                          stepIndex: engine.currentStepIndex, elapsed: engine.elapsed, intensityScale: engine.intensityScale,
-                                         samples: engine.recording.samples, liveHeartRate: live.heartRate, liveCadence: live.cadence)
+                                         samples: engine.recording.samples, liveHeartRate: live.heartRate, liveCadence: live.cadence,
+                                         startedAt: engine.recording.startedAt, timerEvents: engine.recording.timerEvents)
         let stepAtRequest = engine.currentStepIndex
         inFlight?.cancel()
         thinking = true
@@ -106,7 +128,7 @@ final class RideCommentator {
         synthesizer.stopSpeaking(at: .immediate)
         player?.stop()
         player = nil
-        deactivateCoachAudio()
+        audio.deactivateVoice()
     }
 
     // MARK: OpenAI voice
@@ -168,24 +190,16 @@ final class RideCommentator {
     // MARK: Audio session
 
     private func activateAudio() -> Bool {
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers])
-            try session.setActive(true)
-            return true
-        } catch { return false }
+        audio.activateVoice()
     }
 
 }
 
-/// Hands the audio session back so the athlete's music comes up again.
-private func deactivateCoachAudio() {
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-}
-
 /// Not main-actor bound: the synthesizer and player call back on their own queues.
 private final class PlaybackEnd: NSObject, AVSpeechSynthesizerDelegate, AVAudioPlayerDelegate {
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) { deactivateCoachAudio() }
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) { deactivateCoachAudio() }
-    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) { deactivateCoachAudio() }
+    var onEnd: (@MainActor () -> Void)?
+    private func ended() { Task { @MainActor [weak self] in self?.onEnd?() } }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) { ended() }
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) { ended() }
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) { ended() }
 }

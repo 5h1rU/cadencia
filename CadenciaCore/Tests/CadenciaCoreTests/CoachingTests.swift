@@ -182,6 +182,30 @@ final class PlanBuilderTests: XCTestCase {
         let week3 = plan.sessions.filter { plan.weekNumber(of: $0.day) == 3 }
         XCTAssertTrue(week3.contains { $0.kind.isHard })
     }
+
+    func testVO2maxPlanUsesVO2maxWorkAndKeepsRecoveryWeeksEasy() throws {
+        let plan = PlanBuilder().build(.init(goal: .vo2max, startDay: start, endDay: start.adding(days: 55), availability: .typical))
+        let buildSessions = plan.sessions.filter { plan.phase(for: $0.day)?.focus == .build }
+        let consolidateSessions = plan.sessions.filter { plan.phase(for: $0.day)?.focus == .consolidate }
+        XCTAssertTrue(buildSessions.contains { $0.kind == .vo2max })
+        XCTAssertTrue(consolidateSessions.contains { $0.kind == .vo2max })
+        let recoverySessions = plan.sessions.filter {
+            guard let week = plan.weekNumber(of: $0.day) else { return false }
+            return plan.phase(for: $0.day)?.focus == .recover || week % 4 == 0
+        }
+        XCTAssertFalse(recoverySessions.isEmpty)
+        XCTAssertFalse(recoverySessions.contains { $0.kind.isHard })
+        XCTAssertTrue(plan.sessions.allSatisfy { $0.status == .provisional })
+        let restored = try JSONDecoder().decode(TrainingPlan.self, from: JSONEncoder().encode(plan))
+        XCTAssertEqual(restored, plan)
+    }
+
+    func testSavedStrengthPlanStillLoadsWithItsOriginalGoal() throws {
+        let plan = PlanBuilder().build(.init(goal: .strength, startDay: start, endDay: start.adding(days: 55), availability: .typical))
+        let restored = try JSONDecoder().decode(TrainingPlan.self, from: JSONEncoder().encode(plan))
+        XCTAssertEqual(restored.goal, .strength)
+        XCTAssertFalse(GoalKind.selectableGoals.contains(restored.goal))
+    }
 }
 
 final class WeekReviserTests: XCTestCase {
@@ -393,13 +417,16 @@ final class ChatGPTPlanCoachTests: XCTestCase {
         } catch { XCTAssertEqual(error as? LLMCoachError, .usageLimitReached) }
 
         // An incomplete stream (no response.completed) is an error too: there is no on-device fallback.
-        let partial = FakeTransport(responses: [HTTPResponse(status: 200, body: Data("data: {\"type\":\"response.output_text.delta\",\"delta\":\"{\"}\n".utf8))])
+        let partialBody = HTTPResponse(status: 200, body: Data("data: {\"type\":\"response.output_text.delta\",\"delta\":\"{\"}\n".utf8))
+        let partial = FakeTransport(responses: Array(repeating: partialBody, count: 3))
+        var partialCoach = LLMCoach(transport: partial, backend: .chatGPTPlan(accessToken: "tok"))
+        partialCoach.retryDelays = [.zero, .zero]
         do {
-            _ = try await LLMCoach(transport: partial, backend: .chatGPTPlan(accessToken: "tok")).interpret("me siento fresco", context: context)
+            _ = try await partialCoach.interpret("me siento fresco", context: context)
             XCTFail("expected an error")
         } catch {
-            guard case .emptyResponse(let detail)? = error as? LLMCoach.CompletionError else { return XCTFail("\(error)") }
-            XCTAssertTrue(detail.contains("without response.completed"), detail)
+            XCTAssertEqual(error as? LLMCoach.CompletionError, .interruptedResponse)
+            XCTAssertEqual(partial.requests.count, 3, "bounded retries never accept unfinished text")
         }
 
         // A stream cut short by the model reports the reason, and an error envelope its code.
@@ -422,6 +449,109 @@ final class ChatGPTPlanCoachTests: XCTestCase {
         let api = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"data":[{"id":"gpt-5.6-sol"}]}"#.utf8))])
         let b = try await LLMCoach(transport: api, backend: .apiKey(endpoint: URL(string: "https://x")!, key: "k")).listModels()
         XCTAssertEqual(b.map(\.id), ["gpt-5.6-sol"])
+    }
+}
+
+private actor CoachScriptTransport: HTTPTransport {
+    enum Step: Sendable { case response(HTTPResponse), urlError(URLError.Code) }
+    var steps: [Step]
+    private var requests: [HTTPRequest] = []
+    init(_ steps: [Step]) { self.steps = steps }
+    func recordedRequests() -> [HTTPRequest] { requests }
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        requests.append(request)
+        guard !steps.isEmpty else { throw URLError(.unknown) }
+        switch steps.removeFirst() {
+        case .response(let response): return response
+        case .urlError(let code):
+            throw NSError(domain: NSURLErrorDomain, code: code.rawValue,
+                          userInfo: [NSLocalizedDescriptionKey: "cannot parse response",
+                                     NSDebugDescriptionErrorKey: "UserInfo: PRIVATE diagnostics should not reach the screen"])
+        }
+    }
+}
+
+final class CoachConnectionRecoveryTests: XCTestCase {
+    let success = HTTPResponse(status: 200, body: Data(#"{"output":[{"type":"message","content":[{"type":"output_text","text":"{\"reply\":\"Recovered\"}"}]}]}"#.utf8))
+
+    func coach(_ transport: any HTTPTransport) -> LLMCoach {
+        var coach = LLMCoach(transport: transport, backend: .chatGPTPlan(accessToken: "test-token"))
+        coach.retryDelays = [.zero, .zero]
+        return coach
+    }
+
+    func testCannotParseResponseRecoversWithTheSameRequest() async throws {
+        let transport = CoachScriptTransport([.urlError(.cannotParseResponse), .response(success)])
+        let result = try await coach(transport).complete(instructions: "test", userText: "test")
+        XCTAssertEqual(result, #"{"reply":"Recovered"}"#)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests[0], requests[1], "retry the same context without accumulating partial output")
+        XCTAssertTrue(requests.allSatisfy { $0.url == LLMCoach.responsesURL })
+    }
+
+    func testRepeatedMalformedResponsesStopAfterThreeAttemptsWithoutNSErrorDump() async throws {
+        let transport = CoachScriptTransport(Array(repeating: .urlError(.cannotParseResponse), count: 4))
+        do {
+            _ = try await coach(transport).complete(instructions: "test", userText: "test")
+            XCTFail("expected exhausted retries")
+        } catch {
+            let failure = try XCTUnwrap(error as? LLMCoach.CompletionError)
+            XCTAssertEqual(failure, .connection(-1017))
+            XCTAssertEqual(failure.description, "URL error -1017")
+            XCTAssertFalse(failure.description.contains("UserInfo"))
+            XCTAssertFalse(failure.description.contains("PRIVATE"))
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 3)
+    }
+
+    func testTruncatedStreamIsDiscardedBeforeSuccessfulRetry() async throws {
+        let partial = HTTPResponse(status: 200, body: Data(#"data: {"type":"response.output_text.delta","delta":"BROKEN"}"#.utf8))
+        let transport = CoachScriptTransport([.response(partial), .response(success)])
+        let text = try await coach(transport).complete(instructions: "test", userText: "test")
+        XCTAssertEqual(text, #"{"reply":"Recovered"}"#, "partial output must not reach the accepted decision")
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 2)
+    }
+
+    func testServerFailureIsNotBlindlyRetriedWithoutRetryAfterSupport() async throws {
+        let transport = CoachScriptTransport([.response(HTTPResponse(status: 503, body: Data())), .response(success)])
+        do {
+            _ = try await coach(transport).complete(instructions: "test", userText: "test")
+            XCTFail("expected server failure")
+        } catch { XCTAssertEqual(error as? LLMCoach.CompletionError, .httpStatus(503)) }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 1)
+    }
+
+    func testAuthLimitsOfflineAndCertificateFailuresDoNotRetry() async throws {
+        let failures: [CoachScriptTransport.Step] = [
+            .response(HTTPResponse(status: 400, body: Data())),
+            .response(HTTPResponse(status: 401, body: Data())),
+            .response(HTTPResponse(status: 403, body: Data())),
+            .response(HTTPResponse(status: 429, body: Data())),
+            .urlError(.notConnectedToInternet), .urlError(.serverCertificateUntrusted),
+        ]
+        for failure in failures {
+            let transport = CoachScriptTransport([failure, .response(success)])
+            do {
+                _ = try await coach(transport).complete(instructions: "test", userText: "test")
+                XCTFail("expected terminal failure")
+            } catch {}
+            let requests = await transport.recordedRequests()
+            XCTAssertEqual(requests.count, 1)
+        }
+    }
+
+    func testCancellationIsPropagatedWithoutRetry() async throws {
+        let transport = CoachScriptTransport([.urlError(.cancelled), .response(success)])
+        do {
+            _ = try await coach(transport).complete(instructions: "test", userText: "test")
+            XCTFail("expected cancellation")
+        } catch is CancellationError {} catch { XCTFail("\(error)") }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 1)
     }
 }
 
@@ -523,8 +653,8 @@ final class AICoachTests: XCTestCase {
         }
     }
 
-    func brief(legs: SubjectiveFeedback.Legs? = nil, hrv: Double = 60, available: Int? = 75) -> CoachBrief {
-        let wellness = (0..<30).map { i in WellnessDay(day: today.adding(days: -i), hrvMs: i == 0 ? hrv : 58, restingHR: 48, sleepSeconds: 7 * 3600 + 1800, ctl: 60, atl: 70) }
+    func brief(legs: SubjectiveFeedback.Legs? = nil, hrv: Double = 60, available: Int? = 75, eftp: Double? = nil) -> CoachBrief {
+        let wellness = (0..<30).map { i in WellnessDay(day: today.adding(days: -i), hrvMs: i == 0 ? hrv : 58, restingHR: 48, sleepSeconds: 7 * 3600 + 1800, ctl: 60, atl: 70, estimatedFTP: i == 0 ? eftp : nil) }
         let rides = (1...3).map { i in ActivitySummary(id: "a\(i)", name: "Ride \(i)", type: "Ride", startDateLocal: today.adding(days: -i).date(), movingTime: 3600, trainingLoad: 60, intensity: 72, isTrainer: true) }
         let old = ActivitySummary(id: "old", name: "Old", type: "Ride", startDateLocal: today.adding(days: -40).date(), movingTime: 3600, isTrainer: false)
         let plan = PlanBuilder().build(.init(goal: .ftp, startDay: today.adding(days: -14), endDay: today.adding(days: 42), availability: .typical))
@@ -565,6 +695,31 @@ final class AICoachTests: XCTestCase {
         XCTAssertNotEqual(base.fingerprint, brief(legs: .heavy).fingerprint)
         XCTAssertNotEqual(base.fingerprint, brief(hrv: 40).fingerprint)
         XCTAssertNotEqual(base.fingerprint, brief(available: 45).fingerprint)
+        var corrected = base
+        corrected.wellness[0].ctl = 80
+        XCTAssertNotEqual(base.fingerprint, corrected.fingerprint)
+        corrected = base; corrected.powerCurve["20m"] = 210
+        XCTAssertNotEqual(base.fingerprint, corrected.fingerprint)
+        corrected = base; corrected.activities[0].load = 180
+        XCTAssertNotEqual(base.fingerprint, corrected.fingerprint)
+        corrected = base; corrected.recentCoachNotes = ["Race Sunday"]
+        var changedNote = corrected; changedNote.recentCoachNotes = ["Race cancelled"]
+        XCTAssertNotEqual(corrected.fingerprint, changedNote.fingerprint, "same note count can have different meaning")
+        corrected = base
+        corrected.wellness[corrected.wellness.count - 1].ctl = 66
+        corrected.wellness[corrected.wellness.count - 1].atl = 77
+        corrected.wellness[corrected.wellness.count - 1].tsb = -11
+        XCTAssertEqual(base.fingerprint, corrected.fingerprint, "the coach's own projected workout must not trigger another decision")
+    }
+
+    func testIntervalsRunningEFTPIsIncludedAndBlocksUnsupportedDecrease() throws {
+        let b = brief(eftp: 202.18922)
+        XCTAssertEqual(b.intervalsEFTP, 202.18922)
+        XCTAssertNil(b.ftpReviewWatts, "recent best power of 179 W does not override Intervals' 202 W eFTP")
+        XCTAssertEqual(b.loadBeforeToday?.day, today.adding(days: -1).iso)
+        XCTAssertEqual(b.wellness.last?.day, today.iso, "do not relabel yesterday's load as today's")
+        let json = try AICoachPrompt.userMessage(b)
+        XCTAssertTrue(json.contains("\"intervalsEFTP\":202.18922"))
     }
 
     func testPrescribeSendsTheExpertPromptOnThePlanRouteAndRejectsUnsafeOutput() async throws {

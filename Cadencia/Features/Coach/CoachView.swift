@@ -25,7 +25,7 @@ struct CoachView: View {
                             .listRowBackground(Color.clear)
                         }
                         ForEach(model.state.coachMessages) { message in
-                            MessageRow(message: message) { intent in
+                            MessageRow(message: message, busy: model.coachBusy || model.coachThinking) { intent in
                                 Task { await model.applyIntent(intent, messageID: message.id) }
                             }
                             .id(message.id)
@@ -72,6 +72,9 @@ struct CoachView: View {
                 CoachIssueBanner(issue: issue) { model.dismissCoachIssue() }
                     .padding(.horizontal)
                     .padding(.top, 8)
+            }
+            if let notice = model.coachNotice {
+                Text(notice).font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
             }
             if speech.isListening {
                 HStack(spacing: 8) {
@@ -184,6 +187,7 @@ struct CoachIssueBanner: View {
 /// One line of the conversation. Coach replies carry the structured reading and an apply button.
 struct MessageRow: View {
     let message: AppState.CoachMessage
+    var busy = false
     let apply: (CoachIntent) -> Void
 
     var body: some View {
@@ -192,7 +196,7 @@ struct MessageRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(message.text)
                 if let intent = message.intent, !intent.isEmpty {
-                    UnderstoodCard(intent: intent, applied: message.applied) { apply(intent) }
+                    UnderstoodCard(intent: intent, applied: message.applied, proposal: message.workoutProposal, busy: busy) { apply(intent) }
                 }
                 if let intent = message.intent, !intent.needsClarification.isEmpty {
                     ForEach(intent.needsClarification, id: \.self) { q in
@@ -210,8 +214,11 @@ struct MessageRow: View {
 
 /// "What I understood": the structured intent, line by line, with a single confirm.
 struct UnderstoodCard: View {
+    @Environment(AppModel.self) private var model
     let intent: CoachIntent
     let applied: Bool
+    var proposal: AppState.WorkoutProposal?
+    var busy = false
     let apply: () -> Void
 
     var body: some View {
@@ -234,15 +241,56 @@ struct UnderstoodCard: View {
             if let goal = intent.goal {
                 Label { Text("Goal: \(Text(goal.title))") } icon: { Image(systemName: goal.symbol) }
             }
+            if let request = intent.workoutRequest {
+                Label(Format.day(request.day), systemImage: "bicycle")
+                if let proposal {
+                    NavigationLink {
+                        WorkoutDetailView(workout: proposal.prescription.workout, ftp: proposal.ftp)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Review proposed workout").fontWeight(.semibold)
+                            Text(proposal.prescription.workout.name)
+                            Text("\(Format.minutes(proposal.prescription.workout.totalDuration)) · \(proposal.prescription.workout.estimatedLoad) TSS")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } else if request.day > model.today {
+                    Text(request.instructions)
+                    Text("The coach will build this workout from your recovery on that day.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                if requestUnavailable, !applied {
+                    Text("Your training context changed. Ask the coach for an updated workout preview.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
             Button(action: apply) {
-                Label(applied ? "Week updated" : "Update my week", systemImage: applied ? "checkmark" : "calendar.badge.checkmark")
+                Label(buttonTitle, systemImage: applied ? "checkmark" : "calendar.badge.checkmark")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(applied)
+            .disabled(applied || busy || requestUnavailable || !intent.needsClarification.isEmpty)
             .padding(.top, 4)
         }
         .font(.subheadline)
+    }
+
+    private var buttonTitle: LocalizedStringKey {
+        if intent.workoutRequest != nil {
+            if proposal != nil { return applied ? "Workout updated" : "Use this workout" }
+            return applied ? "Workout request saved" : "Save workout request"
+        }
+        return applied ? "Week updated" : "Update my week"
+    }
+
+    private var requestUnavailable: Bool {
+        guard let request = intent.workoutRequest else { return false }
+        if request.day < model.today || model.state.isWorkoutCompleted(on: request.day) { return true }
+        if request.day == model.today {
+            guard let proposal else { return true }
+            return !model.isWorkoutProposalCurrent(proposal)
+        }
+        return false
     }
 
     private func legsText(_ legs: SubjectiveFeedback.Legs) -> LocalizedStringKey {

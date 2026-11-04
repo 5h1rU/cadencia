@@ -11,7 +11,7 @@ struct FTPReviewView: View {
         NavigationStack {
             List {
                 if let estimate = model.state.ftpEstimate, let current = model.workingFTP {
-                    Section {
+                    InfoSection(hasInformation: estimate.confidence != .low) {
                         HStack {
                             VStack(alignment: .leading) {
                                 Text("Estimate").font(.caption).foregroundStyle(.secondary)
@@ -27,8 +27,15 @@ struct FTPReviewView: View {
                         LabeledContent("Confidence", value: confidenceText(estimate.confidence))
                         LabeledContent("Basis", value: estimate.basis)
                         LabeledContent("Sustained efforts", value: "\(estimate.sustainedEfforts) in \(estimate.windowDays) days")
-                    } footer: {
-                        Text(footer(estimate))
+                        if estimate.confidence == .low {
+                            Text(confidenceExplanation(estimate))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    } header: {
+                        Text("Estimate")
+                    } information: {
+                        Text(confidenceExplanation(estimate))
                     }
 
                     Section("Power curve, last \(estimate.windowDays) days") {
@@ -82,7 +89,7 @@ struct FTPReviewView: View {
         }
     }
 
-    private func footer(_ e: FTPEstimate) -> LocalizedStringKey {
+    private func confidenceExplanation(_ e: FTPEstimate) -> LocalizedStringKey {
         switch e.confidence {
         case .low: return "Too few sustained efforts to trust this. Keep the working FTP; a 20-minute or ramp test would settle it."
         case .moderate: return "Several efforts point the same way. Accepting changes every zone and every target; declining keeps today as is."

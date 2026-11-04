@@ -27,10 +27,18 @@ struct PlanView: View {
                 if let plan = model.state.plan {
                     List {
                         Section {
-                            Picker("Scope", selection: $scope) {
-                                ForEach(Scope.allCases) { Text($0.title).tag($0) }
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text(plan.title)
+                                    .font(.title2.bold())
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Picker("Scope", selection: $scope) {
+                                    ForEach(Scope.allCases) { Text($0.title).tag($0) }
+                                }
+                                .pickerStyle(.segmented)
                             }
-                            .pickerStyle(.segmented)
+                            .padding(.vertical, 8)
+                            .padding(.horizontal, 8)
                             .listRowBackground(Color.clear)
                             .listRowInsets(EdgeInsets())
                         }
@@ -41,6 +49,8 @@ struct PlanView: View {
                         }
                     }
                     .listStyle(.insetGrouped)
+                    .listSectionSpacing(16)
+                    .contentMargins(.top, 12, for: .scrollContent)
                 } else {
                     ContentUnavailableView {
                         Label("No plan yet", systemImage: "calendar.badge.plus")
@@ -51,8 +61,8 @@ struct PlanView: View {
                     }
                 }
             }
-            .navigationTitle(model.state.plan?.title ?? String(localized: "Plan"))
-            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle("Plan")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if model.state.plan != nil {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -60,6 +70,7 @@ struct PlanView: View {
                             Button("New plan", systemImage: "plus") { creating = true }
                             Button("Discard plan", systemImage: "trash", role: .destructive) { confirmDiscard = true }
                         } label: { Image(systemName: "ellipsis.circle") }
+                        .accessibilityLabel("Plan options")
                     }
                 }
             }
@@ -78,33 +89,60 @@ struct PlanView: View {
         let anchor = model.today.adding(days: weekOffset * 7)
         let sessions = plan.sessions(inWeekOf: anchor)
         let start = anchor.startOfWeek()
+        let load = sessions.compactMap(\.targetLoad).reduce(0, +)
+        let minutes = sessions.map(\.targetMinutes).reduce(0, +)
         Section {
             ForEach(sessions) { s in
-                if s.day == model.today, let w = model.todayWorkout, let ftp = model.workingFTP {
-                    NavigationLink { WorkoutDetailView(workout: w, ftp: ftp) } label: { SessionRow(session: s, isToday: true) }
+                if let ride = model.completedRide(for: s) {
+                    NavigationLink { RideDebriefView(rideID: ride.id) } label: {
+                        SessionRow(session: s, isToday: s.day == model.today)
+                    }
+                } else if s.day == model.today, let w = model.todayWorkout, let ftp = model.workingFTP {
+                    NavigationLink {
+                        WorkoutDetailView(workout: model.todayRideLocation == .outdoor ? (model.outdoorWorkout?.workout ?? w) : w,
+                                          ftp: model.todayRideLocation == .outdoor ? (model.outdoorFTP ?? ftp) : ftp)
+                    } label: { SessionRow(session: s, isToday: true) }
                 } else {
-                    SessionRow(session: s, isToday: s.day == model.today)
+                    NavigationLink { PlannedRideRouteView(day: s.day) } label: {
+                        SessionRow(session: s, isToday: s.day == model.today)
+                    }
                 }
             }
             if sessions.isEmpty { Text("Nothing planned this week.").foregroundStyle(.secondary) }
+            BlockInfo {
+                Text("\(Format.minutes(TimeInterval(minutes * 60))) · about \(load) TSS")
+                    .font(.subheadline.weight(.medium))
+            } information: {
+                Text("Only today is a fixed workout; the rest adapts to recovery.")
+            }
         } header: {
-            HStack {
-                Button { weekOffset -= 1 } label: { Image(systemName: "chevron.left") }
-                Spacer()
-                VStack(spacing: 2) {
+            HStack(spacing: 8) {
+                Button { weekOffset -= 1 } label: {
+                    Image(systemName: "chevron.left")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Previous week")
+                VStack(spacing: 4) {
                     Text("Week of \(Format.day(start, style: .dateTime.day().month(.abbreviated)))")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
                     if let n = plan.weekNumber(of: start), let phase = plan.phase(for: start) {
                         Text("Week \(n) of \(plan.weekCount) · \(Text(phase.focus.title))").font(.caption).textCase(nil)
                     }
                 }
-                Spacer()
-                Button { weekOffset += 1 } label: { Image(systemName: "chevron.right") }
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                Button { weekOffset += 1 } label: {
+                    Image(systemName: "chevron.right")
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Next week")
             }
+            .buttonStyle(.borderless)
             .textCase(nil)
-        } footer: {
-            let load = sessions.compactMap(\.targetLoad).reduce(0, +)
-            let minutes = sessions.map(\.targetMinutes).reduce(0, +)
-            Text("\(Format.minutes(TimeInterval(minutes * 60))) · about \(load) TSS. Only today is a fixed workout; the rest adapts to recovery.")
         }
     }
 
@@ -135,12 +173,13 @@ struct PlanView: View {
                         }
                     }
                     .padding(.vertical, 4)
-                } header: {
-                    Text(w == 0 ? "This week" : "\(Format.day(weekStart, style: .dateTime.day().month(.abbreviated)))")
-                } footer: {
                     if let phase = plan.phase(for: weekStart) {
                         Text("\(Text(phase.focus.title)) · about \(sessions.compactMap(\.targetLoad).reduce(0, +)) TSS")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
+                } header: {
+                    Text(w == 0 ? "This week" : "\(Format.day(weekStart, style: .dateTime.day().month(.abbreviated)))")
                 }
             }
         }
@@ -159,7 +198,7 @@ struct PlanView: View {
             }
             LabeledContent("Availability", value: "\(plan.availability.availableWeekdays.count) days · \(String(format: "%.0f", plan.availability.hoursPerWeek)) h")
         }
-        Section {
+        InfoSection {
             ForEach(plan.phases) { phase in
                 let current = plan.phase(for: model.today)?.id == phase.id
                 VStack(alignment: .leading, spacing: 4) {
@@ -174,7 +213,7 @@ struct PlanView: View {
             }
         } header: {
             Text("Phases")
-        } footer: {
+        } information: {
             Text("Phases are the long-range intent. Each week's sessions are provisional until the morning they happen.")
         }
     }

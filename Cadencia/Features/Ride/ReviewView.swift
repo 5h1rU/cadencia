@@ -28,7 +28,7 @@ struct ReviewView: View {
 
             DebriefSections(ride: model.ride(id: ride.id) ?? ride)
 
-            Section {
+            InfoSection {
                 Picker("Effort (RPE)", selection: $rpe) {
                     ForEach(1...10, id: \.self) { Text("\($0)").tag($0) }
                 }
@@ -41,7 +41,7 @@ struct ReviewView: View {
                 .pickerStyle(.segmented)
             } header: {
                 Text("How was it?")
-            } footer: {
+            } information: {
                 Text("RPE and feel go to Intervals with the activity and feed tomorrow's readiness.")
             }
 

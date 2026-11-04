@@ -4,6 +4,9 @@ import CadenciaCore
 
 /// Recovery evidence: HRV against the personal typical range, fitness/fatigue/form, and each signal's verdict.
 struct RecoveryView: View {
+    enum Focus: Hashable { case recovery, trainingLoad }
+
+    var focus: Focus = .recovery
     @Environment(AppModel.self) private var model
     @State private var window = 28
 
@@ -13,63 +16,84 @@ struct RecoveryView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                Picker("Window", selection: $window) {
-                    Text("2 weeks").tag(14)
-                    Text("4 weeks").tag(28)
-                    Text("3 months").tag(90)
+        ScrollViewReader { proxy in
+            List {
+                InfoSection {
+                    Picker("Window", selection: $window) {
+                        Text("2 weeks").tag(14)
+                        Text("4 weeks").tag(28)
+                        Text("3 months").tag(90)
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowSeparator(.hidden)
+                    hrvChart
+                } header: {
+                    Text("HRV")
+                } information: {
+                    if let s = model.readiness?.signals.first(where: { $0.name == "hrv" }), let range = s.baseline {
+                        Text("Your typical range over the last 28 days is \(Int(range.lowerBound))–\(Int(range.upperBound)) ms. One low morning means little; a run of them does.")
+                    } else {
+                        Text("Seven mornings of HRV are needed before a typical range can be computed.")
+                    }
                 }
-                .pickerStyle(.segmented)
-                .listRowSeparator(.hidden)
-                hrvChart
-            } header: {
-                Text("HRV")
-            } footer: {
-                if let s = model.readiness?.signals.first(where: { $0.name == "hrv" }), let range = s.baseline {
-                    Text("Your typical range over the last 28 days is \(Int(range.lowerBound))–\(Int(range.upperBound)) ms. One low morning means little; a run of them does.")
-                } else {
-                    Text("Seven mornings of HRV are needed before a typical range can be computed.")
-                }
-            }
+                .id(Focus.recovery)
 
-            Section {
-                loadChart
-                if let w = model.latestLoad {
-                    LabeledContent("Fitness (CTL)", value: w.ctl.map { String(format: "%.0f", $0) } ?? "–")
-                    LabeledContent("Fatigue (ATL)", value: w.atl.map { String(format: "%.0f", $0) } ?? "–")
-                    LabeledContent("Form (TSB)", value: w.tsb.map { String(format: "%+.0f", $0) } ?? "–")
-                }
-            } header: {
-                Text("Training load")
-            } footer: {
-                Text("Intervals.icu's numbers through yesterday, before today's session. Intervals' own Fitness page already counts today's planned workout, so it reads a little higher until the ride is done.")
-            }
-
-            if let r = model.readiness {
-                Section {
-                    ForEach(r.signals) { s in
-                        LabeledContent {
-                            VStack(alignment: .trailing) {
-                                Text(s.valueText).monospacedDigit()
-                                Text(s.verdictText).font(.caption).foregroundStyle(s.verdictTint)
-                            }
-                        } label: {
-                            Text(s.title)
-                        }
+                InfoSection(hasInformation: model.latestLoad != nil || model.loadBeforeToday != nil) {
+                    loadChart
+                    if let w = model.latestLoad {
+                        LabeledContent("Fitness (CTL)", value: w.ctl.map { String(format: "%.0f", $0) } ?? "–")
+                        LabeledContent("Fatigue (ATL)", value: w.atl.map { String(format: "%.0f", $0) } ?? "–")
+                        LabeledContent("Form (TSB)", value: w.tsb.map { String(format: "%+.0f", $0) } ?? "–")
                     }
                 } header: {
-                    Text("Today's verdict: \(Text(r.level.title)) · \(r.score)/100")
-                } footer: {
-                    if !r.missingData.isEmpty {
-                        Text("Missing today: \(r.missingData.joined(separator: ", ")). Without them the call is more conservative.")
+                    Text("Training load")
+                } information: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let load = model.latestLoad {
+                            Text("Intervals.icu for \(Format.day(load.day)), including planned workouts.")
+                        }
+                        if let load = model.loadBeforeToday {
+                            Text("Readiness uses load through \(Format.day(load.day)).")
+                        }
+                    }
+                }
+                .id(Focus.trainingLoad)
+
+                if let r = model.readiness {
+                    Section {
+                        ForEach(r.signals) { s in
+                            LabeledContent {
+                                VStack(alignment: .trailing) {
+                                    Text(s.valueText).monospacedDigit()
+                                    Text(s.verdictText).font(.caption).foregroundStyle(s.verdictTint)
+                                }
+                            } label: {
+                                if s.name == "form" {
+                                    Text("Form before today")
+                                } else if s.name == "fatigue" {
+                                    Text("Fatigue before today")
+                                } else {
+                                    Text(s.title)
+                                }
+                            }
+                        }
+                        if !r.missingData.isEmpty {
+                            Text("Missing today: \(r.missingData.joined(separator: ", ")). Without them the call is more conservative.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    } header: {
+                        Text("Today's verdict: \(Text(r.level.title)) · \(r.score)/100")
                     }
                 }
             }
+            .listStyle(.insetGrouped)
+            .navigationTitle("Recovery")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                if focus == .trainingLoad { proxy.scrollTo(Focus.trainingLoad, anchor: .top) }
+            }
         }
-        .listStyle(.insetGrouped)
-        .navigationTitle("Recovery")
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var hrvChart: some View {

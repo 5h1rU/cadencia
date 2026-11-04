@@ -130,6 +130,48 @@ final class RideEngineTests: XCTestCase {
         XCTAssertEqual(e.intensityScale, 0.8)
         XCTAssertEqual(e.targetWatts, 104)
     }
+
+    func testRecordingKeepsFTPAndTimerTransitionsIncludingPartialSeconds() {
+        var engine = makeEngine()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        engine.start(at: start)
+        engine.tick(now: start.addingTimeInterval(1), watts: 150, heartRate: 120, cadence: 90)
+        engine.pause(at: start.addingTimeInterval(1.5))
+        engine.start(at: start.addingTimeInterval(101.5))
+        engine.finish(at: start.addingTimeInterval(102))
+        XCTAssertEqual(engine.recording.ftpUsed, 200)
+        XCTAssertEqual(engine.elapsed, 2, accuracy: 0.001)
+        XCTAssertEqual(engine.recording.timerEvents, [
+            .init(time: start, kind: .start, workoutElapsed: 0), .init(time: start.addingTimeInterval(1.5), kind: .stop, workoutElapsed: 1.5),
+            .init(time: start.addingTimeInterval(101.5), kind: .start, workoutElapsed: 1.5), .init(time: start.addingTimeInterval(102), kind: .stop, workoutElapsed: 2)
+        ])
+        engine.finish(at: start.addingTimeInterval(103))
+        XCTAssertEqual(engine.recording.timerEvents?.count, 4, "finishing twice does not duplicate the stop")
+    }
+
+    func testTrainerDistanceIsRideRelativeExcludesPausesAndSurvivesCounterReset() {
+        var engine = makeEngine()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        engine.start(at: start, trainerDistanceMeters: 10000)
+        let first = engine.tick(now: start.addingTimeInterval(1), watts: 150, heartRate: nil, cadence: nil,
+                                speedKmh: 36, trainerDistanceMeters: 10010)
+        XCTAssertEqual(first?.speedKmh, 36)
+        XCTAssertEqual(first?.distanceMeters, 10)
+        engine.pause(at: start.addingTimeInterval(1))
+        engine.start(at: start.addingTimeInterval(101), trainerDistanceMeters: 10100)
+        let resumed = engine.tick(now: start.addingTimeInterval(102), watts: 150, heartRate: nil, cadence: nil,
+                                  trainerDistanceMeters: 10110)
+        XCTAssertEqual(resumed?.distanceMeters, 20, "exclude movement during pause")
+        let reset = engine.tick(now: start.addingTimeInterval(103), watts: 150, heartRate: nil, cadence: nil,
+                                trainerDistanceMeters: 0)
+        XCTAssertEqual(reset?.distanceMeters, 20)
+        let afterReset = engine.tick(now: start.addingTimeInterval(104), watts: 150, heartRate: nil, cadence: nil,
+                                     trainerDistanceMeters: 8)
+        XCTAssertEqual(afterReset?.distanceMeters, 28)
+        let missing = engine.tick(now: start.addingTimeInterval(105), watts: nil, heartRate: nil, cadence: nil)
+        XCTAssertNil(missing?.speedKmh)
+        XCTAssertNil(missing?.distanceMeters)
+    }
 }
 
 final class RideCommentaryTests: XCTestCase {
@@ -307,9 +349,8 @@ final class RideDebriefTests: XCTestCase {
         XCTAssertEqual(brief.session.riddenMinutes, 9)
         XCTAssertEqual(brief.planned.map { $0.targetWatts }, [115, 200, 90])
         XCTAssertEqual(brief.planned[1].zone, "Z4 threshold")
-        XCTAssertEqual(brief.executed.count, 2, "the cool-down was never ridden, so it has no stats")
-        XCTAssertEqual(brief.executed[1].seconds, 240)
-        XCTAssertEqual(brief.executed[1].inZonePercent, 100)
+        XCTAssertEqual(brief.analysisSource, "intervals.icu")
+        XCTAssertEqual(brief.intervals?.trainingLoad, 21)
         XCTAssertEqual(brief.feedback?.rpe, 8)
         XCTAssertEqual(brief.feedback?.legs, "heavy")
         XCTAssertEqual(brief.context.goal, "ftp")
@@ -343,7 +384,7 @@ final class RideDebriefTests: XCTestCase {
         let sse = "data: {\"type\":\"response.completed\",\"response\":{\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\(try String(decoding: JSONEncoder().encode(answer), as: UTF8.self))}]}]}}\n"
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(sse.utf8))])
         let coach = LLMCoach(transport: t, backend: .chatGPTPlan(accessToken: "tok"), model: "gpt-6-astra")
-        let report = try await coach.debrief(RideDebrief.Brief(locale: "en", ride: ride(), ftp: 200))
+        let report = try await coach.debrief(RideDebrief.Brief(locale: "en", ride: ride(), ftp: 200, analysis: .init(id: "i9", name: "Threshold", analyzed: true, movingTime: 540)))
         XCTAssertEqual(report.grade, .good)
         XCTAssertEqual(report.model, "gpt-6-astra")
         let body = try JSONSerialization.jsonObject(with: t.requests[0].body!) as! [String: Any]

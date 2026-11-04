@@ -123,6 +123,87 @@ enum PreviewData {
         return r
     }
 
+    #if DEBUG
+    /// The screenshot's long ride, including Intervals' separate SS metric and six HR zones.
+    static var zoneLayoutAnalysis: ActivityDetail {
+        ActivityDetail(id: "preview-zones", name: "Reto caña", analyzed: true, movingTime: 13_860,
+            trainingLoad: 236, intensity: 78, averageWatts: 115, normalizedWatts: 154,
+            averageHR: 152, maxHR: 177, averageCadence: 67, estimatedFTP: 170, kilojoules: 1613,
+            powerZoneTimes: [
+                .init(zone: "Z1", seconds: 5100), .init(zone: "Z2", seconds: 2640),
+                .init(zone: "Z3", seconds: 3660), .init(zone: "Z4", seconds: 1620),
+                .init(zone: "Z5", seconds: 480), .init(zone: "Z6", seconds: 240),
+                .init(zone: "Z7", seconds: 120), .init(zone: "SS", seconds: 2520)
+            ], hrZoneTimes: [3180, 2220, 720, 4860, 2640, 180],
+            hrRecovery: .init(startBPM: 177, endBPM: 156, drop: 21), decoupling: 28.4,
+            efficiencyFactor: 1.01, variabilityIndex: 1.34, compliance: 0, ctl: 66, atl: 79)
+    }
+
+    /// Exercises Home and day navigation with isolated sample data and no network access.
+    @MainActor
+    static func homeModel() -> AppModel {
+        var s = state
+        if ProcessInfo.processInfo.arguments.contains("--cadencia-preview-missing-recovery") { s.wellness = [] }
+        s.settings.llmEnabled = true
+        s.cyclistProfileAutomaticAttemptedAt = Date()
+        s.plan?.event = TrainingEvent(name: "Weekend group ride", day: today.adding(days: 5),
+                                     distanceKm: 120, priority: .b, objective: "Finish strong")
+        if let week = s.today?.ai?.week {
+            s.plan?.sessions = week.map {
+                PlannedSession(day: $0.day, kind: $0.kind, title: $0.title, targetMinutes: $0.minutes)
+            }
+        }
+        s.today?.ai?.week[1].note = "Keep the effort easy and comfortable after today's sweet spot session."
+        let store = JSONStore.temporary()
+        if ProcessInfo.processInfo.arguments.contains("--cadencia-preview-last-session") {
+            var ride = debriefedRide
+            ride.startedAt = today.adding(days: -1).date().addingTimeInterval(10 * 3600)
+            ride.endedAt = ride.startedAt.addingTimeInterval(3600)
+            try? store.save(ride, at: "rides/\(ride.id.uuidString).json")
+            s.rideIndex.append(.init(id: ride.id, name: ride.workout.name, kind: ride.workout.kind,
+                                     startedAt: ride.startedAt, duration: ride.duration,
+                                     averageWatts: ride.averageWatts, load: ride.trainingLoad(ftp: 240)))
+        }
+        let keychain = KeychainStore(service: "preview.home")
+        keychain.write("preview", account: "llm.apiKey")
+        struct OfflineTransport: HTTPTransport {
+            func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+                throw HTTPError.invalidResponse
+            }
+        }
+        return AppModel(state: s, credential: .apiKey("preview"), store: store,
+                        keychain: keychain, transport: OfflineTransport())
+    }
+    #endif
+
+    @MainActor
+    static func completedModel() -> AppModel {
+        var s = state
+        var r = debriefedRide
+        r.startedAt = today.date().addingTimeInterval(10 * 3600)
+        r.endedAt = r.startedAt.addingTimeInterval(3600)
+        s.today?.workout = r.workout
+        s.attachTodayWorkout(r.workout, day: today)
+        r.plannedSessionID = s.session(on: today)?.id
+        r.debriefNote = IntervalsActivityNote(id: 42, content: r.debrief!.noteContent)
+        s.completeSession(for: r)
+        s.rideIndex = [.init(id: r.id, name: r.workout.name, kind: r.workout.kind, startedAt: r.startedAt,
+                             duration: r.duration, averageWatts: r.averageWatts, load: r.trainingLoad(ftp: 240))]
+        s.ledger.enqueue(rideID: r.id, athleteID: r.athleteID)
+        s.ledger.markConfirmed(r.id, activityID: "i4521", at: r.endedAt!)
+        let store = JSONStore.temporary()
+        try? store.save(r, at: "rides/\(r.id.uuidString).json")
+        struct NotesTransport: HTTPTransport {
+            let note: IntervalsActivityNote
+            func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+                guard request.method == .get, request.url.path.hasSuffix("/messages") else { throw HTTPError.invalidResponse }
+                return HTTPResponse(status: 200, body: try JSONEncoder().encode([note]))
+            }
+        }
+        return AppModel(state: s, credential: .apiKey("preview"), store: store, keychain: KeychainStore(service: "preview"),
+                        transport: NotesTransport(note: r.debriefNote!))
+    }
+
     @MainActor
     /// `rides` are written to the model's store so `model.ride(id:)` finds them, and indexed as confirmed uploads.
     static func model(signedIn: Bool = true, rides: [RideRecording] = []) -> AppModel {

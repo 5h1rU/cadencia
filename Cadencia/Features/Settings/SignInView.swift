@@ -96,7 +96,7 @@ struct APIKeyView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
+                InfoSection {
                     SecureField("API key", text: $key)
                         .textContentType(.password)
                         .autocorrectionDisabled()
@@ -106,7 +106,7 @@ struct APIKeyView: View {
                         .onSubmit { Task { await connect() } }
                 } header: {
                     Text("Intervals.icu API key")
-                } footer: {
+                } information: {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("In Intervals.icu open Settings, scroll to Developer Settings and copy the API key. The key gives full access to your account; it never leaves this phone except to call intervals.icu.")
                         Link("Open Intervals.icu settings", destination: AppConfig.intervalsSettingsURL)

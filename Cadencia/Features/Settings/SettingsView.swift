@@ -36,12 +36,12 @@ struct SettingsView: View {
                     NavigationLink { RidePreferencesView() } label: { Label("Ride", systemImage: "bicycle") }
                 }
 
-                Section {
+                InfoSection {
                     LabeledContent("Version", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
                     Link(destination: URL(string: "https://intervals.icu/api/v1/docs")!) { Label("Intervals API documentation", systemImage: "book") }
                 } header: {
                     Text("About")
-                } footer: {
+                } information: {
                     Text("Cadencia keeps Intervals.icu as the system of record. Nothing is stored on other servers.")
                 }
             }
@@ -57,22 +57,23 @@ struct AccountView: View {
 
     var body: some View {
         List {
-            Section {
+            InfoSection {
                 LabeledContent("Athlete", value: model.state.athlete?.name ?? "")
                 LabeledContent("Athlete id", value: model.state.athlete?.id ?? "")
                 LabeledContent("Method", value: method)
                 LabeledContent("Last sync", value: Format.relative(model.state.lastSyncAt))
             } header: {
                 Text("Connection")
-            } footer: {
+            } information: {
                 Text("Your credential lives only in this phone's Keychain.")
             }
             Section {
-                Button("Sign out", role: .destructive) { confirmSignOut = true }
-            } footer: {
                 if !model.pendingUploads.isEmpty {
                     Text("\(model.pendingUploads.count) rides have not reached Intervals yet. They stay on this phone and upload when the same athlete signs back in.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
+                Button("Sign out", role: .destructive) { confirmSignOut = true }
             }
         }
         .listStyle(.insetGrouped)
@@ -104,7 +105,7 @@ struct SyncView: View {
 
     var body: some View {
         List {
-            Section {
+            InfoSection {
                 ForEach(entries) { e in
                     let ride = model.state.rideIndex.first { $0.id == e.rideID }
                     Label {
@@ -125,7 +126,7 @@ struct SyncView: View {
                 if entries.isEmpty { Text("No rides recorded on this phone yet.").foregroundStyle(.secondary) }
             } header: {
                 Text("Uploads")
-            } footer: {
+            } information: {
                 Text("A ride is saved here first, then sent to Intervals. “Checking” means the request went out but no answer came back; it is matched by id before any retry, so nothing is uploaded twice.")
             }
             Section {
@@ -148,7 +149,7 @@ struct DataSourcesView: View {
 
     var body: some View {
         List {
-            Section {
+            InfoSection {
                 Toggle("Read Apple Health", isOn: Binding(get: { model.state.settings.readHealth }, set: { on in
                     model.updateSettings { $0.readHealth = on }
                     if on { Task { await model.readHealth(); await model.askCoachForToday() } }
@@ -157,14 +158,14 @@ struct DataSourcesView: View {
                 LabeledContent("Last read", value: Format.relative(model.state.lastHealthReadAt))
             } header: {
                 Text("Apple Health")
-            } footer: {
+            } information: {
                 Text("HRV (SDNN), resting heart rate and sleep from your watch. Health values win over Intervals for the same day.")
             }
-            Section {
+            InfoSection {
                 Toggle("Send Health wellness to Intervals", isOn: Binding(get: { model.state.settings.pushWellnessToIntervals }, set: { on in model.updateSettings { $0.pushWellnessToIntervals = on } }))
             } header: {
                 Text("Intervals.icu")
-            } footer: {
+            } information: {
                 Text("Off by default: if Intervals already receives Apple Health through its own integration, leave this off to avoid duplicates.")
             }
             Section("Status") {
@@ -185,12 +186,14 @@ struct FTPSettingsView: View {
 
     var body: some View {
         List {
-            Section {
+            InfoSection {
                 LabeledContent("Working FTP", value: Format.watts(model.workingFTP))
                 LabeledContent("Intervals FTP", value: Format.watts(model.state.athlete?.ftp))
                 LabeledContent("Intervals indoor FTP", value: Format.watts(model.state.athlete?.indoorFTP))
                 if let e = model.state.ftpEstimate { LabeledContent("Latest estimate", value: "\(e.watts) W · \(e.confidence.rawValue)") }
-            } footer: {
+            } header: {
+                Text("FTP")
+            } information: {
                 Text("Indoor FTP is used when Intervals has one. Estimates come from the 42-day power curve and only become the working FTP when you accept them.")
             }
             Section {
@@ -225,6 +228,9 @@ struct CoachSettingsView: View {
             modelSection
             apiKeySection
             Section {
+                Text(currentSource)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 Button("Save") {
                     if key != Self.maskedKey { model.setLLMKey(key) }
                     model.updateSettings {
@@ -232,8 +238,6 @@ struct CoachSettingsView: View {
                     }
                     Task { await loadModels() }
                 }
-            } footer: {
-                Text(currentSource)
             }
         }
         .navigationTitle("Coach")
@@ -258,7 +262,7 @@ struct CoachSettingsView: View {
 
     @ViewBuilder private var chatGPTSection: some View {
         if let account = model.chatGPT {
-            Section {
+            InfoSection {
                 LabeledContent("Account", value: account.email ?? account.subject)
                 if account.planUsageEnabled {
                     Label("Using ChatGPT plan", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
@@ -272,15 +276,15 @@ struct CoachSettingsView: View {
                 Button("Sign out of ChatGPT", role: .destructive) { confirmSignOut = true }
             } header: {
                 Text("ChatGPT")
-            } footer: {
+            } information: {
                 Text("Eligible coach requests count against your ChatGPT plan. Tokens live only in this phone's Keychain; nothing goes through a Cadencia server.")
             }
         } else {
-            Section {
+            InfoSection {
                 signInButton("Continue with ChatGPT", requestPlanUsage: false)
             } header: {
                 Text("Use your ChatGPT plan")
-            } footer: {
+            } information: {
                 Text("Run the coach with usage included in your ChatGPT plan instead of paying per request with an API key. You sign in with OpenAI in a browser sheet; Cadencia never sees your password.")
             }
         }
@@ -317,7 +321,7 @@ struct CoachSettingsView: View {
     // MARK: Model
 
     private var modelSection: some View {
-        Section {
+        InfoSection {
             if loadingModels {
                 HStack { Text("Model"); Spacer(); ProgressView() }
             } else if !availableModels.isEmpty {
@@ -344,7 +348,7 @@ struct CoachSettingsView: View {
             }
         } header: {
             Text("Model")
-        } footer: {
+        } information: {
             switch model.coachSource {
             case .chatGPTPlan: Text("The models your ChatGPT plan can use. Changing it asks the coach to decide today again.")
             case .apiKey: Text("The models your API key can use. Changing it asks the coach to decide today again.")
@@ -369,7 +373,7 @@ struct CoachSettingsView: View {
     // MARK: API key
 
     private var apiKeySection: some View {
-        Section {
+        InfoSection {
             SecureField("API key", text: $key)
                 .textContentType(.password)
                 .autocorrectionDisabled()
@@ -380,7 +384,7 @@ struct CoachSettingsView: View {
                 .textInputAutocapitalization(.never)
         } header: {
             Text("API key (alternative)")
-        } footer: {
+        } information: {
             Text(model.chatGPT?.planUsageEnabled == true
                  ? "Used only if you sign out of ChatGPT. Any OpenAI-compatible chat completions endpoint."
                  : "Any OpenAI-compatible chat completions endpoint. The key is stored in the Keychain and only ever sent to this endpoint, together with your recovery data, your plan and your words.")
@@ -434,12 +438,14 @@ struct RidePreferencesView: View {
 
     var body: some View {
         Form {
-            Section {
+            InfoSection {
                 Toggle("ERG by default", isOn: Binding(get: { model.state.settings.ergByDefault }, set: { on in model.updateSettings { $0.ergByDefault = on } }))
-            } footer: {
+            } header: {
+                Text("ERG mode")
+            } information: {
                 Text("You can still switch ERG off before each ride.")
             }
-            Section {
+            InfoSection {
                 Toggle("Coach voice", isOn: Binding(get: { model.state.settings.rideVoice }, set: { on in model.updateSettings { $0.rideVoice = on } }))
                 Toggle("Captions", isOn: Binding(get: { model.state.settings.rideCaptions }, set: { on in model.updateSettings { $0.rideCaptions = on } }))
                 if model.openAISpeech != nil {
@@ -458,7 +464,7 @@ struct RidePreferencesView: View {
                 }
             } header: {
                 Text("Coach during rides")
-            } footer: {
+            } information: {
                 if model.openAISpeech != nil {
                     Text("At the start of each block, halfway through long ones and at the finish, the coach reads your numbers and says what they mean. Spoken with an OpenAI voice over your music; you can mute it from the ride screen.")
                 } else {
