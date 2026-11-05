@@ -13,15 +13,15 @@ final class SpeechRecognizer {
     private(set) var transcript = ""
 
     // Both are created on first use, not per init: SwiftUI rebuilds a `@State` default value whenever
-    // the owning view is re-initialized, and the iOS 26 path may never need either.
-    @ObservationIgnored private lazy var audioEngine = AVAudioEngine()
+    // the owning view is re-initialized. The microphone's blocking work runs off the main thread.
+    @ObservationIgnored private lazy var microphone = MicrophoneEngine()
     @ObservationIgnored private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var finishTimeout: Task<Void, Never>?
     private var recordingID: UUID?
-    private var tapInstalled = false
-    private var sessionActive = false
+    /// The legacy path activated the microphone for the current recording; stopping it is this object's job.
+    @ObservationIgnored private var microphoneInUse = false
     private let locale: Locale
     #if compiler(>=6.2)
     private var modernCapture: (any ConsultationSpeechCapture)?
@@ -42,12 +42,12 @@ final class SpeechRecognizer {
         let id = UUID()
         recordingID = id
         let micOK = await AVAudioApplication.requestRecordPermission()
-        guard recordingID == id, !Task.isCancelled else { return }
+        guard isCurrent(id) else { return }
         guard micOK else { status = .denied; return }
 
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            let capture = AnalyzerSpeechCapture()
+            let capture = AnalyzerSpeechCapture(microphone: microphone)
             modernCapture = capture
             do {
                 try await capture.start(locale: locale, onText: { [weak self] text in
@@ -64,7 +64,7 @@ final class SpeechRecognizer {
                 return
             } catch {
                 capture.cancel()
-                guard recordingID == id, !Task.isCancelled else { return }
+                guard isCurrent(id) else { return }
                 modernCapture = nil
                 // Older hardware, an unsupported locale or unavailable assets can still use the
                 // legacy recognizer. The typed answer stays available if neither can start.
@@ -76,28 +76,24 @@ final class SpeechRecognizer {
         let speechOK = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
             SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0 == .authorized) }
         }
-        guard recordingID == id, !Task.isCancelled else { return }
+        guard isCurrent(id) else { return }
         guard speechOK else { status = .denied; return }
         guard let recognizer, recognizer.isAvailable else { status = .unavailable; return }
 
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        // Asks the speech service, which can take a moment, so it is answered off the main thread.
+        let onDevice = await Task.detached(priority: .userInitiated) { recognizer.supportsOnDeviceRecognition }.value
+        guard isCurrent(id) else { return }
+        if onDevice { request.requiresOnDeviceRecognition = true }
+        self.request = request
+
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.record, mode: .measurement)
-            try session.setActive(true)
-            sessionActive = true
-
-            let request = SFSpeechAudioBufferRecognitionRequest()
-            request.shouldReportPartialResults = true
-            if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
-            self.request = request
-
-            let input = audioEngine.inputNode
-            let format = input.outputFormat(forBus: 0)
-            guard format.sampleRate > 0, format.channelCount > 0 else { stopEngine(); status = .unavailable; return }
-            input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in request.append(buffer) }
-            tapInstalled = true
-            audioEngine.prepare()
-            try audioEngine.start()
+            microphoneInUse = true
+            let format = try await microphone.activate()
+            guard isCurrent(id) else { return }
+            try await microphone.start(format: format, bufferSize: 1024) { buffer in request.append(buffer) }
+            guard isCurrent(id) else { return }
             status = .listening
 
             task = recognizer.recognitionTask(with: request) { [weak self] result, error in
@@ -105,12 +101,22 @@ final class SpeechRecognizer {
                     guard let self, self.recordingID == id else { return }
                     if let result { self.transcript = result.bestTranscription.formattedString }
                     if result?.isFinal == true { self.finishAudio() }
-                    else if let error { self.finishAudio(error: self.transcript.isEmpty ? error : nil) }
+                    // Finishing with nothing said ends quietly; only a failure while listening means voice is unavailable.
+                    else if let error { self.finishAudio(error: self.transcript.isEmpty && self.status != .finishing ? error : nil) }
                 }
             }
         } catch {
+            guard recordingID == id else { return }
             finishAudio(error: error)
         }
+    }
+
+    /// Whether recording `id` may go on after an await. A cancelled task ends its own recording, so the
+    /// screen never stays on "Preparing"; a newer recording or a cancel has already cleaned up.
+    private func isCurrent(_ id: UUID) -> Bool {
+        guard recordingID == id else { return false }
+        if Task.isCancelled { cancel(); return false }
+        return true
     }
 
     /// Stops capturing audio. The recognition task keeps running briefly to deliver its final, more accurate pass.
@@ -143,16 +149,10 @@ final class SpeechRecognizer {
     }
 
     private func stopEngine() {
-        // The engine only runs after its tap is installed, so cancel() never creates it just to check.
-        if tapInstalled {
-            if audioEngine.isRunning { audioEngine.stop() }
-            audioEngine.inputNode.removeTap(onBus: 0)
-            tapInstalled = false
-        }
-        if sessionActive {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            sessionActive = false
-        }
+        // Queued behind the microphone's start, so it always undoes it; cancel() never creates the engine just to check.
+        guard microphoneInUse else { return }
+        microphoneInUse = false
+        microphone.stop()
     }
 
     private func finishAudio(error: Error? = nil) {

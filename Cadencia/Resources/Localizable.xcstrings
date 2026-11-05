@@ -900,6 +900,7 @@
       }
     },
     "Asking the coach…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6843,6 +6844,7 @@
       }
     },
     "Segment" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {

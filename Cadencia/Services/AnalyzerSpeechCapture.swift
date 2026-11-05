@@ -1,5 +1,6 @@
 #if compiler(>=6.2)
-import AVFoundation
+// AVFAudio is not Sendable-annotated yet; the converter tap hands its borrowed buffer to a synchronous input block.
+@preconcurrency import AVFoundation
 import Speech
 
 @MainActor
@@ -14,14 +15,18 @@ protocol ConsultationSpeechCapture: AnyObject {
 @MainActor
 final class AnalyzerSpeechCapture: ConsultationSpeechCapture {
     private enum CaptureError: Error { case unsupported, invalidFormat, conversionFailed }
-    private let engine = AVAudioEngine()
+    private let microphone: MicrophoneEngine
     private var analyzer: SpeechAnalyzer?
     private var input: AsyncThrowingStream<AnalyzerInput, Error>.Continuation?
     private var analysisTask: Task<Void, Never>?
     private var resultsTask: Task<Void, Error>?
-    private var tapInstalled = false
-    private var sessionActive = false
+    /// This capture activated the shared microphone and has not stopped it yet.
+    private var microphoneInUse = false
     private var cancelled = false
+
+    init(microphone: MicrophoneEngine) {
+        self.microphone = microphone
+    }
 
     func start(locale: Locale, onText: @escaping (String) -> Void, onEnd: @escaping (Error?) -> Void) async throws {
         guard SpeechTranscriber.isAvailable,
@@ -31,14 +36,11 @@ final class AnalyzerSpeechCapture: ConsultationSpeechCapture {
             try await assets.downloadAndInstall()
         }
         try checkCurrent()
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.record, mode: .measurement)
-        try session.setActive(true)
-        sessionActive = true
-        let node = engine.inputNode
-        let microphoneFormat = node.outputFormat(forBus: 0)
-        guard microphoneFormat.sampleRate > 0, microphoneFormat.channelCount > 0,
-              let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber], considering: microphoneFormat),
+        // The session and the input node block on the audio server, so the microphone answers off the main thread.
+        microphoneInUse = true
+        let microphoneFormat = try await microphone.activate()
+        try checkCurrent()
+        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber], considering: microphoneFormat),
               let converter = AVAudioConverter(from: microphoneFormat, to: format) else { throw CaptureError.invalidFormat }
         try checkCurrent()
         let analyzer = SpeechAnalyzer(modules: [transcriber])
@@ -77,8 +79,17 @@ final class AnalyzerSpeechCapture: ConsultationSpeechCapture {
             }
         }
 
+        try await microphone.start(format: microphoneFormat, bufferSize: 2048,
+                                   tap: Self.converting(from: microphoneFormat, to: format, with: converter, into: continuation))
+        try checkCurrent()
+    }
+
+    /// The microphone tap: converts each buffer into the analyzer's format and yields it. It runs on the audio
+    /// thread, so it is built outside the main actor and touches only what it captures.
+    private nonisolated static func converting(from microphoneFormat: AVAudioFormat, to format: AVAudioFormat, with converter: AVAudioConverter,
+                                               into continuation: AsyncThrowingStream<AnalyzerInput, Error>.Continuation) -> @Sendable (AVAudioPCMBuffer) -> Void {
         let ratio = format.sampleRate / microphoneFormat.sampleRate
-        node.installTap(onBus: 0, bufferSize: 2048, format: microphoneFormat) { buffer, _ in
+        return { buffer in
             // The tap's buffer is borrowed. Convert into an owned buffer before yielding it.
             let capacity = AVAudioFrameCount(ceil(Double(buffer.frameLength) * ratio)) + 64
             guard let output = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else {
@@ -98,9 +109,6 @@ final class AnalyzerSpeechCapture: ConsultationSpeechCapture {
             }
             if output.frameLength > 0 { continuation.yield(AnalyzerInput(buffer: output)) }
         }
-        tapInstalled = true
-        engine.prepare()
-        try engine.start()
     }
 
     func finish() {
@@ -123,12 +131,10 @@ final class AnalyzerSpeechCapture: ConsultationSpeechCapture {
     }
 
     private func stopMicrophone() {
-        if engine.isRunning { engine.stop() }
-        if tapInstalled { engine.inputNode.removeTap(onBus: 0); tapInstalled = false }
-        if sessionActive {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            sessionActive = false
-        }
+        // Queued behind the microphone's start, so it always undoes it, off the main thread.
+        guard microphoneInUse else { return }
+        microphoneInUse = false
+        microphone.stop()
     }
 }
 #endif
