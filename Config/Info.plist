@@ -56,7 +56,7 @@
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Cadencia connects to your smart trainer, heart rate band and power meter to run and record workouts.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Cadencia reads HRV, resting heart rate, sleep and workouts to decide how hard you should train today.</string>
+	<string>Cadencia reads recovery, workouts, weight and height to personalize your cycling plan.</string>
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Cadencia saves the workouts you complete on the trainer to Apple Health.</string>
 	<key>NSMicrophoneUsageDescription</key>

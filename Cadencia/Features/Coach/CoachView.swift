@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import CadenciaCore
 
@@ -5,6 +6,7 @@ import CadenciaCore
 /// read back ("what I understood") and apply to the week with one tap.
 struct CoachView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @State private var speech = SpeechRecognizer()
     @State private var draft = ""
     @FocusState private var composing: Bool
@@ -62,7 +64,18 @@ struct CoachView: View {
                     } label: { Image(systemName: "ellipsis.circle") }
                 }
             }
-            .onChange(of: speech.transcript) { _, text in if speech.isListening || !text.isEmpty { draft = text } }
+            .onChange(of: speech.status) { old, new in
+                if old == .listening || old == .finishing, new != .listening && new != .finishing, !speech.transcript.isEmpty {
+                    draft = speech.transcript
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in if phase == .background { speech.stop() } }
+            .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { note in
+                if note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == AVAudioSession.InterruptionType.began.rawValue {
+                    speech.stop()
+                }
+            }
+            .onDisappear { speech.cancel() }
         }
     }
 
@@ -76,16 +89,25 @@ struct CoachView: View {
             if let notice = model.coachNotice {
                 Text(notice).font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
             }
-            if speech.isListening {
+            if speech.status == .preparing {
+                ProgressView("Preparing voice input…").padding(.horizontal)
+            } else if speech.status == .finishing {
+                ProgressView("Finishing transcript…").padding(.horizontal)
+            } else if speech.isListening {
                 HStack(spacing: 8) {
                     Image(systemName: "waveform").symbolEffect(.variableColor.iterative, isActive: true).foregroundStyle(.red)
-                    Text(draft.isEmpty ? "Listening…" : draft).lineLimit(2).font(.footnote).foregroundStyle(.secondary)
+                    Text(speech.transcript.isEmpty ? String(localized: "Listening…") : speech.transcript)
+                        .lineLimit(2).font(.footnote).foregroundStyle(.secondary)
                     Spacer()
                 }
                 .padding(.horizontal)
             }
             if case .denied = speech.status {
                 Text("Microphone or speech access is off. Enable it in Settings to use voice notes.").font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
+            } else if speech.status == .unavailable {
+                Text("Voice input isn’t available right now. You can still type your answer.").font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
+            } else if case .failed = speech.status {
+                Text("Voice input isn’t available right now. You can still type your answer.").font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
             }
             HStack(spacing: 12) {
                 Button {
@@ -95,16 +117,18 @@ struct CoachView: View {
                         .font(.system(size: 34))
                         .foregroundStyle(speech.isListening ? .red : Color.accentColor)
                 }
+                .disabled(speech.status == .preparing || speech.status == .finishing || model.coachBusy)
                 .accessibilityLabel(speech.isListening ? "Stop listening" : "Record a voice note")
                 TextField("Message the coach", text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.roundedBorder)
                     .focused($composing)
+                    .disabled(speech.isCapturing)
                     .onSubmit(send)
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 30))
                 }
-                .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || model.coachBusy)
+                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.coachBusy || speech.isCapturing)
                 .accessibilityLabel("Send")
             }
             .padding(.horizontal)
@@ -114,9 +138,9 @@ struct CoachView: View {
     }
 
     private func send() {
+        guard !speech.isCapturing else { return }
         let text = draft
         draft = ""
-        if speech.isListening { speech.stop() }
         Task { await model.sendToCoach(text) }
     }
 }

@@ -14,6 +14,8 @@ final class HealthKitService {
             HKQuantityType(.heartRateVariabilitySDNN),
             HKQuantityType(.restingHeartRate),
             HKQuantityType(.heartRate),
+            HKQuantityType(.bodyMass),
+            HKQuantityType(.height),
             HKCategoryType(.sleepAnalysis),
             HKObjectType.workoutType(),
         ]
@@ -31,6 +33,22 @@ final class HealthKitService {
     func requestAuthorization() async throws {
         guard Self.isAvailable else { return }
         try await store.requestAuthorization(toShare: writeTypes, read: readTypes)
+    }
+
+    /// Denied or absent measurements stay unknown. Never treat a missing sample as zero.
+    func readBodyMeasurements(now: Date = Date()) async throws -> CyclistMeasurements {
+        let window = HKQuery.predicateForSamples(withStart: nil, end: now, options: [])
+        async let weights = latestQuantitySample(.bodyMass, predicate: window)
+        async let heights = latestQuantitySample(.height, predicate: window)
+        let weight = try await weights.map {
+            CyclistMeasurements.Measurement(value: $0.quantity.doubleValue(for: .gramUnit(with: .kilo)), measuredAt: $0.endDate, source: .appleHealth)
+        }
+        let height = try await heights.map {
+            CyclistMeasurements.Measurement(value: $0.quantity.doubleValue(for: .meterUnit(with: .centi)), measuredAt: $0.endDate, source: .appleHealth)
+        }
+        var result = CyclistMeasurements()
+        result.merge(.init(weight: weight, height: height))
+        return result
     }
 
     /// Daily HRV (SDNN, ms), resting HR and sleep for the last `days` days, one `WellnessDay` per day with data.
@@ -131,6 +149,12 @@ final class HealthKitService {
     }
 
     // MARK: Queries
+
+    private func latestQuantitySample(_ id: HKQuantityTypeIdentifier, predicate: NSPredicate) async throws -> HKQuantitySample? {
+        let descriptor = HKSampleQueryDescriptor(predicates: [.quantitySample(type: HKQuantityType(id), predicate: predicate)],
+            sortDescriptors: [SortDescriptor(\.endDate, order: .reverse)], limit: 1)
+        return try await descriptor.result(for: store).first
+    }
 
     private func quantitySamples(_ id: HKQuantityTypeIdentifier, predicate: NSPredicate) async throws -> [HKQuantitySample] {
         let descriptor = HKSampleQueryDescriptor(

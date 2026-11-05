@@ -7,7 +7,9 @@ struct StartupView: View {
     var body: some View {
         Group {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--cadencia-preview-zones") {
+            if ProcessInfo.processInfo.arguments.contains("--cadencia-preview-consultation") {
+                PlanConsultationPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("--cadencia-preview-zones") {
                 RideZoneLayoutPreview()
             } else if ProcessInfo.processInfo.arguments.contains("--cadencia-preview-ride-hud") {
                 RideHUDPreview()
@@ -35,6 +37,7 @@ struct StartupView: View {
         }
         .task {
             #if DEBUG
+            guard !ProcessInfo.processInfo.arguments.contains("--cadencia-preview-consultation") else { return }
             guard !ProcessInfo.processInfo.arguments.contains("--cadencia-preview-zones") else { return }
             // Show the loading design without network calls, permissions, or account changes.
             guard !ProcessInfo.processInfo.arguments.contains("--cadencia-preview-ride-hud") else { return }

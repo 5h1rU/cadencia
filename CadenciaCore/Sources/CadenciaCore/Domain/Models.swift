@@ -617,6 +617,8 @@ public struct TrainingPlan: Codable, Equatable, Sendable, Identifiable {
     public var phases: [TrainingPhase]
     public var sessions: [PlannedSession]
     public var isActive: Bool
+    /// Optional so existing saved plans still decode. No body measurements belong here.
+    public var consultation: PlanConsultation.Details?
 
     public init(id: UUID = UUID(), goal: GoalKind, secondaryGoal: GoalKind? = nil, title: String, startDay: Day, endDay: Day,
                 event: TrainingEvent? = nil, availability: Availability, phases: [TrainingPhase],

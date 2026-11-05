@@ -29,6 +29,10 @@ final class AppModel {
     private(set) var coachBusy = false
     private(set) var cyclistProfileBusy = false
     private(set) var cyclistProfileError: String?
+    private(set) var consultationBusy = false
+    private(set) var consultationError: String?
+    private var consultationRequestID: UUID?
+    private var syncingProfileWeight = false
     private(set) var isUploading = false
 
     /// Sign in with ChatGPT. Tokens live in the Keychain; the issued client id and the per-device host id
@@ -64,6 +68,7 @@ final class AppModel {
     private let store: JSONStore
     private let keychain: KeychainStore
     private let transport: any HTTPTransport
+    private let coachOverride: LLMCoach?
     private var rideCache: [UUID: RideRecording] = [:]
     private var isMirroring = false
     private var calendarWaiters: [CheckedContinuation<Void, Never>] = []
@@ -76,12 +81,14 @@ final class AppModel {
     private static let chatGPTHostIDAccount = "chatgpt.hostID"
 
     init(state: AppState, credential: IntervalsCredential?, store: JSONStore, keychain: KeychainStore,
-         transport: any HTTPTransport, bluetooth: BluetoothManager = BluetoothManager(), health: HealthKitService = HealthKitService()) {
+         transport: any HTTPTransport, bluetooth: BluetoothManager = BluetoothManager(), health: HealthKitService = HealthKitService(),
+         coachOverride: LLMCoach? = nil) {
         self.state = state
         self.credential = credential
         self.store = store
         self.keychain = keychain
         self.transport = transport
+        self.coachOverride = coachOverride
         self.bluetooth = bluetooth
         self.health = health
         self.chatGPT = keychain.readCodable(ChatGPTCredential.self, account: Self.chatGPTAccount)
@@ -186,11 +193,12 @@ final class AppModel {
     }
 
     /// Whether any AI coach is connected. Today and the coach chat need one.
-    var aiCoachAvailable: Bool { coachSource != nil }
+    var aiCoachAvailable: Bool { coachOverride != nil || coachSource != nil }
 
     /// Resolves the coach for one request, refreshing the ChatGPT token first when it is about to expire.
     /// Nil when the ChatGPT sign-in is dead (`coachIssue` is set) and no API key exists.
     private func coachEngine() async -> LLMCoach? {
+        if let coachOverride { return coachOverride }
         switch coachSource {
         case .chatGPTPlan:
             guard let credential = await freshChatGPTCredential() else { return nil }
@@ -459,6 +467,8 @@ final class AppModel {
         }
 
         await readHealth()
+        await syncProfileWeight()
+        await retirePlanEvents()
         recomputeFTPEstimate()
         await askCoachForToday()
         await runUploads()
@@ -477,6 +487,13 @@ final class AppModel {
             mutate {
                 $0.mergeWellness(days)
                 $0.lastHealthReadAt = Date()
+            }
+            if let measurements = try? await health.readBodyMeasurements() {
+                mutate {
+                    var current = $0.cyclistMeasurements ?? CyclistMeasurements()
+                    current.merge(measurements)
+                    $0.cyclistMeasurements = current
+                }
             }
             if state.settings.pushWellnessToIntervals, let client, let todayHealth = days.first(where: { $0.day == today }) {
                 try? await client.updateWellness(todayHealth)
@@ -514,7 +531,7 @@ final class AppModel {
         let feedback = Dictionary(uniqueKeysWithValues: state.feedbackByDay.values.map { ($0.day, $0) })
         let event = state.plan?.event.flatMap { $0.day >= today ? $0 : nil } ?? upcomingEvent
         var brief = CoachBrief(today: today, locale: coachLocale,
-                          athlete: .init(ftp: workingFTP ?? 200, weightKg: state.athlete?.weightKg ?? latestWellness?.weightKg,
+                          athlete: .init(ftp: workingFTP ?? 200, weightKg: state.weightKg,
                                          maxHR: state.athlete?.maxHR, lthr: state.athlete?.lthr),
                           ftpEstimate: state.ftpEstimate, powerCurve: state.powerCurve,
                           wellness: state.wellness, feedback: feedback, activities: state.activities,
@@ -549,6 +566,10 @@ final class AppModel {
     /// (or always, with `force`). Keeps the rule-based baseline on any failure; plan problems become `coachIssue`.
     func askCoachForToday(force: Bool = false) async {
         guard !coachThinking, !coachBusy, !isTodayWorkoutCompleted else { return }
+        guard let ftp = workingFTP, ftp > 0 else {
+            coachNotice = String(localized: "Add FTP in your cyclist profile to generate power-based workouts.")
+            return
+        }
         let day = today
         let brief = coachBrief()
         if !force, let current = state.today, current.day == day, current.aiFingerprint == brief.fingerprint {
@@ -692,6 +713,167 @@ final class AppModel {
     }
 
     // MARK: Plan
+
+    func beginPlanConsultation() async {
+        if state.planConsultation == nil { mutate { $0.planConsultation = .init(startedOn: today) } }
+        guard state.planConsultation?.reply == nil || state.planConsultation?.messages.last?.role == .athlete else { return }
+        await requestPlanConsultation()
+    }
+
+    func restartPlanConsultation() async {
+        consultationRequestID = nil
+        consultationBusy = false
+        consultationError = nil
+        mutate { $0.planConsultation = .init(startedOn: today) }
+        await requestPlanConsultation()
+    }
+
+    func cancelPlanConsultationRequest() {
+        consultationRequestID = nil
+        consultationBusy = false
+    }
+
+    func sendPlanConsultationAnswer(_ text: String) async {
+        let answer = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !answer.isEmpty, answer.count <= 6000, !consultationBusy, state.planConsultation != nil else { return }
+        mutate {
+            $0.planConsultation?.messages.append(.init(role: .athlete, text: answer))
+            // A previous draft cannot be accepted while a requested revision is outstanding or failed.
+            $0.planConsultation?.reply?.draft = nil
+        }
+        await requestPlanConsultation()
+    }
+
+    func requestPlanConsultation() async {
+        guard !consultationBusy, let session = state.planConsultation else { return }
+        let requestID = UUID(), account = athleteID, day = today
+        consultationRequestID = requestID
+        consultationBusy = true
+        consultationError = nil
+        defer { if consultationRequestID == requestID { consultationBusy = false } }
+        let context = PlanConsultation.Context(today: day, locale: coachLocale, ftp: workingFTP,
+            weightKg: state.weightKg, heightCm: state.heightCm, profileSummary: state.cyclistProfile?.summary,
+            lastSyncAt: state.lastSyncAt, historyIssue: syncError, activities: state.activities,
+            wellness: state.wellness, powerCurve: state.powerCurve, existingPlan: state.plan, session: session)
+        func isCurrent() -> Bool {
+            !Task.isCancelled && isSignedIn && athleteID == account && today == day &&
+            consultationRequestID == requestID && state.planConsultation?.id == session.id
+        }
+        guard let engine = await coachEngine() else {
+            if isCurrent() { consultationError = String(localized: "Connect ChatGPT (or an API key) in Settings → Coach first.") }
+            return
+        }
+        do {
+            let reply = try await engine.consult(context)
+            guard isCurrent() else { return }
+            mutate {
+                $0.planConsultation?.reply = reply
+                $0.planConsultation?.messages.append(.init(role: .coach, text: reply.question))
+            }
+        } catch is CancellationError { return }
+        catch let error as LLMCoachError {
+            guard isCurrent() else { return }
+            switch error {
+            case .usageLimitReached: coachIssue = .usageLimit
+            case .notEligible: coachIssue = .notEligible
+            case .unauthorized: coachIssue = .signInAgain
+            }
+            consultationError = String(localized: "The coach needs attention. Your consultation is saved; try again after reconnecting.")
+        } catch is PlanConsultation.ValidationError {
+            if isCurrent() { consultationError = String(localized: "The coach couldn't prepare a valid consultation reply. Your answers are saved. Try again.") }
+        } catch {
+            if isCurrent() { consultationError = coachFailureNotice(error, preservingSession: false) }
+        }
+    }
+
+    func saveCyclistProfile(_ update: PlanConsultation.ProfileUpdate) async throws {
+        try update.validate()
+        let now = Date()
+        mutate {
+            var current = $0.cyclistMeasurements ?? CyclistMeasurements()
+            current.merge(.init(weight: update.weightKg.map { .init(value: $0, measuredAt: now, source: .athlete) },
+                                height: update.heightCm.map { .init(value: $0, measuredAt: now, source: .athlete) }))
+            $0.cyclistMeasurements = current
+            if let kg = update.weightKg { $0.profileWeightPendingSync = .init(day: today, kg: kg) }
+            if let ftp = update.ftp { $0.acceptedFTP = ftp; $0.dismissedFTPProposal = nil }
+            $0.planConsultation?.reply?.profileUpdate = nil
+        }
+        await syncProfileWeight()
+        reaskCoach()
+    }
+
+    func importCyclistMeasurements() async throws -> Bool {
+        let account = athleteID
+        try await health.requestAuthorization()
+        let measurements = try await health.readBodyMeasurements()
+        guard account == athleteID, isSignedIn else { return false }
+        var current = state.cyclistMeasurements ?? CyclistMeasurements()
+        current.merge(measurements)
+        guard current != state.cyclistMeasurements, current.weight != nil || current.height != nil else { return false }
+        mutate { $0.cyclistMeasurements = current }
+        return true
+    }
+
+    private func syncProfileWeight() async {
+        guard !syncingProfileWeight, let pending = state.profileWeightPendingSync, let client else { return }
+        syncingProfileWeight = true
+        defer { syncingProfileWeight = false }
+        let account = athleteID
+        do {
+            try await client.updateWellness(WellnessDay(day: pending.day, weightKg: pending.kg))
+            guard account == athleteID, isSignedIn, state.profileWeightPendingSync == pending else { return }
+            mutate { $0.profileWeightPendingSync = nil }
+        } catch { /* Kept for retry on refresh; the profile editor shows the pending sync. */ }
+    }
+
+    /// Explicit acceptance is the only place a consultation can replace an active plan.
+    func activateConsultationPlan(_ draft: PlanConsultation.Draft, sessionID: UUID) async throws {
+        await acquireCalendar()
+        do {
+            defer { releaseCalendar() }
+            guard isSignedIn, !consultationBusy, !Task.isCancelled, state.planConsultation?.id == sessionID,
+                  state.planConsultation?.reply?.draft == draft else { throw PlanConsultation.ValidationError.invalidDraft }
+            var plan = try draft.makePlan(today: today)
+            let previous = state.plan?.sessions ?? []
+            let completedToday = isTodayWorkoutCompleted
+            var reused = Set<Int>()
+            for i in plan.sessions.indices {
+                if let old = previous.first(where: { $0.day == plan.sessions[i].day }), let id = old.intervalsEventID {
+                    plan.sessions[i].intervalsEventID = id
+                    reused.insert(id)
+                }
+            }
+            plan.isActive = true
+            mutate {
+                let retired = previous.filter { $0.day >= today && $0.status != .completed }
+                    .compactMap(\.intervalsEventID).filter { !reused.contains($0) }
+                $0.retiredPlanEventIDs = Array(Set(($0.retiredPlanEventIDs ?? []) + retired))
+                $0.plan = plan
+                if !completedToday { $0.today = nil }
+                $0.planConsultation = nil
+            }
+        }
+        await retirePlanEvents()
+        await askCoachForToday()
+        await pushWeekToIntervals()
+    }
+
+    private func retirePlanEvents() async {
+        guard state.retiredPlanEventIDs?.isEmpty == false else { return }
+        await acquireCalendar()
+        defer { releaseCalendar() }
+        guard let client, !Task.isCancelled else { return }
+        let account = athleteID
+        for id in state.retiredPlanEventIDs ?? [] {
+            do {
+                try await client.deleteEvent(id: id)
+            } catch HTTPError.status(404, _) {
+                // A preceding mirror or retry already removed this session.
+            } catch { return }
+            guard account == athleteID, isSignedIn else { return }
+            mutate { $0.retiredPlanEventIDs?.removeAll { $0 == id } }
+        }
+    }
 
     func createPlan(_ request: PlanBuilder.Request) async {
         var plan = PlanBuilder().build(request)
@@ -1010,7 +1192,7 @@ final class AppModel {
         do {
             let intent = try await engine.interpret(trimmed, context: context)
             var proposal: AppState.WorkoutProposal?
-            if let request = intent.workoutRequest, request.day == day, !isTodayWorkoutCompleted {
+            if let request = intent.workoutRequest, request.day == day, !isTodayWorkoutCompleted, workingFTP != nil {
                 let basis = coachBrief().fingerprint
                 let brief = coachBrief(applying: intent)
                 let prescription = try await engine.prescribe(brief: brief)

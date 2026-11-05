@@ -22,6 +22,29 @@ public struct PrescriptionValidator: Sendable {
         if let outlook = prescription.week.first(where: { $0.day.iso == brief?.today }), outlook.kind != workout.kind {
             try reject("Today's week entry must have the same purpose as today's concrete workout.")
         }
+        if let plan = brief?.plan, let details = plan.consultation, let day = brief.flatMap({ Day(iso: $0.today) }) {
+            func check(_ day: Day, kind: SessionKind, minutes: Double, intensity: Double = 0) throws {
+                guard day.iso >= plan.startDay, day.iso <= plan.endDay else { return }
+                let scheduled = plan.next7Days.first { $0.day == day.iso && $0.status != "skipped" }
+                let allowedMinutes = details.isUnavailable(day) ? 0 : scheduled?.minutes ?? 0
+                if kind != .rest, allowedMinutes == 0 {
+                    try reject("The consultation confirmed no cycling on this day. Preserve the holiday or unavailable day.")
+                }
+                if minutes > Double(allowedMinutes) + 0.1 {
+                    try reject("Cycling must fit the availability confirmed in the consultation.")
+                }
+                if details.avoidsIntensity(on: day), kind.isHard || intensity > 0.75 {
+                    try reject("Keep cycling easy on and immediately after confirmed hard gym/CrossFit sessions.")
+                }
+                let planned = scheduled.flatMap { SessionKind(rawValue: $0.kind) }
+                if let planned, [.recovery, .endurance, .longRide].contains(planned), kind.isHard || intensity > 0.75 {
+                    try reject("Readiness can soften the confirmed ride. Preserve the plan's easy intensity ceiling.")
+                }
+            }
+            try check(day, kind: workout.kind, minutes: workout.totalDuration / 60,
+                      intensity: workout.steps.map { max($0.startIntensity, $0.endIntensity) }.max() ?? 0)
+            for outlook in prescription.week { try check(outlook.day, kind: outlook.kind, minutes: Double(outlook.minutes)) }
+        }
         guard workout.kind == .openerActivation else { return }
         if let brief {
             let events = [brief.upcomingEvent, brief.plan?.event].compactMap { $0 }

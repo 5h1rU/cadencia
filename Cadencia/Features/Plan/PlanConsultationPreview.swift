@@ -1,0 +1,64 @@
+#if DEBUG
+import SwiftUI
+import CadenciaCore
+
+/// A Simulator fixture with no live credentials or calendar writes.
+struct PlanConsultationPreview: View {
+    @State private var model = makeModel()
+    @State private var presenting = true
+    private let showRecording = !ProcessInfo.processInfo.arguments.contains("--cadencia-consultation-idle")
+
+    var body: some View {
+        PlanView()
+            .fullScreenCover(isPresented: $presenting) {
+                CreatePlanView(previewTranscript: showRecording ? String(localized: "I’d like to combine cycling with CrossFit.") : nil)
+            }
+            .environment(model)
+    }
+
+    @MainActor private static func makeModel() -> AppModel {
+        var state = PreviewData.state
+        state.athlete?.weightKg = nil
+        state.athlete?.ftp = nil
+        state.athlete?.indoorFTP = nil
+        state.acceptedFTP = nil
+        state.plan = nil
+        state.today = nil
+        state.settings.llmEnabled = true
+        let empty = ProcessInfo.processInfo.arguments.contains("--cadencia-consultation-empty")
+        if empty { state.activities = [] }
+        var session = PlanConsultation.Session(startedOn: Day(Date()))
+        session.reply = .init(
+            review: empty ? String(localized: "Let’s get to know your riding.") :
+                String(localized: "Your recent rides give us a starting point. We can fill in the missing details as we talk."),
+            question: String(localized: "What other training would you like to include?"), topic: .otherTraining)
+        state.planConsultation = session
+        let transport = ConsultationPreviewTransport()
+        let coach = LLMCoach(transport: transport, endpoint: URL(string: "https://example.invalid/chat/completions")!, apiKey: "preview")
+        return AppModel(state: state, credential: .apiKey("preview"), store: .temporary(), keychain: KeychainStore(service: "preview.consultation"),
+                        transport: transport, coachOverride: coach)
+    }
+}
+
+private struct ConsultationPreviewTransport: HTTPTransport {
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        guard request.url.path.hasSuffix("chat/completions") else { throw HTTPError.invalidResponse }
+        let today = Day(Date())
+        let reply = PlanConsultation.Reply(
+            review: String(localized: "Your plan makes room for CrossFit and keeps your long ride on Sunday."),
+            question: String(localized: "Would you like to review the plan?"), topic: .review,
+            coveredTopics: [.goal, .availability, .otherTraining, .timeAway],
+            draft: .init(title: String(localized: "Stronger on long rides"), goal: .durability, startDay: today, endDay: today.adding(days: 27),
+                details: .init(objective: String(localized: "Finish Sunday rides feeling stronger."),
+                    rationale: String(localized: "An easy ride after CrossFit leaves room for your longer Sunday ride."),
+                    weeklyRides: [.init(weekday: 5, minutes: 45, kind: .endurance), .init(weekday: 1, minutes: 120, kind: .longRide)],
+                    otherTraining: [.init(name: "CrossFit", weekdays: [4], minutes: 45, intensity: .hard)],
+                    timeAway: [.init(start: today.adding(days: 14), end: today.adding(days: 20), reason: String(localized: "Vacation"))]),
+                phases: [.init(focus: .base, startWeek: 1, endWeek: 3, summary: String(localized: "Build a steady routine.")),
+                         .init(focus: .recover, startWeek: 4, endWeek: 4, summary: String(localized: "Ease off and review how the block felt."))]))
+        let content = String(decoding: try JSONEncoder().encode(reply), as: UTF8.self)
+        let response = try JSONSerialization.data(withJSONObject: ["choices": [["message": ["content": content]]]])
+        return HTTPResponse(status: 200, body: response)
+    }
+}
+#endif

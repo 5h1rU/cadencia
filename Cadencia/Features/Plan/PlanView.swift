@@ -55,9 +55,10 @@ struct PlanView: View {
                     ContentUnavailableView {
                         Label("No plan yet", systemImage: "calendar.badge.plus")
                     } description: {
-                        Text("Pick a goal or an event. Cadencia lays out the phases and keeps only the coming week concrete; later weeks are intentions that adapt to how you recover.")
+                        Text("Tell your coach what you want from your riding. We’ll shape a plan around your history, your week and the training you want to include.")
                     } actions: {
-                        Button("Create a plan") { creating = true }.buttonStyle(.borderedProminent)
+                        Button(model.state.planConsultation == nil ? "Create a plan" : "Continue consultation") { creating = true }
+                            .buttonStyle(.borderedProminent)
                     }
                 }
             }
@@ -74,7 +75,7 @@ struct PlanView: View {
                     }
                 }
             }
-            .sheet(isPresented: $creating) { CreatePlanView() }
+            .fullScreenCover(isPresented: $creating) { CreatePlanView() }
             .confirmationDialog("Discard this plan?", isPresented: $confirmDiscard, titleVisibility: .visible) {
                 Button("Discard", role: .destructive) { Task { await model.discardPlan() } }
             } message: {
@@ -189,7 +190,10 @@ struct PlanView: View {
 
     @ViewBuilder private func planSections(_ plan: TrainingPlan) -> some View {
         Section {
-            LabeledContent("Goal") { Text(plan.goal.title) }
+            LabeledContent("Goal") {
+                if let objective = plan.consultation?.objective { Text(verbatim: objective) }
+                else { Text(plan.goal.title) }
+            }
             if let g = plan.secondaryGoal { LabeledContent("Also") { Text(g.title) } }
             LabeledContent("From", value: Format.day(plan.startDay, style: .dateTime.day().month(.abbreviated).year()))
             LabeledContent("To", value: Format.day(plan.endDay, style: .dateTime.day().month(.abbreviated).year()))
@@ -197,6 +201,11 @@ struct PlanView: View {
                 NavigationLink { EventPrepView(event: e) } label: { LabeledContent("Event", value: e.name) }
             }
             LabeledContent("Availability", value: "\(plan.availability.availableWeekdays.count) days · \(String(format: "%.0f", plan.availability.hoursPerWeek)) h")
+        }
+        if let activities = plan.consultation?.otherTraining, !activities.isEmpty {
+            Section("Other training") {
+                ForEach(activities) { OtherTrainingRow(activity: $0) }
+            }
         }
         InfoSection {
             ForEach(plan.phases) { phase in

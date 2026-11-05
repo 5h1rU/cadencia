@@ -26,6 +26,7 @@ struct SettingsView: View {
 
                 Section("Data") {
                     NavigationLink { DataSourcesView() } label: { Label("Sources", systemImage: "heart.text.square") }
+                    NavigationLink { CyclistMeasurementsView() } label: { Label("Cyclist profile", systemImage: "person.crop.circle") }
                     NavigationLink { FTPSettingsView() } label: {
                         LabeledContent { Text(Format.watts(model.workingFTP)) } label: { Label("FTP", systemImage: "bolt") }
                     }
@@ -159,7 +160,7 @@ struct DataSourcesView: View {
             } header: {
                 Text("Apple Health")
             } information: {
-                Text("HRV (SDNN), resting heart rate and sleep from your watch. Health values win over Intervals for the same day.")
+                Text("Cadencia reads HRV, resting heart rate, sleep and available body measurements from Apple Health.")
             }
             InfoSection {
                 Toggle("Send Health wellness to Intervals", isOn: Binding(get: { model.state.settings.pushWellnessToIntervals }, set: { on in model.updateSettings { $0.pushWellnessToIntervals = on } }))

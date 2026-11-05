@@ -47,6 +47,11 @@ private struct CyclistProfileContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
+            NavigationLink {
+                CyclistMeasurementsView()
+            } label: {
+                Label("Profile details", systemImage: "person.crop.circle")
+            }
             if let profile = model.state.cyclistProfile {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: symbol(profile.riderType))

@@ -84,6 +84,11 @@ struct AppState: Codable, Equatable {
         var ftp: Int
     }
 
+    struct PendingProfileWeight: Codable, Equatable {
+        var day: Day
+        var kg: Double
+    }
+
     var athlete: AthleteProfile?
     /// FTP the athlete accepted in the app. Falls back to the Intervals value until a review is accepted.
     var acceptedFTP: Int?
@@ -114,6 +119,10 @@ struct AppState: Codable, Equatable {
     var workoutRequests: [String: CoachIntent.WorkoutRequest]?
     /// Optional for existing state files. Profile generation is independent of the daily coach.
     var cyclistProfile: CyclistProfile.Report?
+    var cyclistMeasurements: CyclistMeasurements?
+    var planConsultation: PlanConsultation.Session?
+    var profileWeightPendingSync: PendingProfileWeight?
+    var retiredPlanEventIDs: [Int]?
     /// Persisted before the first automatic request, including failed/cancelled attempts.
     var cyclistProfileAutomaticAttemptedAt: Date?
     var settings = Settings()
@@ -134,7 +143,22 @@ struct AppState: Codable, Equatable {
         var load: Int?
     }
 
-    var workingFTP: Int? { acceptedFTP ?? athlete?.workingFTP }
+    var workingFTP: Int? { (acceptedFTP ?? athlete?.workingFTP).flatMap { $0 > 0 ? $0 : nil } }
+
+    var profileWeight: CyclistMeasurements.Measurement? {
+        let local = cyclistMeasurements?.weight
+        if let day = wellness.last(where: { ($0.weightKg ?? 0) > 0 }), let kg = day.weightKg, kg.isFinite,
+           local.map({ day.day > Day($0.measuredAt) }) ?? true {
+            return .init(value: kg, measuredAt: day.day.date(), source: .intervals)
+        }
+        if let local { return local }
+        guard let kg = athlete?.weightKg, kg.isFinite, kg > 0 else { return nil }
+        return .init(value: kg, measuredAt: .distantPast, source: .intervals)
+    }
+
+    var weightKg: Double? { profileWeight?.value }
+
+    var heightCm: Double? { cyclistMeasurements?.height?.value }
 
     func feedback(for day: Day) -> SubjectiveFeedback? { feedbackByDay[day.iso] }
 

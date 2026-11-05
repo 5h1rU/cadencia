@@ -52,6 +52,16 @@
     "%@" : {
 
     },
+    "%@ – %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ – %2$@"
+          }
+        }
+      }
+    },
     "%@ · %@" : {
       "localizations" : {
         "en" : {
@@ -360,9 +370,6 @@
         }
       }
     },
-    "%lld weeks" : {
-
-    },
     "%lld%%" : {
       "localizations" : {
         "es" : {
@@ -414,6 +421,7 @@
       }
     },
     "A plan is a direction, not a contract. The coach reshapes each week from your recovery and what you tell it." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -516,6 +524,16 @@
         }
       }
     },
+    "Add FTP in your cyclist profile to generate power-based workouts." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añade tu FTP en el perfil de ciclista para generar entrenamientos por potencia."
+          }
+        }
+      }
+    },
     "After the ride" : {
       "localizations" : {
         "es" : {
@@ -571,6 +589,7 @@
       }
     },
     "Also keep an eye on" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -606,6 +625,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Altitud y descenso"
+          }
+        }
+      }
+    },
+    "An easy ride after CrossFit leaves room for your longer Sunday ride." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una rodada suave después de CrossFit deja espacio para la rodada larga del domingo."
+          }
+        }
+      }
+    },
+    "Answer by voice" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Responder por voz"
           }
         }
       }
@@ -981,6 +1020,7 @@
       }
     },
     "Blocks alternate three loading weeks with one easier week." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1016,6 +1056,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Construcción"
+          }
+        }
+      }
+    },
+    "Build a steady routine." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Construye una rutina constante."
           }
         }
       }
@@ -1069,6 +1119,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cadencia usa Intervals.icu como fuente de verdad. Nada se guarda en otros servidores."
+          }
+        }
+      }
+    },
+    "Cadencia reads HRV, resting heart rate, sleep and available body measurements from Apple Health." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadencia lee la VFC, la frecuencia cardiaca en reposo, el sueño y las medidas disponibles en Salud."
           }
         }
       }
@@ -1243,6 +1303,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Revisa los valores opcionales, elige al menos un día de entrenamiento y una llegada anterior o igual al día del evento. Si buscas un tiempo objetivo, debes ingresarlo."
+          }
+        }
+      }
+    },
+    "Check the measurements and units, then try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisa las medidas y las unidades e inténtalo de nuevo."
           }
         }
       }
@@ -1458,6 +1528,9 @@
         }
       }
     },
+    "cm" : {
+
+    },
     "Coach" : {
       "localizations" : {
         "es" : {
@@ -1505,6 +1578,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mensaje del entrenador"
+          }
+        }
+      }
+    },
+    "Coach settings" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configuración del entrenador"
           }
         }
       }
@@ -1612,12 +1695,42 @@
         }
       }
     },
+    "Confirm profile details" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmar datos del perfil"
+          }
+        }
+      }
+    },
     "Confirm the event location and its local time zone. A GPX timestamp is not the event date or start time." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Confirma la ubicación y la zona horaria del evento. Una fecha del archivo GPX no indica cuándo empieza el evento."
+          }
+        }
+      }
+    },
+    "Confirm what the coach heard" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirma lo que entendió tu entrenador"
+          }
+        }
+      }
+    },
+    "Confirmed by you" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmado por ti"
           }
         }
       }
@@ -1702,6 +1815,16 @@
         }
       }
     },
+    "Connect your coach to begin the consultation." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conecta a tu entrenador para empezar la consulta."
+          }
+        }
+      }
+    },
     "Connected" : {
       "localizations" : {
         "es" : {
@@ -1742,6 +1865,16 @@
         }
       }
     },
+    "Consultation options" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opciones de la consulta"
+          }
+        }
+      }
+    },
     "Continue" : {
       "localizations" : {
         "es" : {
@@ -1752,12 +1885,32 @@
         }
       }
     },
+    "Continue consultation" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuar consulta"
+          }
+        }
+      }
+    },
     "Continue with ChatGPT" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Continuar con ChatGPT"
+          }
+        }
+      }
+    },
+    "Conversation history" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Historial de la conversación"
           }
         }
       }
@@ -1822,12 +1975,32 @@
         }
       }
     },
+    "Couldn’t read measurements from Apple Health." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron leer las medidas de Salud."
+          }
+        }
+      }
+    },
     "Couldn't read your Intervals.icu history. Try generating your profile again." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "No se pudo leer tu historial de Intervals.icu. Intenta generar tu perfil de nuevo."
+          }
+        }
+      }
+    },
+    "Couldn’t refresh all training data." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron actualizar todos los datos de entrenamiento."
           }
         }
       }
@@ -1911,6 +2084,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tiempo límite (horas)"
+          }
+        }
+      }
+    },
+    "Cyclist profile" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfil de ciclista"
           }
         }
       }
@@ -2201,6 +2384,16 @@
         }
       }
     },
+    "Ease off and review how the block felt." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baja la carga y revisa cómo te sentiste durante el bloque."
+          }
+        }
+      }
+    },
     "Easier" : {
       "localizations" : {
         "es" : {
@@ -2210,6 +2403,9 @@
           }
         }
       }
+    },
+    "Easy" : {
+
     },
     "Efficiency" : {
       "localizations" : {
@@ -2737,6 +2933,16 @@
         }
       }
     },
+    "Finish answer" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar respuesta"
+          }
+        }
+      }
+    },
     "Finish comfortably" : {
       "localizations" : {
         "es" : {
@@ -2753,6 +2959,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Termina fuerte"
+          }
+        }
+      }
+    },
+    "Finish Sunday rides feeling stronger." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminar las rodadas del domingo con más fuerza."
+          }
+        }
+      }
+    },
+    "Finishing transcript…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminando la transcripción…"
+          }
+        }
+      }
+    },
+    "First week" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Primera semana"
           }
         }
       }
@@ -3023,6 +3259,16 @@
         }
       }
     },
+    "Go back to the consultation if you want to change anything." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a la consulta si quieres cambiar algo."
+          }
+        }
+      }
+    },
     "Go easy" : {
       "localizations" : {
         "es" : {
@@ -3153,6 +3399,16 @@
         }
       }
     },
+    "Gym, CrossFit, running, swimming, or anything you’d like to add." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gimnasio, CrossFit, correr, nadar o cualquier otra actividad que quieras incluir."
+          }
+        }
+      }
+    },
     "h" : {
       "localizations" : {
         "es" : {
@@ -3163,7 +3419,18 @@
         }
       }
     },
+    "Hard" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fuerte"
+          }
+        }
+      }
+    },
     "Hard days land on the days you train that do not precede the long ride." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3239,6 +3506,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pesadas"
+          }
+        }
+      }
+    },
+    "Height" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estatura"
           }
         }
       }
@@ -3388,6 +3665,7 @@
 
     },
     "HRV (SDNN), resting heart rate and sleep from your watch. Health values win over Intervals for the same day." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -3438,8 +3716,31 @@
         }
       }
     },
+    "I’d like to combine cycling with CrossFit." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Me gustaría combinar ciclismo con CrossFit."
+          }
+        }
+      }
+    },
     "IF" : {
 
+    },
+    "Imperial" : {
+
+    },
+    "Import from Apple Health" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importar desde Salud"
+          }
+        }
+      }
     },
     "Import recorded GPX" : {
       "localizations" : {
@@ -3480,6 +3781,9 @@
           }
         }
       }
+    },
+    "in" : {
+
     },
     "In" : {
       "localizations" : {
@@ -3634,6 +3938,17 @@
     "Intervals.icu" : {
 
     },
+    "Intervals.icu · Recent rides" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intervals.icu · Rodadas recientes"
+          }
+        }
+      }
+    },
     "Intervals.icu API key" : {
       "localizations" : {
         "es" : {
@@ -3735,6 +4050,9 @@
         }
       }
     },
+    "kg" : {
+
+    },
     "Kilometre splits" : {
       "localizations" : {
         "es" : {
@@ -3795,6 +4113,9 @@
         }
       }
     },
+    "lb" : {
+
+    },
     "Left" : {
       "localizations" : {
         "es" : {
@@ -3854,6 +4175,19 @@
           }
         }
       }
+    },
+    "Let’s get to know your riding." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conozcamos cómo estás rodando."
+          }
+        }
+      }
+    },
+    "Listening…" : {
+
     },
     "Load" : {
       "localizations" : {
@@ -4065,6 +4399,16 @@
         }
       }
     },
+    "Measurements" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medidas"
+          }
+        }
+      }
+    },
     "Message the coach" : {
       "localizations" : {
         "es" : {
@@ -4085,12 +4429,25 @@
         }
       }
     },
+    "Metric" : {
+
+    },
     "Microphone or speech access is off. Enable it in Settings to use voice notes." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "El acceso al micrófono o al dictado está apagado. Actívalo en Ajustes para usar notas de voz."
+          }
+        }
+      }
+    },
+    "Microphone or speech access is off. You can still type your answer." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El acceso al micrófono o al reconocimiento de voz está desactivado. Puedes escribir tu respuesta."
           }
         }
       }
@@ -4311,6 +4668,16 @@
         }
       }
     },
+    "No cycling scheduled in the first week." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay rodadas programadas para la primera semana."
+          }
+        }
+      }
+    },
     "no data" : {
       "localizations" : {
         "es" : {
@@ -4346,6 +4713,16 @@
         }
       }
     },
+    "No newer weight or height was available in Apple Health." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No había datos más recientes de peso o estatura en Salud."
+          }
+        }
+      }
+    },
     "No outdoor workout" : {
       "localizations" : {
         "es" : {
@@ -4372,6 +4749,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sin potencia"
+          }
+        }
+      }
+    },
+    "No recent rides to review" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay rodadas recientes para revisar"
           }
         }
       }
@@ -4469,11 +4856,22 @@
       }
     },
     "None" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ninguno"
+          }
+        }
+      }
+    },
+    "Not added" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin añadir"
           }
         }
       }
@@ -4497,6 +4895,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sin emparejar"
+          }
+        }
+      }
+    },
+    "Not set" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin definir"
           }
         }
       }
@@ -4746,6 +5154,16 @@
         }
       }
     },
+    "Other training" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otros entrenamientos"
+          }
+        }
+      }
+    },
     "Outdoor" : {
       "localizations" : {
         "es" : {
@@ -4908,6 +5326,7 @@
       }
     },
     "Pick a goal or an event. Cadencia lays out the phases and keeps only the coming week concrete; later weeks are intentions that adapt to how you recover." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5080,6 +5499,9 @@
         }
       }
     },
+    "Prepare for an event" : {
+
+    },
     "Prepare Garmin FIT file" : {
       "localizations" : {
         "es" : {
@@ -5117,6 +5539,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Preparando archivo…"
+          }
+        }
+      }
+    },
+    "Preparing voice input…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando la entrada de voz…"
           }
         }
       }
@@ -5161,12 +5593,32 @@
         }
       }
     },
+    "Profile details" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datos del perfil"
+          }
+        }
+      }
+    },
     "Profile needs attention" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu perfil necesita atención"
+          }
+        }
+      }
+    },
+    "Profile updated from Apple Health." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfil actualizado desde Salud."
           }
         }
       }
@@ -5261,6 +5713,16 @@
         }
       }
     },
+    "Reading ride history…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leyendo el historial de rodadas…"
+          }
+        }
+      }
+    },
     "Reading route points…" : {
       "localizations" : {
         "es" : {
@@ -5324,6 +5786,16 @@
     },
     "Record a voice note" : {
 
+    },
+    "Record answer" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grabar respuesta"
+          }
+        }
+      }
     },
     "Record on your bike computer. Let Garmin sync the ride to Intervals.icu; for Magene, export the recorded FIT from OnelapFit and import it into Intervals.icu. Pair it with this planned workout in Intervals, then refresh Cadencia for the coach's review." : {
       "localizations" : {
@@ -5415,6 +5887,16 @@
         }
       }
     },
+    "Relative power" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Potencia relativa"
+          }
+        }
+      }
+    },
     "Reload models" : {
       "localizations" : {
         "es" : {
@@ -5451,6 +5933,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Reemplazar GPX"
+          }
+        }
+      }
+    },
+    "Replace your current plan?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Reemplazar tu plan actual?"
           }
         }
       }
@@ -5545,6 +6037,16 @@
         }
       }
     },
+    "Review plan" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisar plan"
+          }
+        }
+      }
+    },
     "Review planned course" : {
       "localizations" : {
         "es" : {
@@ -5581,6 +6083,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Revisa tu plan"
+          }
+        }
+      }
+    },
+    "Review your words before sending." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revisa la transcripción antes de enviarla."
           }
         }
       }
@@ -5826,6 +6338,16 @@
         }
       }
     },
+    "Save profile details" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar datos del perfil"
+          }
+        }
+      }
+    },
     "Save rides to Apple Health" : {
       "localizations" : {
         "es" : {
@@ -5907,6 +6429,7 @@
       }
     },
     "Secondary goal" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6362,6 +6885,36 @@
         }
       }
     },
+    "Start over" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empezar de nuevo"
+          }
+        }
+      }
+    },
+    "Start plan" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciar plan"
+          }
+        }
+      }
+    },
+    "Start this consultation over?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Empezar esta consulta de nuevo?"
+          }
+        }
+      }
+    },
     "Start with the route" : {
       "localizations" : {
         "es" : {
@@ -6462,6 +7015,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fuerza"
+          }
+        }
+      }
+    },
+    "Stronger on long rides" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más fuerte en rodadas largas"
           }
         }
       }
@@ -6616,12 +7179,32 @@
         }
       }
     },
+    "Tell me what matters to you. We’ll shape the plan together." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuéntame qué te importa. Armaremos el plan juntos."
+          }
+        }
+      }
+    },
     "Tell the coach what changed" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cuéntale al coach qué cambió"
+          }
+        }
+      }
+    },
+    "Tell your coach what you want from your riding. We’ll shape a plan around your history, your week and the training you want to include." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuéntale al entrenador qué quieres lograr. Armaremos un plan según tu historial, tu semana y las actividades que quieras incluir."
           }
         }
       }
@@ -6719,6 +7302,16 @@
         }
       }
     },
+    "The coach couldn't prepare a valid consultation reply. Your answers are saved. Try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El entrenador no pudo preparar una respuesta válida. Tus respuestas están guardadas. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
     "The coach couldn't produce a valid workout for this request. Your current workout is unchanged. Try rephrasing the request." : {
       "localizations" : {
         "es" : {
@@ -6775,6 +7368,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "El entrenador no está disponible temporalmente. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "The coach needs attention. Your consultation is saved; try again after reconnecting." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu consulta está guardada. Vuelve a conectar al entrenador e inténtalo de nuevo."
           }
         }
       }
@@ -7031,6 +7634,16 @@
         }
       }
     },
+    "These measurements are saved to your cyclist profile. You can leave any unknown value blank." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estas medidas se guardan en tu perfil de ciclista. Puedes dejar en blanco los datos que no conozcas."
+          }
+        }
+      }
+    },
     "Thinking…" : {
       "localizations" : {
         "es" : {
@@ -7047,6 +7660,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Esta cuenta de ChatGPT no puede compartir su plan con apps. Añade una clave de API en Ajustes → Coach para seguir usando el modelo de lenguaje."
+          }
+        }
+      }
+    },
+    "This draft needs an update. Go back and ask the coach to revise it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay que actualizar este borrador. Vuelve y pídele al entrenador que lo revise."
           }
         }
       }
@@ -7147,6 +7770,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tiempo"
+          }
+        }
+      }
+    },
+    "Time away" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tiempo fuera"
           }
         }
       }
@@ -7361,6 +7994,9 @@
         }
       }
     },
+    "Try again" : {
+
+    },
     "Turn on Bluetooth to find your devices." : {
       "localizations" : {
         "es" : {
@@ -7377,6 +8013,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dos días antes se acaba la intensidad; la víspera es una activación corta para que las piernas lleguen afiladas, no cansadas."
+          }
+        }
+      }
+    },
+    "Type instead" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escribir en su lugar"
           }
         }
       }
@@ -7400,6 +8046,9 @@
           }
         }
       }
+    },
+    "Units" : {
+
     },
     "Unknown" : {
       "localizations" : {
@@ -7584,6 +8233,16 @@
         }
       }
     },
+    "Vacation" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vacaciones"
+          }
+        }
+      }
+    },
     "Variability" : {
       "localizations" : {
         "es" : {
@@ -7652,6 +8311,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Voz"
+          }
+        }
+      }
+    },
+    "Voice input isn’t available right now. You can still type your answer." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La entrada de voz no está disponible en este momento. Puedes escribir tu respuesta."
           }
         }
       }
@@ -7780,12 +8449,6 @@
     "Week updated" : {
 
     },
-    "Weekdays: %@" : {
-
-    },
-    "Weekend: %@" : {
-
-    },
     "Weekly training time" : {
       "localizations" : {
         "es" : {
@@ -7806,6 +8469,26 @@
         }
       }
     },
+    "Weight" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Peso"
+          }
+        }
+      }
+    },
+    "Weight saved on this phone. Intervals.icu sync is pending." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El peso está guardado en este teléfono. La sincronización con Intervals.icu está pendiente."
+          }
+        }
+      }
+    },
     "Wellness days" : {
       "localizations" : {
         "es" : {
@@ -7817,6 +8500,7 @@
       }
     },
     "What do you want to get out of the next weeks?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7836,6 +8520,16 @@
         }
       }
     },
+    "What I’ve reviewed" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lo que revisé"
+          }
+        }
+      }
+    },
     "What it built" : {
       "localizations" : {
         "es" : {
@@ -7846,12 +8540,42 @@
         }
       }
     },
+    "What other training would you like to include?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué otros entrenamientos te gustaría incluir?"
+          }
+        }
+      }
+    },
     "What would success look like?" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "¿Qué quieres lograr?"
+          }
+        }
+      }
+    },
+    "What would you change?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué cambiarías?"
+          }
+        }
+      }
+    },
+    "What would you like us to work toward?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué te gustaría lograr con tu entrenamiento?"
           }
         }
       }
@@ -8016,6 +8740,16 @@
         }
       }
     },
+    "Would you like to review the plan?" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Quieres revisar el plan?"
+          }
+        }
+      }
+    },
     "Written by %@ from the Intervals.icu analysis and your planned workout." : {
       "localizations" : {
         "es" : {
@@ -8046,6 +8780,9 @@
           }
         }
       }
+    },
+    "You" : {
+
     },
     "You can close this window and return to the app." : {
       "localizations" : {
@@ -8117,6 +8854,16 @@
         }
       }
     },
+    "You’re speaking" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estás hablando"
+          }
+        }
+      }
+    },
     "You're using your ChatGPT plan" : {
       "localizations" : {
         "es" : {
@@ -8153,6 +8900,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu cuenta no devolvió modelos."
+          }
+        }
+      }
+    },
+    "Your answer" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu respuesta"
+          }
+        }
+      }
+    },
+    "Your answers and draft will be cleared." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se borrarán tus respuestas y el borrador."
           }
         }
       }
@@ -8217,6 +8984,16 @@
         }
       }
     },
+    "Your coach is thinking…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu entrenador está pensando…"
+          }
+        }
+      }
+    },
     "Your coach looks at six months of Intervals.icu rides, climbing, power and feedback to explain your strengths and the kind of cyclist you're becoming." : {
       "localizations" : {
         "es" : {
@@ -8233,6 +9010,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu coach necesita atención"
+          }
+        }
+      }
+    },
+    "Your consultation" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu consulta"
           }
         }
       }
@@ -8277,6 +9064,16 @@
         }
       }
     },
+    "Your future cycling sessions will follow this plan. Completed rides stay in your history." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus próximas sesiones de ciclismo seguirán este plan. Las rodadas completadas seguirán en tu historial."
+          }
+        }
+      }
+    },
     "Your goal" : {
       "localizations" : {
         "es" : {
@@ -8297,12 +9094,42 @@
         }
       }
     },
+    "Your plan makes room for CrossFit and keeps your long ride on Sunday." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu plan incluye CrossFit y mantiene la rodada larga el domingo."
+          }
+        }
+      }
+    },
     "Your preparation" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu preparación"
+          }
+        }
+      }
+    },
+    "Your recent rides give us a starting point." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus rodadas recientes nos dan un punto de partida."
+          }
+        }
+      }
+    },
+    "Your recent rides give us a starting point. We can fill in the missing details as we talk." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus rodadas recientes nos dan un punto de partida. Podemos completar los detalles que falten mientras hablamos."
           }
         }
       }
@@ -8343,6 +9170,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu sesión está guardada. El análisis del entrenador aparece en los detalles de la sesión."
+          }
+        }
+      }
+    },
+    "Your starting point" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu punto de partida"
           }
         }
       }

@@ -153,6 +153,7 @@ public struct CoachBrief: Codable, Equatable, Sendable {
         public var longRideWeekday: Int
         public var event: Event?
         public var next7Days: [PlannedRow]
+        public var consultation: PlanConsultation.Details?
 
         public init(_ p: TrainingPlan, today: Day) {
             title = p.title; goal = p.goal.rawValue; startDay = p.startDay.iso; endDay = p.endDay.iso
@@ -160,6 +161,7 @@ public struct CoachBrief: Codable, Equatable, Sendable {
             hoursPerWeek = p.availability.hoursPerWeek
             longRideWeekday = p.availability.longRideWeekday
             event = p.event.map { Event($0, today: today) }
+            consultation = p.consultation
             let horizon = today.adding(days: 7)
             next7Days = p.sessions.filter { $0.day >= today && $0.day <= horizon }.sorted { $0.day < $1.day }.map(PlannedRow.init)
         }
@@ -473,6 +475,9 @@ public enum AICoachPrompt {
         The event being tomorrow is not a reason to impose a below-threshold power ceiling.
         - Individual plannedRoutes describe optional navigation courses for specific days. Use their distance, climbs and altitude \
         as preparation context, while recovery still sets the training ceiling. A GPX course never forces a hard session or guarantees completion. \
+        - For a plan created in consultation, keep confirmed no-cycling dates free. Fit each ride within its planned minutes, \
+        account for other training, and never add intensity on or immediately after a hard non-cycling session. \
+        Use the planned ride as a ceiling and soften it when recovery calls for it.
         - Use the confirmed event course and preparation details: distinguish total elevation gain from absolute altitude; \
         consider climb length/gradient, surface, technical difficulty, expected duration, objective, cutoff, travel, \
         usual training altitude, arrival date and available terrain. Conditions are the athlete's expectations, not a forecast. \
