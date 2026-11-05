@@ -36,10 +36,22 @@ final class BluetoothManager: NSObject {
         var totalDistanceMeters: Int?
         var speedUpdatedAt: Date?
         var distanceUpdatedAt: Date?
-        var updatedAt: Date?
         // A heart-rate packet must not make an old pedaling reading look fresh.
         var wattsUpdatedAt: Date?
         var cadenceUpdatedAt: Date?
+        // Nor a trainer packet a silent or dropped strap's last heart rate.
+        var heartRateUpdatedAt: Date?
+
+        /// A copy without the power, cadence and heart rate readings older than `maxAge`, so a sensor that
+        /// stopped sending shows and records as missing rather than frozen.
+        func fresh(at now: Date, maxAge: TimeInterval = 5) -> Live {
+            func isFresh(_ stamp: Date?) -> Bool { stamp.map { now.timeIntervalSince($0) < maxAge } ?? false }
+            var copy = self
+            if !isFresh(wattsUpdatedAt) { copy.watts = nil }
+            if !isFresh(cadenceUpdatedAt) { copy.cadence = nil }
+            if !isFresh(heartRateUpdatedAt) { copy.heartRate = nil }
+            return copy
+        }
     }
 
     private(set) var isPoweredOn = false
@@ -49,7 +61,7 @@ final class BluetoothManager: NSObject {
     private(set) var live = Live()
     private(set) var ergAcknowledged = false
     private(set) var lastControlError: String?
-    /// Set when a connected trainer drops mid-ride. The ride screen turns this into an alert.
+    /// Time of the last trainer drop, recorded at any time; a ride reacts only to drops after it started.
     var trainerDroppedAt: Date?
 
     private var central: CBCentralManager!
@@ -155,10 +167,11 @@ final class BluetoothManager: NSObject {
 
     /// Tells the trainer the session is over so it drops back to free-ride resistance.
     func releaseControl() {
-        guard let cp = controlPoint, let p = trainerPeripheral else { return }
-        p.writeValue(FTMSControl.stop(), for: cp, type: .withResponse)
+        // Dropped even when the trainer is gone, so a later reconnect never applies the ride's last target.
         lastSentTarget = nil
         pendingTarget = nil
+        guard let cp = controlPoint, let p = trainerPeripheral else { return }
+        p.writeValue(FTMSControl.stop(), for: cp, type: .withResponse)
     }
 
     /// Pauses the trainer's ERG hold without giving up control.
@@ -189,10 +202,24 @@ final class BluetoothManager: NSObject {
 
 extension BluetoothManager: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        let wasPoweredOn = isPoweredOn
         isPoweredOn = central.state == .poweredOn
         if !isPoweredOn {
             isScanning = false
+            // Devices found before the power-off can't be connected; the picker must not offer them.
+            discovered = []
             for role in Role.allCases { connections[role]?.isReady = false }
+            // The links went down without a disconnect callback, so the trainer must grant control and get its target again.
+            controlPoint = nil
+            ergAcknowledged = false
+            lastSentTarget = nil
+        } else if !wasPoweredOn {
+            // Devices still registered when Bluetooth went off get no callback either: connect them again, as after a drop.
+            for p in central.retrievePeripherals(withIdentifiers: Array(Set(connections.values.map(\.id)))) {
+                peripherals[p.identifier] = p
+                p.delegate = self
+                central.connect(p)
+            }
         }
     }
 
@@ -275,6 +302,8 @@ extension BluetoothManager: CBPeripheralDelegate {
                 peripheral.setNotifyValue(true, for: c)
                 connections[.heartRate]?.isReady = true
             case GATT.cyclingPowerMeasurement where connections[.powerMeter]?.id == peripheral.identifier:
+                // A new subscription has no crank reading to compare with; the last one before a reconnect would give a bogus cadence.
+                lastPowerMeasurement = nil
                 peripheral.setNotifyValue(true, for: c)
                 connections[.powerMeter]?.isReady = true
             case GATT.batteryLevel:
@@ -305,12 +334,14 @@ extension BluetoothManager: CBPeripheralDelegate {
             }
             if let s = bike.speedKmh { live.speedKmh = s; live.speedUpdatedAt = Date() }
             if let distance = bike.totalDistanceMeters { live.totalDistanceMeters = distance; live.distanceUpdatedAt = Date() }
-            if connections[.heartRate]?.isReady != true, let hr = bike.heartRate, hr > 0 { live.heartRate = hr }
-            live.updatedAt = Date()
+            if connections[.heartRate]?.isReady != true, let hr = bike.heartRate, hr > 0 {
+                live.heartRate = hr
+                live.heartRateUpdatedAt = now
+            }
         case GATT.heartRateMeasurement:
             guard let hr = HeartRateMeasurement.parse(data) else { return }
             live.heartRate = hr.bpm
-            live.updatedAt = Date()
+            live.heartRateUpdatedAt = Date()
         case GATT.cyclingPowerMeasurement:
             guard let m = CyclingPowerMeasurement.parse(data) else { return }
             let now = Date()
@@ -330,7 +361,6 @@ extension BluetoothManager: CBPeripheralDelegate {
                 }
             }
             lastPowerMeasurement = m
-            live.updatedAt = Date()
         case GATT.fitnessMachineControlPoint:
             guard let r = FTMSControl.parseResponse(data) else { return }
             if r.request == .requestControl {

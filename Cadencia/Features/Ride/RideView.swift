@@ -15,6 +15,8 @@ struct RideView: View {
     @State private var coachMessage: CoachMessage?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .title2) private var hudValueSize = 26.0
+    @ScaledMetric(relativeTo: .subheadline) private var bandLabelHeight = 18.0
+    @ScaledMetric(relativeTo: .title2) private var coachIconWidth = 24.0
 
     private struct CoachMessage: Identifiable {
         let id = UUID()
@@ -29,7 +31,10 @@ struct RideView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     hud
-                    timeline.padding(.top, 12)
+                    WorkoutTimelineStrip(session: session)
+                        .contentShape(Rectangle())
+                        .onTapGesture { showProfile = true }
+                        .padding(.top, 12)
                     Spacer(minLength: 12)
                     targetHero
                     Spacer(minLength: 12)
@@ -200,69 +205,75 @@ struct RideView: View {
 
     // MARK: Timeline
 
-    private struct Cell: Identifiable {
-        let id: Int
-        let step: Int
-        let start: TimeInterval
-        let duration: TimeInterval
-        let intensity: Double
-    }
+    /// The workout timeline with its playhead. It reads only the engine, so it redraws once per tick rather
+    /// than with every sensor packet that redraws the HUD.
+    private struct WorkoutTimelineStrip: View {
+        let session: RideSession
 
-    /// The workout cut into one-minute cells (two past 90 min), coloured by zone; ramps show as stairs.
-    private var cells: [Cell] {
-        var out: [Cell] = []
-        var offset: TimeInterval = 0
-        let size: TimeInterval = engine.workout.totalDuration > 90 * 60 ? 120 : 60
-        for (i, step) in engine.workout.steps.enumerated() {
-            let n = max(1, Int((step.duration / size).rounded(.up)))
-            let d = step.duration / Double(n)
-            for k in 0..<n {
-                out.append(Cell(id: out.count, step: i, start: offset + Double(k) * d, duration: d, intensity: step.intensity(at: (Double(k) + 0.5) * d)))
-            }
-            offset += step.duration
+        private var engine: RideEngine { session.engine }
+
+        private struct Cell: Identifiable {
+            let id: Int
+            let step: Int
+            let start: TimeInterval
+            let duration: TimeInterval
+            let intensity: Double
         }
-        return out
-    }
 
-    private var timeline: some View {
-        VStack(spacing: 6) {
-            GeometryReader { geo in
-                let total = max(engine.workout.totalDuration, 1)
-                let cells = cells
-                let peak = max(cells.map(\.intensity).max() ?? 1, 0.4)
-                let gap: CGFloat = 1.5
-                ZStack(alignment: .bottomLeading) {
-                    HStack(alignment: .bottom, spacing: gap) {
-                        ForEach(cells) { cell in
-                            let past = cell.start + cell.duration <= engine.elapsed
-                            RoundedRectangle(cornerRadius: 1.5)
-                                .fill(past ? Color.white.opacity(0.28) : Zone.color(for: cell.intensity).opacity(cell.step == engine.currentStepIndex ? 1 : 0.75))
-                                .frame(width: max(geo.size.width * CGFloat(cell.duration / total) - gap, 1.5),
-                                       height: max(geo.size.height * CGFloat(cell.intensity / peak), 4))
-                        }
-                    }
-                    .frame(width: geo.size.width, alignment: .leading)
-                    Capsule()
-                        .fill(.white)
-                        .frame(width: 3, height: geo.size.height + 6)
-                        .shadow(color: .white.opacity(0.9), radius: 4)
-                        .offset(x: geo.size.width * CGFloat(engine.progress) - 1.5, y: 3)
+        /// The workout cut into one-minute cells (two past 90 min), coloured by zone; ramps show as stairs.
+        private var cells: [Cell] {
+            var out: [Cell] = []
+            var offset: TimeInterval = 0
+            let size: TimeInterval = engine.workout.totalDuration > 90 * 60 ? 120 : 60
+            for (i, step) in engine.workout.steps.enumerated() {
+                let n = max(1, Int((step.duration / size).rounded(.up)))
+                let d = step.duration / Double(n)
+                for k in 0..<n {
+                    out.append(Cell(id: out.count, step: i, start: offset + Double(k) * d, duration: d, intensity: step.intensity(at: (Double(k) + 0.5) * d)))
                 }
+                offset += step.duration
             }
-            .frame(height: 26)
-            HStack {
-                Text("Block \(blockNumber) of \(engine.workout.steps.count)")
-                Spacer()
-                Text("\(Format.countdown(engine.remainingTotal)) left")
-            }
-            .font(.footnote).foregroundStyle(.secondary)
+            return out
         }
-        .contentShape(Rectangle())
-        .onTapGesture { showProfile = true }
-    }
 
-    private var blockNumber: Int {
-        min((engine.currentStepIndex ?? engine.workout.steps.count - 1) + 1, engine.workout.steps.count)
+        var body: some View {
+            VStack(spacing: 6) {
+                GeometryReader { geo in
+                    let total = max(engine.workout.totalDuration, 1)
+                    let cells = cells
+                    let peak = max(cells.map(\.intensity).max() ?? 1, 0.4)
+                    let gap: CGFloat = 1.5
+                    ZStack(alignment: .bottomLeading) {
+                        HStack(alignment: .bottom, spacing: gap) {
+                            ForEach(cells) { cell in
+                                let past = cell.start + cell.duration <= engine.elapsed
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(past ? Color.white.opacity(0.28) : Zone.color(for: cell.intensity).opacity(cell.step == engine.currentStepIndex ? 1 : 0.75))
+                                    .frame(width: max(geo.size.width * CGFloat(cell.duration / total) - gap, 1.5),
+                                           height: max(geo.size.height * CGFloat(cell.intensity / peak), 4))
+                            }
+                        }
+                        .frame(width: geo.size.width, alignment: .leading)
+                        Capsule()
+                            .fill(.white)
+                            .frame(width: 3, height: geo.size.height + 6)
+                            .shadow(color: .white.opacity(0.9), radius: 4)
+                            .offset(x: geo.size.width * CGFloat(engine.progress) - 1.5, y: 3)
+                    }
+                }
+                .frame(height: 26)
+                HStack {
+                    Text("Block \(blockNumber) of \(engine.workout.steps.count)")
+                    Spacer()
+                    Text("\(Format.countdown(engine.remainingTotal)) left")
+                }
+                .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+
+        private var blockNumber: Int {
+            min((engine.currentStepIndex ?? engine.workout.steps.count - 1) + 1, engine.workout.steps.count)
+        }
     }
 
     // MARK: Target
@@ -300,7 +311,7 @@ struct RideView: View {
             toleranceBand.padding(.top, 10)
             HStack(spacing: 6) {
                 Text(zoneText).foregroundStyle(powerTint).fontWeight(.semibold)
-                if let inZone = inZonePercent {
+                if let inZone = session.blockInZonePercent {
                     Text("·").foregroundStyle(.secondary)
                     Text("\(inZone) % of block").foregroundStyle(.secondary)
                 }
@@ -322,14 +333,17 @@ struct RideView: View {
     private func intensityButton(_ title: LocalizedStringKey, symbol: String, delta: Double, disabled: Bool) -> some View {
         VStack(spacing: 4) {
             Button { session.adjustIntensity(by: delta) } label: {
-                Image(systemName: symbol)
+                Label(title, systemImage: symbol)
+                    .labelStyle(.iconOnly)
                     .font(.title2.weight(.semibold))
                     .frame(width: 56, height: 56)
             }
             .buttonStyle(.bordered)
             .buttonBorderShape(.circle)
             .disabled(disabled)
+            // The button already carries the title for VoiceOver.
             Text(title).font(.caption).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
         }
         .frame(width: 72)
     }
@@ -378,10 +392,12 @@ struct RideView: View {
                     }
                 }
                 .font(.subheadline.monospacedDigit())
+                // A three-digit value shrinks inside its 60-pt slot instead of wrapping at accessibility sizes.
+                .lineLimit(1).minimumScaleFactor(0.5)
                 .offset(y: bandH + 6)
             }
         }
-        .frame(height: 36 + 6 + 18)
+        .frame(height: 36 + 6 + bandLabelHeight)
         .animation(.easeOut(duration: 0.4), value: live.watts)
     }
 
@@ -392,12 +408,6 @@ struct RideView: View {
         if ratio > 1 + tolerance { return "Too hard" }
         if ratio < 1 - tolerance { return "Too easy" }
         return "In zone"
-    }
-
-    /// Share of this block's seconds so far spent inside the zone.
-    private var inZonePercent: Int? {
-        guard let i = engine.currentStepIndex, engine.elapsedInStep >= 10 else { return nil }
-        return RideCommentary.BlockStats.compute(index: i, workout: engine.workout, ftp: engine.ftp, samples: engine.recording.samples, upTo: engine.elapsed).inZonePercent
     }
 
     /// Green inside the zone, orange above, blue below. Red above the ceiling.
@@ -466,21 +476,6 @@ struct RideView: View {
 
     // MARK: Sparkline
 
-    private struct Point: Identifiable {
-        let id: Int        // seconds ago, 0…120
-        let watts: Int
-        let target: Int?
-    }
-
-    /// The last two minutes of 1 Hz samples, x = seconds ago (120 → 0).
-    private var recent: [Point] {
-        let samples = engine.recording.samples.suffix(120)
-        let n = samples.count
-        return samples.enumerated().compactMap { k, s in
-            s.watts.map { Point(id: n - 1 - k, watts: $0, target: s.targetWatts) }
-        }
-    }
-
     private var sparkline: some View {
         VStack(spacing: 4) {
             HStack {
@@ -488,50 +483,72 @@ struct RideView: View {
                 Spacer()
                 Text(live.watts.map { "\($0) W" } ?? "–").font(.callout.weight(.semibold).monospacedDigit()).foregroundStyle(powerTint)
             }
-            powerChart
+            PowerSparklineChart(session: session)
         }
     }
 
-    private var yMax: Int {
-        let peak = engine.workout.steps.map { max($0.startIntensity, $0.endIntensity) }.max() ?? 1
-        let planned = Double(engine.ftp) * peak * engine.intensityScale
-        let seen = Double(recent.map(\.watts).max() ?? 0)
-        return Int((max(planned, seen, 100) * 1.15 / 20).rounded(.up)) * 20
-    }
+    /// The last two minutes of recorded power. It reads only the engine, so the chart redraws once per tick
+    /// rather than with every sensor packet that redraws the HUD.
+    private struct PowerSparklineChart: View {
+        let session: RideSession
 
-    private var powerChart: some View {
-        let points = recent
-        return Chart {
-            ForEach(points) { p in
-                AreaMark(x: .value("Ago", -p.id), y: .value("W", p.watts))
-                    .foregroundStyle(LinearGradient(colors: [.green.opacity(0.45), .green.opacity(0.02)], startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.monotone)
-                LineMark(x: .value("Ago", -p.id), y: .value("W", p.watts))
-                    .foregroundStyle(.green)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
-                    .interpolationMethod(.monotone)
-            }
-            if let target = engine.targetWatts {
-                RuleMark(y: .value("Target", target))
-                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .foregroundStyle(.white.opacity(0.35))
-            }
-            if let last = points.last {
-                PointMark(x: .value("Ago", -last.id), y: .value("W", last.watts))
-                    .foregroundStyle(.green)
-                    .symbolSize(50)
+        private var engine: RideEngine { session.engine }
+
+        private struct Point: Identifiable {
+            let id: Int        // seconds ago, 0…120
+            let watts: Int
+            let target: Int?
+        }
+
+        /// The last two minutes of 1 Hz samples, x = seconds ago (120 → 0).
+        private var recent: [Point] {
+            let samples = engine.recording.samples.suffix(120)
+            let n = samples.count
+            return samples.enumerated().compactMap { k, s in
+                s.watts.map { Point(id: n - 1 - k, watts: $0, target: s.targetWatts) }
             }
         }
-        .chartXScale(domain: -120...0)
-        .chartYScale(domain: 0...yMax)
-        .chartXAxis(.hidden)
-        .chartYAxis {
-            AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3])).foregroundStyle(.white.opacity(0.12))
-                AxisValueLabel().font(.caption2).foregroundStyle(.tertiary)
-            }
+
+        private func yMax(seen: Int) -> Int {
+            let peak = engine.workout.steps.map { max($0.startIntensity, $0.endIntensity) }.max() ?? 1
+            let planned = Double(engine.ftp) * peak * engine.intensityScale
+            return Int((max(planned, Double(seen), 100) * 1.15 / 20).rounded(.up)) * 20
         }
-        .frame(height: 72)
+
+        var body: some View {
+            let points = recent
+            Chart {
+                ForEach(points) { p in
+                    AreaMark(x: .value("Ago", -p.id), y: .value("W", p.watts))
+                        .foregroundStyle(LinearGradient(colors: [.green.opacity(0.45), .green.opacity(0.02)], startPoint: .top, endPoint: .bottom))
+                        .interpolationMethod(.monotone)
+                    LineMark(x: .value("Ago", -p.id), y: .value("W", p.watts))
+                        .foregroundStyle(.green)
+                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .interpolationMethod(.monotone)
+                }
+                if let target = engine.targetWatts {
+                    RuleMark(y: .value("Target", target))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                if let last = points.last {
+                    PointMark(x: .value("Ago", -last.id), y: .value("W", last.watts))
+                        .foregroundStyle(.green)
+                        .symbolSize(50)
+                }
+            }
+            .chartXScale(domain: -120...0)
+            .chartYScale(domain: 0...yMax(seen: points.map(\.watts).max() ?? 0))
+            .chartXAxis(.hidden)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { _ in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3])).foregroundStyle(.white.opacity(0.12))
+                    AxisValueLabel().font(.caption2).foregroundStyle(.tertiary)
+                }
+            }
+            .frame(height: 72)
+        }
     }
 
     // MARK: Coach
@@ -545,8 +562,8 @@ struct RideView: View {
                 HStack(alignment: .center, spacing: 10) {
                     Image(systemName: commentator.caption.map { moodSymbol($0.line.mood) } ?? "waveform")
                         .foregroundStyle(commentator.caption.map { moodTint($0.line.mood) } ?? .secondary)
-                        .font(.system(size: 22))
-                        .frame(width: 24)
+                        .font(.title2)
+                        .frame(width: coachIconWidth)
                         .symbolEffect(.variableColor.iterative, isActive: commentator.thinking)
                     if let caption = commentator.caption {
                         Text(caption.line.caption)
@@ -559,7 +576,7 @@ struct RideView: View {
                     Spacer(minLength: 0)
                     if commentator.caption != nil {
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
                     }
                 }

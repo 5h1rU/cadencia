@@ -21,6 +21,14 @@ struct PlanView: View {
         }
     }
 
+    /// Session rows push values, not views: a pushed screen stays when its row changes branch or goes away
+    /// (the coach decides today, a sync completes it, the coach turns a day into rest).
+    private enum Route: Hashable {
+        case debrief(UUID)
+        case todayWorkout
+        case route(Day)
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -57,13 +65,23 @@ struct PlanView: View {
                     } description: {
                         Text("Tell your coach what you want from your riding. We’ll shape a plan around your history, your week and the training you want to include.")
                     } actions: {
-                        Button(model.state.planConsultation == nil ? "Create a plan" : "Continue consultation") { creating = true }
+                        // Only the athlete's own answers make it a consultation to continue; an unanswered
+                        // opening question is asked again.
+                        Button(model.state.planConsultation?.messages.contains(where: { $0.role == .athlete }) == true
+                               ? "Continue consultation" : "Create a plan") { creating = true }
                             .buttonStyle(.borderedProminent)
                     }
                 }
             }
             .navigationTitle("Plan")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: Route.self) { route in
+                switch route {
+                case .debrief(let id): RideDebriefView(rideID: id)
+                case .todayWorkout: TodayWorkoutDestination()
+                case .route(let day): PlannedRideRouteView(day: day)
+                }
+            }
             .toolbar {
                 if model.state.plan != nil {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -95,16 +113,13 @@ struct PlanView: View {
         Section {
             ForEach(sessions) { s in
                 if let ride = model.completedRide(for: s) {
-                    NavigationLink { RideDebriefView(rideID: ride.id) } label: {
+                    NavigationLink(value: Route.debrief(ride.id)) {
                         SessionRow(session: s, isToday: s.day == model.today)
                     }
-                } else if s.day == model.today, let w = model.todayWorkout, let ftp = model.workingFTP {
-                    NavigationLink {
-                        WorkoutDetailView(workout: model.todayRideLocation == .outdoor ? (model.outdoorWorkout?.workout ?? w) : w,
-                                          ftp: model.todayRideLocation == .outdoor ? (model.outdoorFTP ?? ftp) : ftp)
-                    } label: { SessionRow(session: s, isToday: true) }
+                } else if s.day == model.today, model.todayWorkout != nil, model.workingFTP != nil {
+                    NavigationLink(value: Route.todayWorkout) { SessionRow(session: s, isToday: true) }
                 } else {
-                    NavigationLink { PlannedRideRouteView(day: s.day) } label: {
+                    NavigationLink(value: Route.route(s.day)) {
                         SessionRow(session: s, isToday: s.day == model.today)
                     }
                 }

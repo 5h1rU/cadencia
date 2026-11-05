@@ -7,9 +7,11 @@ import CadenciaCore
 struct CoachView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    /// Created once here and handed to the composer, which owns the draft: a child's `@State` default
+    /// value would be rebuilt every time this view re-renders.
     @State private var speech = SpeechRecognizer()
-    @State private var draft = ""
-    @FocusState private var composing: Bool
+    @State private var didScrollInitially = false
+    @State private var confirmClear = false
 
     var body: some View {
         NavigationStack {
@@ -42,16 +44,27 @@ struct CoachView: View {
                     .listStyle(.plain)
                     .scrollDismissesKeyboard(.interactively)
                     .onChange(of: model.state.coachMessages.count) { _, _ in
-                        if let last = model.state.coachMessages.last { withAnimation { proxy.scrollTo(last.id, anchor: .bottom) } }
+                        withAnimation { scrollToLatest(proxy) }
+                    }
+                    .onChange(of: model.coachBusy) { _, busy in
+                        if busy { withAnimation { scrollToLatest(proxy) } }
+                    }
+                    // Opens at the latest message the first time the tab is shown; later visits keep the
+                    // reader's position.
+                    .task {
+                        guard !didScrollInitially else { return }
+                        didScrollInitially = true
+                        scrollToLatest(proxy)
                     }
                 }
-                composer
+                CoachComposer(speech: speech)
             }
             .navigationTitle("Coach")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("Clear conversation", systemImage: "trash", role: .destructive) { model.clearCoachHistory() }
+                        Button("Clear conversation", systemImage: "trash", role: .destructive) { confirmClear = true }
+                            .disabled(model.state.coachMessages.isEmpty)
                         switch model.coachSource {
                         case .chatGPTPlan:
                             Label("Using ChatGPT plan · \(model.state.settings.llmModel)", systemImage: "sparkles")
@@ -61,13 +74,15 @@ struct CoachView: View {
                         case nil:
                             Label("No coach connected", systemImage: "exclamationmark.triangle")
                         }
-                    } label: { Image(systemName: "ellipsis.circle") }
+                    } label: {
+                        Label("Coach options", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
+                    }
                 }
             }
-            .onChange(of: speech.status) { old, new in
-                if old == .listening || old == .finishing, new != .listening && new != .finishing, !speech.transcript.isEmpty {
-                    draft = speech.transcript
-                }
+            .confirmationDialog("Clear this conversation?", isPresented: $confirmClear, titleVisibility: .visible) {
+                Button("Clear conversation", role: .destructive) { model.clearCoachHistory() }
+            } message: {
+                Text("Suggestions you haven't applied are removed. Changes you already applied stay.")
             }
             .onChange(of: scenePhase) { _, phase in if phase == .background { speech.stop() } }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { note in
@@ -79,15 +94,43 @@ struct CoachView: View {
         }
     }
 
-    private var composer: some View {
+    /// Brings the newest thing into view: the "Thinking…" row while a reply is pending, else the last message.
+    private func scrollToLatest(_ proxy: ScrollViewProxy) {
+        if model.coachBusy {
+            proxy.scrollTo("busy", anchor: .bottom)
+        } else if let last = model.state.coachMessages.last {
+            proxy.scrollTo(last.id, anchor: .bottom)
+        }
+    }
+}
+
+/// The message field, the voice button and the coach's status lines. A view of its own, so typing and
+/// live transcripts re-render only the composer, not the conversation. It never reads `model.state`.
+private struct CoachComposer: View {
+    @Environment(AppModel.self) private var model
+    let speech: SpeechRecognizer
+    @State private var draft = ""
+    @FocusState private var composing: Bool
+
+    var body: some View {
         VStack(spacing: 8) {
             if let issue = model.coachIssue {
                 CoachIssueBanner(issue: issue) { model.dismissCoachIssue() }
                     .padding(.horizontal)
-                    .padding(.top, 8)
             }
             if let notice = model.coachNotice {
                 Text(notice).font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
+            }
+            // A chat reply has its own "Thinking…" row; this explains why the apply buttons wait meanwhile.
+            if model.coachThinking, !model.coachBusy {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("The coach is reading your data…")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal)
+                .accessibilityElement(children: .combine)
             }
             if speech.status == .preparing {
                 ProgressView("Preparing voice input…").padding(.horizontal)
@@ -110,15 +153,19 @@ struct CoachView: View {
                 Text("Voice input isn’t available right now. You can still type your answer.").font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
             }
             HStack(spacing: 12) {
+                // Stops (or, while preparing, cancels) any capture; a new one can't start during a reply.
                 Button {
-                    if speech.isListening { speech.stop() } else { Task { await speech.start() } }
+                    if speech.isCapturing { speech.stop() } else { Task { await speech.start() } }
                 } label: {
-                    Image(systemName: speech.isListening ? "stop.circle.fill" : "mic.circle.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(speech.isListening ? .red : Color.accentColor)
+                    Label(micTitle, systemImage: speech.isCapturing ? "stop.circle.fill" : "mic.circle.fill")
+                        .labelStyle(.iconOnly)
+                        .font(.largeTitle)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(.rect)
                 }
-                .disabled(speech.status == .preparing || speech.status == .finishing || model.coachBusy)
-                .accessibilityLabel(speech.isListening ? "Stop listening" : "Record a voice note")
+                .buttonStyle(.borderless)
+                .tint(speech.isListening ? Color.red : Color.accentColor)
+                .disabled(speech.status == .finishing || (model.coachBusy && !speech.isCapturing))
                 TextField("Message the coach", text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.roundedBorder)
@@ -126,19 +173,33 @@ struct CoachView: View {
                     .disabled(speech.isCapturing)
                     .onSubmit(send)
                 Button(action: send) {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 30))
+                    Label("Send", systemImage: "arrow.up.circle.fill")
+                        .labelStyle(.iconOnly)
+                        .font(.largeTitle)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(.rect)
                 }
+                .buttonStyle(.borderless)
                 .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.coachBusy || speech.isCapturing)
-                .accessibilityLabel("Send")
             }
             .padding(.horizontal)
-            .padding(.bottom, 8)
         }
+        // Even insets, so a status line never sits on the bar's top edge.
+        .padding(.vertical, 8)
         .background(.bar)
+        .onChange(of: speech.status) { old, new in
+            if old == .listening || old == .finishing, new != .listening && new != .finishing, !speech.transcript.isEmpty {
+                draft = speech.transcript
+            }
+        }
     }
 
+    private var micTitle: LocalizedStringKey { speech.isCapturing ? "Stop listening" : "Record a voice note" }
+
     private func send() {
-        guard !speech.isCapturing else { return }
+        // `.onSubmit` ignores Send's disabled state. Never clear a draft the coach would drop (a reply in flight).
+        guard !speech.isCapturing, !model.coachBusy,
+              !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         let text = draft
         draft = ""
         Task { await model.sendToCoach(text) }
@@ -152,6 +213,7 @@ struct CoachIssueBanner: View {
     let issue: AppModel.CoachIssue
     let dismiss: () -> Void
     @State private var signingIn = false
+    @State private var signInError: String?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -165,22 +227,34 @@ struct CoachIssueBanner: View {
                         Link("Manage usage", destination: ChatGPTAuth.usageSettingsURL).buttonStyle(.borderedProminent).controlSize(.small)
                     case .signInAgain:
                         Button {
+                            guard !signingIn else { return }
                             signingIn = true
-                            Task { defer { signingIn = false }; try? await model.signInWithChatGPT() }
+                            Task {
+                                defer { signingIn = false }
+                                do { try await model.signInWithChatGPT() }
+                                catch ChatGPTSignIn.Failure.cancelled {}
+                                catch { signInError = error.localizedDescription }
+                            }
                         } label: {
-                            if signingIn { ProgressView() } else { Text("Continue with ChatGPT") }
+                            // The title keeps the pill's width while the spinner shows.
+                            Text("Continue with ChatGPT")
+                                .opacity(signingIn ? 0 : 1)
+                                .overlay { if signingIn { ProgressView() } }
                         }
                         .buttonStyle(.borderedProminent).controlSize(.small).disabled(signingIn)
                     case .notEligible:
                         EmptyView()
                     }
-                    Button("Dismiss", action: dismiss).controlSize(.small)
+                    Button("Dismiss", action: dismiss).buttonStyle(.bordered).controlSize(.small)
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(12)
         .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        .alert("Could not sign in", isPresented: Binding(get: { signInError != nil }, set: { if !$0 { signInError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(signInError ?? "") }
     }
 
     private var symbol: String {
@@ -246,6 +320,8 @@ struct UnderstoodCard: View {
     let apply: () -> Void
 
     var body: some View {
+        // Read once per render: for today's proposal it checks the coach brief's fingerprint.
+        let unavailable = requestUnavailable
         VStack(alignment: .leading, spacing: 6) {
             Text("What I understood").font(.caption).foregroundStyle(.secondary).textCase(.uppercase)
             if let e = intent.event {
@@ -277,13 +353,16 @@ struct UnderstoodCard: View {
                             Text("\(Format.minutes(proposal.prescription.workout.totalDuration)) · \(proposal.prescription.workout.estimatedLoad) TSS")
                                 .foregroundStyle(.secondary)
                         }
+                        .contentShape(.rect)
                     }
+                    // Only the link navigates; a default-styled link would take over the whole chat row.
+                    .buttonStyle(.borderless)
                 } else if request.day > model.today {
                     Text(request.instructions)
                     Text("The coach will build this workout from your recovery on that day.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
-                if requestUnavailable, !applied {
+                if unavailable, !applied {
                     Text("Your training context changed. Ask the coach for an updated workout preview.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
@@ -293,7 +372,7 @@ struct UnderstoodCard: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(applied || busy || requestUnavailable || !intent.needsClarification.isEmpty)
+            .disabled(applied || busy || unavailable || !intent.needsClarification.isEmpty)
             .padding(.top, 4)
         }
         .font(.subheadline)

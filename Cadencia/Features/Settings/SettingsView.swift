@@ -55,6 +55,7 @@ struct SettingsView: View {
 struct AccountView: View {
     @Environment(AppModel.self) private var model
     @State private var confirmSignOut = false
+    @State private var signingOut = false
 
     var body: some View {
         List {
@@ -74,14 +75,27 @@ struct AccountView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                Button("Sign out", role: .destructive) { confirmSignOut = true }
+                // An OAuth sign-out waits for Intervals to disconnect the app before the account clears.
+                Button(role: .destructive) { confirmSignOut = true } label: {
+                    // An HStack, not LabeledContent: a LabeledContent title stays full strength while disabled.
+                    HStack {
+                        Text("Sign out")
+                        Spacer()
+                        if signingOut { ProgressView() }
+                    }
+                }
+                .disabled(signingOut)
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Account")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Sign out of Intervals.icu?", isPresented: $confirmSignOut, titleVisibility: .visible) {
-            Button("Sign out", role: .destructive) { Task { await model.signOut() } }
+            Button("Sign out", role: .destructive) {
+                guard !signingOut else { return }
+                signingOut = true
+                Task { await model.signOut(); signingOut = false }
+            }
         } message: {
             if model.pendingUploads.isEmpty { Text("Rides already in Intervals are unaffected.") }
             else { Text("\(model.pendingUploads.count) pending uploads are kept and resume when you reconnect this athlete.") }
@@ -111,7 +125,7 @@ struct SyncView: View {
                     let ride = model.state.rideIndex.first { $0.id == e.rideID }
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(ride?.name ?? "Ride")
+                            Text(ride?.name ?? String(localized: "Ride"))
                             HStack(spacing: 4) {
                                 if let ride { Text(ride.startedAt, style: .date) }
                                 Text("·")
@@ -131,12 +145,18 @@ struct SyncView: View {
                 Text("A ride is saved here first, then sent to Intervals. “Checking” means the request went out but no answer came back; it is matched by id before any retry, so nothing is uploaded twice.")
             }
             Section {
+                // An explicit retry skips the backoff; parked (needs reconnect) uploads never count.
                 Button {
-                    Task { await model.runUploads() }
+                    Task { await model.runUploads(force: true) }
                 } label: {
-                    HStack { if model.isUploading { ProgressView() }; Text("Retry now") }
+                    // An HStack, not LabeledContent, so the title greys out with the button and the spinner trails.
+                    HStack {
+                        Text("Retry now")
+                        Spacer()
+                        if model.isUploading { ProgressView() }
+                    }
                 }
-                .disabled(model.isUploading || model.pendingUploads.isEmpty)
+                .disabled(model.isUploading || !model.canRetryUploads)
             }
         }
         .listStyle(.insetGrouped)
@@ -215,12 +235,21 @@ struct CoachSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var key = ""
     @State private var endpoint = ""
+    /// The fields as last loaded or saved (the key masked when one exists), so Save and onAppear know what was edited.
+    @State private var savedKey = ""
+    @State private var savedEndpoint = ""
+    @FocusState private var focusedField: Field?
     @State private var signingIn = false
     @State private var signInError: String?
     @State private var availableModels: [LLMCoach.Model] = []
-    @State private var loadingModels = false
     @State private var modelsError: String?
+    /// Bumped by Save and Reload models to load the list again.
+    @State private var modelsReload = 0
+    /// The `modelsTaskID` whose load finished. Until it matches, the Model row shows a spinner.
+    @State private var loadedModelsID: String?
     @State private var confirmSignOut = false
+
+    private enum Field { case key, endpoint }
 
     var body: some View {
         @Bindable var model = model
@@ -232,22 +261,27 @@ struct CoachSettingsView: View {
                 Text(currentSource)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Button("Save") {
-                    if key != Self.maskedKey { model.setLLMKey(key) }
-                    model.updateSettings {
-                        if let url = URL(string: endpoint), url.scheme?.hasPrefix("http") == true { $0.llmEndpoint = url }
-                    }
-                    Task { await loadModels() }
-                }
+                Button("Save") { save() }
+                    .disabled(!hasChanges || endpointURL == nil)
             }
         }
         .navigationTitle("Coach")
         .navigationBarTitleDisplayMode(.inline)
+        // The sign-in ends after the browser sheet closes (the token exchange), and the welcome sheet is
+        // presented from this screen: leaving it then would lose the one-time welcome. Also blocks swipe-back.
+        .navigationBarBackButtonHidden(signingIn)
         .onAppear {
-            endpoint = model.state.settings.llmEndpoint.absoluteString
-            key = model.hasLLMKey ? Self.maskedKey : ""
+            // Coming back from the Model picker must not wipe unsaved edits. Untouched fields reload, so this
+            // screen left open in another tab never offers to save back what was changed there.
+            guard key == savedKey, endpoint == savedEndpoint else { return }
+            loadFields()
         }
-        .task(id: "\(model.chatGPT?.accessToken ?? "")|\(model.coachSource.debugDescription)") { await loadModels() }
+        .task(id: modelsTaskID) {
+            // Coming back from the Model picker restarts the task; a finished list is not loaded again.
+            let id = modelsTaskID
+            guard loadedModelsID != id else { return }
+            await loadModels(id)
+        }
         .alert("Could not sign in", isPresented: Binding(get: { signInError != nil }, set: { if !$0 { signInError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(signInError ?? "") }
@@ -274,7 +308,9 @@ struct CoachSettingsView: View {
                     Label("Plan usage not enabled", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
                     signInButton("Enable ChatGPT plan usage", requestPlanUsage: true)
                 }
+                // A re-consent that is still exchanging tokens would sign the account straight back in.
                 Button("Sign out of ChatGPT", role: .destructive) { confirmSignOut = true }
+                    .disabled(signingIn)
             } header: {
                 Text("ChatGPT")
             } information: {
@@ -293,6 +329,7 @@ struct CoachSettingsView: View {
 
     private func signInButton(_ title: LocalizedStringKey, requestPlanUsage: Bool) -> some View {
         Button {
+            guard !signingIn else { return }
             signingIn = true
             Task {
                 defer { signingIn = false }
@@ -301,22 +338,26 @@ struct CoachSettingsView: View {
                 catch { signInError = error.localizedDescription }
             }
         } label: {
-            HStack {
-                Spacer()
-                if signingIn { ProgressView().tint(Color(.systemBackground)) } else { Image(systemName: "bubble.left.and.text.bubble.right.fill") }
-                Text(title).fontWeight(.semibold)
-                Spacer()
-            }
-            .foregroundStyle(Color(.systemBackground))
-            .padding(.vertical, 6)
+            // The title stays in place while busy so the button keeps its size; the spinner takes the
+            // button's `.primary` tint, readable on the grey disabled fill, and .regular stops it inheriting .large.
+            Label(title, systemImage: "bubble.left.and.text.bubble.right.fill")
+                .labelStyle(.titleAndIcon)
+                .font(.headline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(Color(.systemBackground))
+                .opacity(signingIn ? 0 : 1)
+                .overlay { if signingIn { ProgressView().controlSize(.regular) } }
+                .frame(maxWidth: .infinity)
         }
         // Black on white in light mode, white on black in dark: `.primary` flips with the appearance,
         // so the button never disappears into a dark list background.
         .buttonStyle(.borderedProminent)
+        .controlSize(.large)
         .tint(.primary)
         .disabled(signingIn)
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+        .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
         .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
     }
 
     // MARK: Model
@@ -324,7 +365,9 @@ struct CoachSettingsView: View {
     private var modelSection: some View {
         InfoSection {
             if loadingModels {
-                HStack { Text("Model"); Spacer(); ProgressView() }
+                LabeledContent("Model") {
+                    HStack { Text(model.state.settings.llmModel); ProgressView() }
+                }
             } else if !availableModels.isEmpty {
                 Picker("Model", selection: Binding(get: { model.state.settings.llmModel }, set: { model.setCoachModel($0) })) {
                     ForEach(availableModels) { m in
@@ -344,7 +387,7 @@ struct CoachSettingsView: View {
                 if let modelsError {
                     Label(modelsError, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.secondary)
                 }
-                Button("Reload models", systemImage: "arrow.clockwise") { Task { await loadModels() } }
+                Button("Reload models", systemImage: "arrow.clockwise") { modelsReload += 1 }
                     .disabled(model.coachSource == nil)
             }
         } header: {
@@ -358,17 +401,36 @@ struct CoachSettingsView: View {
         }
     }
 
-    private func loadModels() async {
-        guard model.coachSource != nil else { availableModels = []; modelsError = nil; return }
-        loadingModels = true
-        defer { loadingModels = false }
+    /// Keyed on the account, its plan consent, the coach source and Save/Reload, not on the access token:
+    /// a token refresh during the load must not cancel and restart it.
+    private var modelsTaskID: String {
+        [model.chatGPT?.subject ?? "", String(model.chatGPT?.planUsageEnabled == true),
+         String(describing: model.coachSource), String(modelsReload)].joined(separator: "|")
+    }
+
+    /// True until the list for the current inputs has arrived, so a fresh screen never flashes Reload models.
+    private var loadingModels: Bool { model.coachSource != nil && loadedModelsID != modelsTaskID }
+
+    private func loadModels(_ id: String) async {
+        guard model.coachSource != nil else { availableModels = []; modelsError = nil; loadedModelsID = id; return }
         do {
-            availableModels = try await model.listCoachModels()
-            modelsError = availableModels.isEmpty ? String(localized: "Your account returned no models.") : nil
+            let models = try await model.listCoachModels()
+            // A list for the current inputs is kept even if the screen stopped waiting for it.
+            guard modelsTaskID == id else { return }
+            availableModels = models
+            modelsError = models.isEmpty ? String(localized: "Your account returned no models.") : nil
         } catch {
-            availableModels = []
-            modelsError = error.localizedDescription
+            // Cancelled or superseded: change nothing. The task for the current inputs loads again.
+            guard !Task.isCancelled, modelsTaskID == id else { return }
+            if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                // A cancellation this screen did not ask for is not an error: keep the list, stop the spinner.
+                modelsError = nil
+            } else {
+                availableModels = []
+                modelsError = error.localizedDescription
+            }
         }
+        loadedModelsID = id
     }
 
     // MARK: API key
@@ -379,10 +441,14 @@ struct CoachSettingsView: View {
                 .textContentType(.password)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .focused($focusedField, equals: .key)
             TextField("Endpoint", text: $endpoint)
                 .keyboardType(.URL)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .focused($focusedField, equals: .endpoint)
+                // Red while it is not an http(s) URL; Save stays disabled until it is.
+                .foregroundStyle(endpointURL == nil ? Color.red : Color.primary)
         } header: {
             Text("API key (alternative)")
         } information: {
@@ -390,6 +456,35 @@ struct CoachSettingsView: View {
                  ? "Used only if you sign out of ChatGPT. Any OpenAI-compatible chat completions endpoint."
                  : "Any OpenAI-compatible chat completions endpoint. The key is stored in the Keychain and only ever sent to this endpoint, together with your recovery data, your plan and your words.")
         }
+    }
+
+    /// The endpoint field as an http(s) URL with a host; nil while it is not one.
+    private var endpointURL: URL? {
+        let text = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        // `https://:443/v1` parses with an empty host, so the host must also be non-empty.
+        guard let url = URL(string: text), let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https", url.host()?.isEmpty == false else { return nil }
+        return url
+    }
+
+    private var hasChanges: Bool { key != savedKey || endpointURL != model.state.settings.llmEndpoint }
+
+    /// Saves only what changed, closes the keyboard and re-masks the key, so Save greys out at once.
+    private func save() {
+        guard hasChanges, let url = endpointURL else { return }
+        focusedField = nil
+        if key != savedKey { model.setLLMKey(key) }
+        if url != model.state.settings.llmEndpoint { model.updateSettings { $0.llmEndpoint = url } }
+        loadFields()
+        modelsReload += 1
+    }
+
+    /// Shows what is saved: the stored endpoint, and the masked key when one exists.
+    private func loadFields() {
+        endpoint = model.state.settings.llmEndpoint.absoluteString
+        key = model.hasLLMKey ? Self.maskedKey : ""
+        savedKey = key
+        savedEndpoint = endpoint
     }
 
     private var currentSource: String {
@@ -408,28 +503,41 @@ struct ChatGPTWelcomeView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 20) {
-            Spacer()
-            Image(systemName: "bubble.left.and.text.bubble.right.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(.primary)
-            Text("You're using your ChatGPT plan")
-                .font(.title2.bold())
-                .multilineTextAlignment(.center)
-            Text("Eligible coach requests in Cadencia use your ChatGPT plan. You can review and manage usage in ChatGPT settings at any time.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
-            Link("Manage usage", destination: ChatGPTAuth.usageSettingsURL)
+        // Scrolls (and can grow to .large) so the notice is never cut off by Dynamic Type or longer copy.
+        ScrollView {
+            VStack(spacing: 20) {
+                Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                    .font(.system(size: 56))
+                    .foregroundStyle(.primary)
+                    .accessibilityHidden(true)
+                Text("You're using your ChatGPT plan")
+                    .font(.title2.bold())
+                    .multilineTextAlignment(.center)
+                Text("Eligible coach requests in Cadencia use your ChatGPT plan. You can review and manage usage in ChatGPT settings at any time.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+                Link(destination: ChatGPTAuth.usageSettingsURL) {
+                    Text("Manage usage")
+                        .frame(minHeight: 44)
+                        .contentShape(.rect)
+                }
                 .font(.subheadline)
-            Spacer()
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .safeAreaInset(edge: .bottom) {
             Button { dismiss() } label: {
-                Text("Got it").fontWeight(.semibold).frame(maxWidth: .infinity).padding(.vertical, 6)
+                Text("Got it").font(.headline).frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .padding()
+            .background(.bar)
         }
-        .padding(24)
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 }
@@ -449,7 +557,7 @@ struct RidePreferencesView: View {
             InfoSection {
                 Toggle("Coach voice", isOn: Binding(get: { model.state.settings.rideVoice }, set: { on in model.updateSettings { $0.rideVoice = on } }))
                 Toggle("Captions", isOn: Binding(get: { model.state.settings.rideCaptions }, set: { on in model.updateSettings { $0.rideCaptions = on } }))
-                if model.openAISpeech != nil {
+                if model.hasOpenAISpeech {
                     Picker("Voice", selection: Binding(get: { model.state.settings.coachVoice }, set: { v in model.updateSettings { $0.coachVoice = v } })) {
                         ForEach(CoachVoice.options) { option in
                             VStack(alignment: .leading) {
@@ -466,7 +574,7 @@ struct RidePreferencesView: View {
             } header: {
                 Text("Coach during rides")
             } information: {
-                if model.openAISpeech != nil {
+                if model.hasOpenAISpeech {
                     Text("At the start of each block, halfway through long ones and at the finish, the coach reads your numbers and says what they mean. Spoken with an OpenAI voice over your music; you can mute it from the ride screen.")
                 } else {
                     Text("At the start of each block, halfway through long ones and at the finish, the coach reads your numbers and says what they mean. The ChatGPT sign-in covers text only, so the phone's own voice speaks; add an OpenAI API key under Coach to unlock the OpenAI coach voices. For a better iPhone voice, download an enhanced one in Settings › Accessibility › Spoken Content › Voices.")
@@ -476,7 +584,9 @@ struct RidePreferencesView: View {
                 ForEach(BluetoothManager.Role.allCases) { role in
                     LabeledContent(roleTitle(role)) {
                         if model.bluetooth.remembered[role] != nil {
-                            Button("Forget") { model.bluetooth.forget(role) }
+                            // Borderless: only the word forgets the device, not a tap anywhere on the row.
+                            Button("Forget", role: .destructive) { model.bluetooth.forget(role) }
+                                .buttonStyle(.borderless)
                         } else {
                             Text("Not paired").foregroundStyle(.secondary)
                         }

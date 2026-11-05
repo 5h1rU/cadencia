@@ -70,6 +70,7 @@ struct InfoSection<Content: View, Header: View, Information: View>: View {
                     .foregroundStyle(.primary)
                     .labelStyle(.titleAndIcon)
                     .textCase(nil)
+                    .accessibilityAddTraits(.isHeader)
             } information: {
                 information()
             }

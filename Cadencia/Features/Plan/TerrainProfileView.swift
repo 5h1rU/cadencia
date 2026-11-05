@@ -85,18 +85,6 @@ struct TerrainProfileView: View {
     @Environment(\.dynamicTypeSize) private var textSize
     @ScaledMetric(relativeTo: .body) private var plotHeight = 180.0
 
-    private struct Sample: Identifiable {
-        let id: Int
-        let segment: Int
-        let point: ClimbProfilePoint
-    }
-    private var samples: [Sample] {
-        var result: [Sample] = []
-        for (index, segment) in segments.enumerated() {
-            for point in segment { result.append(Sample(id: result.count, segment: index, point: point)) }
-        }
-        return result
-    }
     private var length: Double { max(0.001, totalDistanceKm ?? ((segments.last?.last?.distanceKm ?? originKm) - originKm)) }
     private var selection: Binding<Double?> {
         Binding(get: { selectedKm ?? 0 }, set: { value in
@@ -124,11 +112,11 @@ struct TerrainProfileView: View {
     var body: some View {
         let range = altitudeRange
         Chart {
-            ForEach(samples) { sample in
-                LineMark(x: .value("Distance", sample.point.distanceKm - originKm), y: .value("Altitude", sample.point.altitudeM),
-                         series: .value("Segment", sample.segment))
-                    .foregroundStyle(.clear)
-            }
+            // TerrainProfileDrawing paints the terrain. One invisible mark spanning both domains keeps the axes and
+            // the selection proxy without re-resolving a mark per profile sample on every scrub frame.
+            RectangleMark(xStart: .value("Distance", 0.0), xEnd: .value("Distance", length),
+                          yStart: .value("Altitude", range.lowerBound), yEnd: .value("Altitude", range.upperBound))
+                .foregroundStyle(.clear)
             ForEach(annotatedClimbs) { climb in
                 RuleMark(x: .value("Climb start", climb.startKm - originKm))
                     .foregroundStyle(.secondary.opacity(0.35)).lineStyle(StrokeStyle(dash: [3, 3]))

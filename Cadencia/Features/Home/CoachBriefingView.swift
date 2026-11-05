@@ -4,8 +4,15 @@ import CadenciaCore
 /// The coach's complete daily note and actions, reached from the compact Home link.
 struct CoachBriefingView: View {
     @Environment(AppModel.self) private var model
+    /// Coach settings are pushed from the list, not from the setup row: the row goes away as soon as the
+    /// coach is connected, and a link leaving the screen would pop Settings (and the ChatGPT welcome sheet).
+    @State private var showsCoachSettings = false
 
     private var ai: DailyPrescription? { model.state.today?.day == model.today ? model.state.today?.ai : nil }
+
+    /// A daily decision or a chat reply is running. A tap now would only be queued until it ends, so the
+    /// ask buttons wait, as Coach's apply buttons do.
+    private var coachRequestInFlight: Bool { model.coachThinking || model.coachBusy }
 
     var body: some View {
         List {
@@ -14,6 +21,7 @@ struct CoachBriefingView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("Your coach")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showsCoachSettings) { CoachSettingsView() }
         .refreshable { await model.refresh() }
         .task(id: model.completedRideToday?.id) {
             if let id = model.completedRideToday?.id { await model.syncDebriefNote(for: id) }
@@ -43,7 +51,7 @@ struct CoachBriefingView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 4)
-                    NavigationLink { CoachSettingsView() } label: {
+                    Button { showsCoachSettings = true } label: {
                         Label("Set up the coach", systemImage: "arrow.right.circle")
                     }
                 } else if let ai, let readiness = model.readiness {
@@ -97,10 +105,12 @@ struct CoachBriefingView: View {
                 } else if let notice = model.coachNotice {
                     Label(notice, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
                     Button("Ask the coach", systemImage: "sparkles") { Task { await model.askCoachForToday(force: true) } }
+                        .disabled(coachRequestInFlight)
                 } else if let issue = model.coachIssue {
                     Label(issueText(issue), systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
                 } else {
                     Button("Ask the coach", systemImage: "sparkles") { Task { await model.askCoachForToday(force: true) } }
+                        .disabled(coachRequestInFlight)
                 }
             } header: {
                 Text(Format.day(model.today))
@@ -135,13 +145,13 @@ struct CoachBriefingView: View {
         Button {
             Task { await model.askCoachForToday(force: true) }
         } label: {
-            if model.coachThinking {
-                HStack(spacing: 8) { ProgressView(); Text("Asking the coach…") }
-            } else {
+            // The row keeps its label. Only a decision for today shows progress; a chat reply just holds the button.
+            HStack {
                 Label("Ask the coach again", systemImage: "arrow.triangle.2.circlepath")
+                if model.coachThinking { Spacer(); ProgressView() }
             }
         }
-        .disabled(model.coachThinking)
+        .disabled(coachRequestInFlight)
     }
 
     private func issueText(_ issue: AppModel.CoachIssue) -> LocalizedStringKey {

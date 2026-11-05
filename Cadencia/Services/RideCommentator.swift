@@ -44,6 +44,9 @@ final class RideCommentator {
     private var player: AVAudioPlayer?
     /// Hands the audio session back (un-ducks the music) once a line has been played.
     private let playbackEnd = PlaybackEnd()
+    /// The phone's voice for the athlete's language, resolved once off the main actor: listing the
+    /// installed voices takes tens of milliseconds, too long to repeat for every line mid-ride.
+    @ObservationIgnored private var deviceVoice: AVSpeechSynthesisVoice?
 
     init(coach: LLMCoach, locale: String, openAISpeech: OpenAISpeech?, voiceEnabled: Bool, captionsEnabled: Bool) {
         self.coach = coach
@@ -56,6 +59,12 @@ final class RideCommentator {
             self.audio.deactivateVoice()
         }
         synthesizer.delegate = playbackEnd
+        let code = locale
+        Task { [weak self] in
+            // The identifier crosses back, not the voice: a String is Sendable.
+            let identifier = await Task.detached(priority: .utility) { Self.bestVoice(for: code)?.identifier }.value
+            self?.deviceVoice = identifier.flatMap(AVSpeechSynthesisVoice.init(identifier:))
+        }
     }
 
     /// Which engine will speak: the OpenAI voice name, or nil for the phone's voice.
@@ -92,7 +101,8 @@ final class RideCommentator {
         inFlight?.cancel()
         thinking = true
         inFlight = Task { [weak self] in
-            defer { self?.thinking = false }
+            // A superseded request unwinds after its replacement set `thinking`, so only the current one clears it.
+            defer { if !Task.isCancelled { self?.thinking = false } }
             guard let self else { return }
             let line: RideCommentary.Line
             do { line = try await coach.comment(brief) } catch { return }   // silence beats a wrong line mid-effort
@@ -105,6 +115,8 @@ final class RideCommentator {
     func stop() {
         inFlight?.cancel()
         inFlight = nil
+        // The cancelled request no longer clears it itself.
+        thinking = false
         silence()
     }
 
@@ -152,7 +164,7 @@ final class RideCommentator {
         guard let text, activateAudio() else { return }
         if synthesizer.isSpeaking { synthesizer.stopSpeaking(at: .word) }
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = Self.bestVoice(for: locale)
+        utterance.voice = deviceVoice ?? AVSpeechSynthesisVoice(language: Self.voiceLanguage(for: locale))
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.06
         utterance.pitchMultiplier = 1.05
         utterance.postUtteranceDelay = 0.2
@@ -161,7 +173,7 @@ final class RideCommentator {
 
     /// The highest-quality installed voice for the language (premium > enhanced > compact), preferring the
     /// region the phone is set to.
-    static func bestVoice(for code: String) -> AVSpeechSynthesisVoice? {
+    nonisolated static func bestVoice(for code: String) -> AVSpeechSynthesisVoice? {
         let language = voiceLanguage(for: code)
         let prefix = String(language.prefix(2))
         let candidates = AVSpeechSynthesisVoice.speechVoices().filter { $0.language.hasPrefix(prefix) }
@@ -179,7 +191,7 @@ final class RideCommentator {
     }
 
     /// The system voice closest to the athlete's language; falls back to the current locale's identifier.
-    static func voiceLanguage(for code: String) -> String {
+    nonisolated static func voiceLanguage(for code: String) -> String {
         switch code {
         case "es": return Locale.current.region?.identifier == "MX" ? "es-MX" : "es-ES"
         case "en": return Locale.current.region?.identifier == "GB" ? "en-GB" : "en-US"

@@ -12,6 +12,9 @@ final class RideSession {
     private(set) var engine: RideEngine
     var ergEnabled: Bool
     private(set) var trainerLostAlert = false
+    /// Share of the current block's seconds so far spent inside the zone. Kept in step with the engine's clock
+    /// so the HUD doesn't recompute it from the recording on every sensor packet.
+    private(set) var blockInZonePercent: Int?
     /// The AI voice for this ride; nil when no coach is connected.
     let commentator: RideCommentator?
     var countdownBeepsEnabled = true {
@@ -34,17 +37,20 @@ final class RideSession {
         self.audio = commentator?.audio ?? RideAudio()
     }
 
+    /// The latest sensor readings, with power, cadence and heart rate that went stale (no packet in 5 s) removed.
     var live: BluetoothManager.Live {
         #if DEBUG
         if let previewLive { return previewLive }
         #endif
-        return bluetooth.live
+        return bluetooth.live.fresh(at: Date())
     }
     var state: RideEngine.State { engine.state }
     var recording: RideRecording { engine.recording }
 
     func start() {
         guard engine.state == .ready else { return }
+        // BluetoothManager outlives rides and keeps its last trainer drop; only a drop during this ride pauses it.
+        lastDropSeen = bluetooth.trainerDroppedAt
         var recording = engine.recording
         recording.startedAt = Date()
         engine = RideEngine(recording: recording, ftp: engine.ftp)
@@ -56,7 +62,9 @@ final class RideSession {
         ticker = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
-                self?.tick()
+                // Bound only after the sleep, so a session released without finish() ends the loop.
+                guard let self, !Task.isCancelled else { return }
+                self.tick()
             }
         }
     }
@@ -64,6 +72,7 @@ final class RideSession {
     func pause() {
         guard engine.state == .riding else { return }
         engine.pause(at: Date())
+        refreshBlockInZone()
         audio.stopCountdown()
         if ergEnabled { bluetooth.pauseTrainer() }
     }
@@ -78,13 +87,17 @@ final class RideSession {
     }
 
     func finish() -> RideRecording {
+        let ranToEnd = engine.state == .finished
         ticker?.cancel()
         ticker = nil
         engine.finish(at: Date())
+        refreshBlockInZone()
         bluetooth.releaseControl()
         UIApplication.shared.isIdleTimerDisabled = false
-        // Ending early is the athlete's call; the voice stops rather than commenting on it.
-        commentator?.stop()
+        // Ending early is the athlete's call, so the voice stops rather than commenting on it. A workout that
+        // ran to its end keeps the closing line the last tick requested; only the voice can deliver it,
+        // because Review replaces this screen and its caption.
+        if !ranToEnd || commentator?.voiceEnabled != true { commentator?.stop() }
         audio.stopCountdown()
         return engine.recording
     }
@@ -101,13 +114,14 @@ final class RideSession {
     private func tick() {
         guard engine.state == .riding else { return }
         let now = Date()
-        // Stale sensor values (no packet in 5 s) count as missing rather than frozen.
-        let fresh = live.updatedAt.map { now.timeIntervalSince($0) < 5 } ?? false
+        // Stale sensor values (no packet in 5 s) count as missing rather than frozen; `live` already leaves out
+        // stale power, cadence and heart rate.
         let freshPower = live.wattsUpdatedAt.map { now.timeIntervalSince($0) < 5 } ?? false
         let freshCadence = live.cadenceUpdatedAt.map { now.timeIntervalSince($0) < 5 } ?? false
         let speedFresh = live.speedUpdatedAt.map { now.timeIntervalSince($0) < 5 } ?? false
-        _ = engine.tick(now: now, watts: freshPower ? live.watts : nil, heartRate: fresh ? live.heartRate : nil, cadence: freshCadence ? live.cadence : nil,
+        _ = engine.tick(now: now, watts: freshPower ? live.watts : nil, heartRate: live.heartRate, cadence: freshCadence ? live.cadence : nil,
                         speedKmh: speedFresh ? live.speedKmh : nil, trainerDistanceMeters: freshTrainerDistance(at: now))
+        refreshBlockInZone()
         playCountdownIfDue()
         if engine.state == .finished {
             // The last block ran out: the engine closed the recording itself.
@@ -126,6 +140,18 @@ final class RideSession {
             trainerLostAlert = true
             pause()
         }
+    }
+
+    /// Recomputes `blockInZonePercent` from this block's samples only. The slice keeps the last sample before
+    /// the block, whose reading can cover the block's first second, and the timeline keeps the recording's first
+    /// sample as its origin, so the result is the same as a pass over the whole recording.
+    private func refreshBlockInZone() {
+        guard let i = engine.currentStepIndex, engine.elapsedInStep >= 10 else { blockInZonePercent = nil; return }
+        let samples = engine.recording.samples
+        let blockStart = engine.workout.steps[..<i].reduce(0) { $0 + $1.duration }
+        let from = samples.lastIndex { ($0.workoutElapsed ?? 0) < blockStart } ?? samples.startIndex
+        blockInZonePercent = RideCommentary.BlockStats.compute(index: i, workout: engine.workout, ftp: engine.ftp, samples: Array(samples[from...]),
+                                                               upTo: engine.elapsed, startedAt: samples.first?.time).inZonePercent
     }
 
     private func freshTrainerDistance(at now: Date) -> Int? {
@@ -164,6 +190,7 @@ final class RideSession {
             session.engine.tick(now: start.addingTimeInterval(Double(second)), watts: watts, heartRate: 93, cadence: 78)
         }
         session.previewLive = .init(watts: session.engine.targetWatts, heartRate: 93, cadence: 78)
+        session.refreshBlockInZone()
         return session
     }
     #endif

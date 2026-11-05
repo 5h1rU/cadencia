@@ -6,9 +6,16 @@ import CadenciaCore
 struct RideDebriefView: View {
     @Environment(AppModel.self) private var model
     let rideID: UUID
+    /// The newest copy the screen has shown. When a memory warning drops the ride from the cache, the screen
+    /// keeps it while the file is read back, so the scroll position, the open sections and a debrief in
+    /// progress stay put.
+    @State private var shownRide: RideRecording?
+    /// The ride whose file could not be read. Until a load says so, a ride missing from the cache is
+    /// still loading, not "not found".
+    @State private var unreadableRideID: UUID?
 
     var body: some View {
-        if let ride = model.ride(id: rideID) {
+        if let ride = model.cachedRide(id: rideID) ?? shownRide.flatMap({ $0.id == rideID ? $0 : nil }) {
             List {
                 Section {
                     RideStatsRow(ride: ride, ftp: ride.ftpUsed ?? model.workingFTP ?? 200)
@@ -26,8 +33,29 @@ struct RideDebriefView: View {
                 else { await model.syncDebriefNote(for: rideID) }
             }
             .task(id: rideID) { await model.loadRideRoute(rideID) }
+            // Seeds the copy on screen, and reads the ride back off the main actor once a purge drops it.
+            .task(id: model.cachedRide(id: rideID) == nil) {
+                if let loaded = await model.loadRide(id: rideID) { shownRide = loaded }
+            }
+            // Each newer copy becomes the fallback, so a purge never shows older data than the screen already showed.
+            .onChange(of: model.cachedRide(id: rideID)) { _, latest in
+                if let latest { shownRide = latest }
+            }
         } else {
-            ContentUnavailableView("Ride not found", systemImage: "bicycle")
+            // An empty list keeps the screen's grouped background while the file is decoded off the main actor.
+            List {}
+                .listStyle(.insetGrouped)
+                .overlay {
+                    if unreadableRideID == rideID {
+                        ContentUnavailableView("Ride not found", systemImage: "bicycle")
+                    } else {
+                        ProgressView()
+                    }
+                }
+                .navigationBarTitleDisplayMode(.inline)
+                .task(id: rideID) {
+                    if await model.loadRide(id: rideID) == nil { unreadableRideID = rideID }
+                }
         }
     }
 }
@@ -68,6 +96,9 @@ struct DebriefSections: View {
     let ride: RideRecording
 
     private var status: AppModel.DebriefStatus? { model.debriefStatus[ride.id] }
+    /// Where the debrief stands while there is nothing to read yet; the collapsed header shows it too.
+    private var pendingStatus: AppModel.DebriefStatus? { visibleNote == nil && visibleReport == nil ? status : nil }
+    private var isSyncingNote: Bool { model.syncingDebriefNotes.contains(ride.id) }
     private var uploaded: Bool { ride.sourceActivity != nil || model.state.ledger.entry(for: ride.id)?.state == .confirmed }
     private var ftp: Int { ride.ftpUsed ?? model.workingFTP ?? 200 }
 
@@ -92,16 +123,20 @@ struct DebriefSections: View {
                         Label("Coach debrief", systemImage: "sparkles")
                     }
                     Spacer(minLength: 8)
-                    Image(systemName: isDebriefExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
+                    // Centered on the chevron, which keeps its baseline alignment with the title.
+                    HStack(spacing: 8) {
+                        if !isDebriefExpanded { pendingIndicator }
+                        Image(systemName: isDebriefExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
                 }
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityValue(isDebriefExpanded ? Text("Expanded") : Text("Collapsed"))
+            .accessibilityValue(headerAccessibilityValue)
             .accessibilityIdentifier("coach-debrief-toggle")
         } information: {
             if visibleNote != nil {
@@ -161,9 +196,41 @@ struct DebriefSections: View {
         }
         if let message = model.debriefNoteErrors[ride.id] {
             Label(message, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(.secondary)
-            Button("Retry note sync") { Task { await model.syncDebriefNote(for: ride.id) } }
+            // Busy while any sync of this note runs, including the automatic ones.
+            Button {
+                Task { await model.syncDebriefNote(for: ride.id) }
+            } label: {
+                HStack {
+                    Text("Retry note sync")
+                    Spacer()
+                    if isSyncingNote { ProgressView() }
+                }
+            }
+            .disabled(isSyncingNote)
         } else if visibleNote != nil {
             Label("Saved in Intervals.icu Notes", systemImage: "checkmark.icloud").font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+
+    /// On the collapsed header: the debrief is on its way, or it failed. The details are inside.
+    @ViewBuilder private var pendingIndicator: some View {
+        switch pendingStatus {
+        case .waitingForIntervals, .reading:
+            ProgressView().controlSize(.small).accessibilityHidden(true)
+        case .failed:
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(.secondary).accessibilityHidden(true)
+        case nil:
+            EmptyView()
+        }
+    }
+
+    private var headerAccessibilityValue: String {
+        let expansion = isDebriefExpanded ? String(localized: "Expanded") : String(localized: "Collapsed")
+        guard !isDebriefExpanded else { return expansion }
+        switch pendingStatus {
+        case .waitingForIntervals, .reading: return "\(expansion), \(String(localized: "Reading your session…"))"
+        case .failed(let message): return "\(expansion), \(message)"
+        case nil: return expansion
         }
     }
 
@@ -196,7 +263,7 @@ struct BlockVerdictRow: View {
             Image(systemName: symbol).foregroundStyle(color).font(.title3)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(stats?.name ?? "Block \(verdict.index + 1)")
+                    Text(stats?.name ?? String(localized: "Block \(verdict.index + 1)"))
                     Spacer()
                     if let pct = stats?.inZonePercent {
                         Text("\(pct) % in zone").font(.caption.monospacedDigit()).foregroundStyle(.secondary)

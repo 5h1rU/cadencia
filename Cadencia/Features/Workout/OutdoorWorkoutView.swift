@@ -5,9 +5,13 @@ import CadenciaCore
 /// device receipt are deliberately separate; changing the prescription invalidates the export.
 struct OutdoorWorkoutView: View {
     @Environment(AppModel.self) private var model
-    @State private var busy = false
+    private enum Action { case send, fit }
+    @State private var running: Action?
     @State private var error: String?
     @State private var fitFile: URL?
+    /// The route opens from the list, not from its row: the row goes away when a sync completes the day, and
+    /// a link leaving the screen would pop the route (and its import or share sheet) with it.
+    @State private var showsRoute = false
 
     var body: some View {
         List {
@@ -36,7 +40,7 @@ struct OutdoorWorkoutView: View {
                 }
 
                 Section {
-                    NavigationLink { PlannedRideRouteView(day: model.today) } label: {
+                    Button { showsRoute = true } label: {
                         Label(model.plannedToday?.route == nil ? "Add a route (optional)" : "Review planned route", systemImage: "map")
                     }
                 }
@@ -68,11 +72,21 @@ struct OutdoorWorkoutView: View {
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Ride outdoors")
+        .navigationDestination(isPresented: $showsRoute) { PlannedRideRouteView(day: model.today) }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Refresh", systemImage: "arrow.clockwise") { run { await model.refresh() } }
-                    .disabled(busy || model.isSyncing)
+                // Follows every sync, including one started on Home or at launch; the coach's
+                // follow-up shows in the Garmin section while it holds Send and FIT.
+                if model.isSyncing {
+                    ProgressView().accessibilityLabel("Syncing your training…")
+                } else {
+                    Button("Refresh", systemImage: "arrow.clockwise") {
+                        error = nil
+                        Task { await model.refresh() }
+                    }
+                    .disabled(!model.isSignedIn)
+                }
             }
         }
         .onAppear {
@@ -87,25 +101,39 @@ struct OutdoorWorkoutView: View {
             Text("In Intervals.icu Settings, connect Garmin and enable Upload planned workouts. Then sync your Edge with Garmin Connect.")
                 .font(.subheadline)
             Link("Open Intervals.icu settings", destination: URL(string: "https://intervals.icu/settings")!)
+            // Explains why Send and FIT wait: the coach may still replace today's prescription.
+            if model.coachThinking {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("The coach is reading your data…")
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
             Button {
-                run { try await model.sendOutdoorWorkout() }
+                run(.send) { try await model.sendOutdoorWorkout() }
             } label: {
                 HStack {
                     Label("Send workout via Intervals.icu", systemImage: "arrow.up.circle")
-                    if busy { Spacer(); ProgressView() }
+                    if running == .send { Spacer(); ProgressView() }
                 }
             }
-            .disabled(busy || !model.isSignedIn || model.coachThinking)
+            .disabled(running != nil || !model.isSignedIn || model.coachThinking)
             if let handoff = model.currentOutdoorHandoff {
                 Label("Saved in Intervals.icu", systemImage: "checkmark.circle").foregroundStyle(.green)
                 Text(handoff.savedAt, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(.secondary)
                 Text("Sync Garmin Connect, then check the workout on your Edge before leaving. Cadencia cannot confirm receipt by the bike computer.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-            Button("Prepare Garmin FIT file", systemImage: "square.and.arrow.up") {
-                run { fitFile = try await model.exportOutdoorFIT() }
+            Button {
+                run(.fit) { fitFile = try await model.exportOutdoorFIT() }
+            } label: {
+                HStack {
+                    Label("Prepare Garmin FIT file", systemImage: "square.and.arrow.up")
+                    if running == .fit { Spacer(); ProgressView() }
+                }
             }
-            .disabled(busy || !model.isSignedIn || model.coachThinking)
+            .disabled(running != nil || !model.isSignedIn || model.coachThinking)
             if let fitFile, model.currentOutdoorHandoff != nil {
                 ShareLink(item: fitFile) { Label("Share Garmin FIT file", systemImage: "square.and.arrow.up") }
                 Text("For compatible Edge models, copy the FIT workout to Garmin/NewFiles over USB and restart the device. Sharing the file does not confirm installation.")
@@ -175,13 +203,14 @@ struct OutdoorWorkoutView: View {
         return start == end ? "\(start) W" : "\(start) → \(end) W"
     }
 
-    private func run(_ action: @escaping @MainActor () async throws -> Void) {
-        guard !busy else { return }
-        busy = true
+    /// Send and FIT exclude each other (FIT sends first); each shows progress on its own row.
+    private func run(_ action: Action, _ work: @escaping @MainActor () async throws -> Void) {
+        guard running == nil else { return }
+        running = action
         error = nil
         Task { @MainActor in
-            defer { busy = false }
-            do { try await action() }
+            defer { running = nil }
+            do { try await work() }
             catch is CancellationError { }
             catch { self.error = error.localizedDescription }
         }

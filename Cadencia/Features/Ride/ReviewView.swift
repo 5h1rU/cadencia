@@ -7,17 +7,38 @@ struct ReviewView: View {
     let ride: RideRecording
     let done: () -> Void
 
-    @State private var rpe: Int = 6
+    @State private var rpe: Int
     @State private var legs: SubjectiveFeedback.Legs?
     @State private var submitted = false
+    /// The newest saved copy the screen has shown. While a memory warning keeps the ride out of the cache, the
+    /// screen shows this copy instead of the recording from the end of the ride, so nothing it showed disappears.
+    @State private var shownRide: RideRecording?
+
+    /// Seeds the RPE once, from the workout. Seeding on appear would undo the rider's pick every time the
+    /// RPE picker pops back to this screen.
+    init(ride: RideRecording, done: @escaping () -> Void) {
+        self.ride = ride
+        self.done = done
+        _rpe = State(initialValue: Self.defaultRPE(for: ride.workout))
+    }
 
     private var ftp: Int { model.workingFTP ?? 200 }
     private var entry: UploadEntry? { model.state.ledger.entry(for: ride.id) }
+    /// The saved recording: Intervals' analysis, the debrief and the feedback land here while the screen is open.
+    private var current: RideRecording { model.cachedRide(id: ride.id) ?? shownRide ?? ride }
+    /// The model is still saving the ride, writing it to Health or making the first upload attempt.
+    private var finishing: Bool { model.finishingRides.contains(ride.id) }
+    /// Intervals' numbers are on their way: the save, the upload or the analysis read is in flight.
+    private var statsPending: Bool {
+        current.analysis?.analyzed != true
+            && (finishing || model.isUploading || model.debriefStatus[ride.id] == .waitingForIntervals)
+    }
 
     var body: some View {
         List {
             Section {
-                RideStatsRow(ride: ride, ftp: ftp)
+                RideStatsRow(ride: current, ftp: ftp)
+                    .redacted(reason: statsPending ? .placeholder : [])
                 if adherence < 0.9 {
                     Label("Power ran \(Format.percent(1 - adherence)) under target on average. Worth a word to the coach if it felt harder than it should.", systemImage: "info.circle")
                         .font(.footnote).foregroundStyle(.secondary)
@@ -26,7 +47,7 @@ struct ReviewView: View {
                 Text(ride.workout.name)
             }
 
-            DebriefSections(ride: model.ride(id: ride.id) ?? ride)
+            DebriefSections(ride: current)
 
             InfoSection {
                 Picker("Effort (RPE)", selection: $rpe) {
@@ -54,27 +75,37 @@ struct ReviewView: View {
                             if entry.state == .confirmed { Text("Activity \(entry.intervalsActivityID ?? "")").font(.footnote).foregroundStyle(.secondary) }
                         }
                     } icon: {
-                        Image(systemName: entry.state.symbol).foregroundStyle(entry.state == .confirmed ? .green : .secondary)
+                        if finishing || model.isUploading, entry.state == .pending || entry.state == .uncertain {
+                            ProgressView()
+                        } else {
+                            Image(systemName: entry.state.symbol).foregroundStyle(entry.state == .confirmed ? .green : .secondary)
+                        }
                     }
                 } else {
                     HStack { ProgressView(); Text("Saving…").foregroundStyle(.secondary) }
                 }
-                if model.state.settings.writeWorkoutsToHealth {
+                // Only once the save happened: it runs after the ride file, and it can fail.
+                if model.healthSavedRides.contains(ride.id) {
                     Label("Saved to Apple Health", systemImage: "heart.text.square")
                 }
             }
 
             Section {
                 Button {
-                    Task {
-                        await model.submitReview(rideID: ride.id, rpe: rpe, legs: legs)
-                        submitted = true
-                        done()
-                    }
+                    guard !submitted else { return }
+                    submitted = true
+                    // The model finishes the save and the Intervals sync after the cover is gone.
+                    let model = model, rideID = ride.id, rpe = rpe, legs = legs
+                    Task { await model.submitReview(rideID: rideID, rpe: rpe, legs: legs) }
+                    done()
                 } label: {
-                    Text("Done").frame(maxWidth: .infinity)
+                    Text("Done").font(.headline).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(submitted)
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                .listRowSeparator(.hidden)
             }
             .listRowBackground(Color.clear)
         }
@@ -82,7 +113,12 @@ struct ReviewView: View {
         .navigationTitle("Ride complete")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()
-        .onAppear { rpe = defaultRPE }
+        // A memory warning can drop the saved recording from the cache: read it back off the main actor.
+        .task(id: model.cachedRide(id: ride.id) == nil) { await model.loadRide(id: ride.id) }
+        // Each newer copy becomes the fallback, so a purge never shows older data than the screen already showed.
+        .onChange(of: model.cachedRide(id: ride.id), initial: true) { _, latest in
+            if let latest { shownRide = latest }
+        }
     }
 
     private var adherence: Double {
@@ -94,9 +130,8 @@ struct ReviewView: View {
         return pairs.reduce(0) { $0 + $1.0 } / pairs.reduce(0) { $0 + $1.1 }
     }
 
-    private var defaultRPE: Int {
-        let intensity = ride.workout.averageIntensity
-        switch intensity {
+    private static func defaultRPE(for workout: Workout) -> Int {
+        switch workout.averageIntensity {
         case ..<0.6: return 3
         case ..<0.75: return 5
         case ..<0.9: return 7

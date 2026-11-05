@@ -12,8 +12,10 @@ final class SpeechRecognizer {
     private(set) var status: Status = .idle
     private(set) var transcript = ""
 
-    private let audioEngine = AVAudioEngine()
-    private var recognizer: SFSpeechRecognizer?
+    // Both are created on first use, not per init: SwiftUI rebuilds a `@State` default value whenever
+    // the owning view is re-initialized, and the iOS 26 path may never need either.
+    @ObservationIgnored private lazy var audioEngine = AVAudioEngine()
+    @ObservationIgnored private var recognizer: SFSpeechRecognizer?
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
     private var finishTimeout: Task<Void, Never>?
@@ -27,7 +29,6 @@ final class SpeechRecognizer {
 
     init(locale: Locale = Locale(identifier: Locale.preferredLanguages.first ?? Locale.current.identifier)) {
         self.locale = locale
-        recognizer = SFSpeechRecognizer(locale: locale)
     }
 
     var isListening: Bool { status == .listening }
@@ -71,6 +72,7 @@ final class SpeechRecognizer {
         }
         #endif
 
+        if recognizer == nil { recognizer = SFSpeechRecognizer(locale: locale) }
         let speechOK = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
             SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0 == .authorized) }
         }
@@ -141,8 +143,9 @@ final class SpeechRecognizer {
     }
 
     private func stopEngine() {
-        if audioEngine.isRunning { audioEngine.stop() }
+        // The engine only runs after its tap is installed, so cancel() never creates it just to check.
         if tapInstalled {
+            if audioEngine.isRunning { audioEngine.stop() }
             audioEngine.inputNode.removeTap(onBus: 0)
             tapInstalled = false
         }

@@ -53,22 +53,33 @@ struct FTPReviewView: View {
                         .frame(height: 180)
                     }
 
+                    // Two large full-width choices; the filled one marks the preferred option.
                     Section {
                         Button {
                             model.acceptFTP(estimate.watts)
                             dismiss()
                         } label: {
-                            Label("Use \(estimate.watts) W", systemImage: "checkmark").frame(maxWidth: .infinity)
+                            Label("Use \(estimate.watts) W", systemImage: "checkmark")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
                         .disabled(estimate.confidence == .low)
-                        Button("Keep \(current) W") {
+                        Button {
                             model.keepCurrentFTP()
                             dismiss()
+                        } label: {
+                            Text("Keep \(current) W")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
                         }
-                        .frame(maxWidth: .infinity)
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
                     }
                     .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .listRowSeparator(.hidden)
                 } else {
                     ContentUnavailableView("No estimate yet", systemImage: "chart.line.uptrend.xyaxis",
                                            description: Text("Ride a few sustained efforts of 12 minutes or more and the estimate will appear here."))

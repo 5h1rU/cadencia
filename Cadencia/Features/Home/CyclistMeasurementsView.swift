@@ -27,6 +27,7 @@ struct CyclistMeasurementsView: View {
     @State private var metric = true
     @State private var initialized = false
     @State private var busy = false
+    @State private var importing = false
     @State private var notice: String?
 
     var body: some View {
@@ -83,8 +84,15 @@ struct CyclistMeasurementsView: View {
                     .foregroundStyle(.secondary)
             }
             Section {
-                Button("Import from Apple Health", systemImage: "heart.text.square") {
+                // Health may ask for access first; the row keeps its label and shows a spinner while it reads.
+                Button {
                     Task { await importHealth() }
+                } label: {
+                    LabeledContent {
+                        if importing { ProgressView() }
+                    } label: {
+                        Label("Import from Apple Health", systemImage: "heart.text.square")
+                    }
                 }
                 .disabled(busy || !HealthKitService.isAvailable)
                 if let notice { Text(verbatim: notice).foregroundStyle(.secondary) }
@@ -169,7 +177,8 @@ struct CyclistMeasurementsView: View {
     private func importHealth() async {
         guard !busy else { return }
         busy = true
-        defer { busy = false }
+        importing = true
+        defer { busy = false; importing = false }
         do {
             let updated = try await model.importCyclistMeasurements()
             fill(proposed)

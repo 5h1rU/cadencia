@@ -5,13 +5,33 @@ import CadenciaCore
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var showDevices = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var preRide: PreRideRequest?
+    @State private var showOutdoorPrep = false
     @State private var showFTPReview = false
     @State private var recoveryFocus: RecoveryView.Focus?
     @State private var recoveryInformationExpanded = false
     @State private var loadInformationExpanded = false
 
+    /// The workout the pre-ride flow was opened with, so the cover keeps its content (and the ride in it)
+    /// when today's workout goes away, for example after midnight.
+    private struct PreRideRequest: Identifiable {
+        let id = UUID()
+        let workout: Workout
+        let plannedSession: PlannedSession?
+    }
+
+    /// Today's workout is pushed by value: its row goes away once the day is completed, and a link leaving
+    /// the screen would pop the workout (and Ride outdoors on top of it) back to Home.
+    private enum TodayRoute: Hashable { case workout }
+
     var body: some View {
+        // Each completion query scans the ride index, so read them once per render.
+        let todayCompleted = model.isTodayWorkoutCompleted
+        let completedRide = todayCompleted ? model.completedRideToday : nil
+        let headline = coachHeadline(completed: todayCompleted, completedRide: completedRide)
+        let lastRide = model.lastRide
+        let rideIDsToLoad = ridesToLoad(completedRide?.id, lastRide?.id)
         NavigationStack {
             List {
                 trainingLoadSection
@@ -25,30 +45,47 @@ struct HomeView: View {
                     }
                 }
 
-                briefingSection
-                workoutSection
+                briefingSection(headline: headline, completed: todayCompleted)
+                workoutSection(completed: todayCompleted, completedRide: completedRide)
                 if let event = model.thisWeekEvent { eventSection(event) }
-                if let last = model.lastRide { lastSessionSection(last) }
+                if let last = lastRide { lastSessionSection(last) }
                 Section {
                     NavigationLink { PlannedRideRouteView(day: model.today, chooseDate: true) } label: { Label("Plan a route", systemImage: "map") }
                     NavigationLink { RideHistoryView() } label: { Label("Ride history", systemImage: "clock.arrow.circlepath") }
                 }
-                if let week = ai?.week, !week.isEmpty, model.todayWorkout != nil { weekSection(week) }
+                if let week = ai?.week, !week.isEmpty, model.todayWorkout != nil { weekSection(week, todayCompleted: todayCompleted) }
                 CyclistProfileSection()
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Home")
             .navigationBarTitleDisplayMode(.large)
             .navigationDestination(item: $recoveryFocus) { focus in RecoveryView(focus: focus) }
+            .navigationDestination(isPresented: $showOutdoorPrep) { OutdoorWorkoutView() }
+            .navigationDestination(for: TodayRoute.self) { _ in TodayWorkoutDestination() }
             .refreshable { await model.refresh() }
             .task(id: "\(model.athleteID):\(model.isSignedIn):\(model.aiCoachAvailable)") {
-                await model.generateCyclistProfile(automatically: true)
+                model.startAutomaticCyclistProfile()
+            }
+            .task(id: rideIDsToLoad) {
+                for id in rideIDsToLoad { await model.loadRide(id: id) }
             }
             .sheet(isPresented: $showFTPReview) { FTPReviewView() }
-            .fullScreenCover(isPresented: $showDevices) {
-                if let workout = model.todayWorkout { PreRideFlow(workout: workout, plannedSession: model.plannedToday) }
+            .fullScreenCover(item: $preRide) { request in
+                // Follow a re-prescription that lands during the checklist; once today's workout is gone, keep the opened one.
+                let live = model.todayWorkout
+                PreRideFlow(workout: live ?? request.workout, plannedSession: live == nil ? request.plannedSession : model.plannedToday)
             }
         }
+    }
+
+    /// The headline and the last-session card read their rides only from the cache (the model's completion
+    /// checks still decode today's rides on a miss). Returns those rides while any of them is missing (first
+    /// appearance, or after a purge) and nothing once all are cached, so the loading task starts again only when
+    /// something needs loading.
+    private func ridesToLoad(_ ids: UUID?...) -> [UUID] {
+        var shown: [UUID] = []
+        for case let id? in ids where !shown.contains(id) { shown.append(id) }
+        return shown.allSatisfy { model.cachedRide(id: $0) != nil } ? [] : shown
     }
 
     // MARK: Coach briefing
@@ -56,10 +93,10 @@ struct HomeView: View {
     private var ai: DailyPrescription? { model.state.today?.day == model.today ? model.state.today?.ai : nil }
 
     /// Use the same headline as the detail screen, including the completed ride's debrief.
-    private var coachHeadline: String? {
+    private func coachHeadline(completed: Bool, completedRide: AppState.RideIndexEntry?) -> String? {
         let headline: String?
-        if model.isTodayWorkoutCompleted {
-            if let id = model.completedRideToday?.id, let ride = model.ride(id: id), !RideDebrief.requiresRefresh(ride) {
+        if completed {
+            if let id = completedRide?.id, let ride = model.cachedRide(id: id), !RideDebrief.requiresRefresh(ride) {
                 headline = ride.debrief?.headline
                     ?? ride.debriefNote?.debriefText.split(separator: "\n", omittingEmptySubsequences: true).first.map(String.init)
             } else {
@@ -72,18 +109,21 @@ struct HomeView: View {
         return headline
     }
 
-    private var briefingSection: some View {
+    private func briefingSection(headline: String?, completed: Bool) -> some View {
         HomeSection("Your coach") {
             NavigationLink {
                 CoachBriefingView()
             } label: {
                 VStack(alignment: .leading, spacing: 6) {
-                    if let headline = coachHeadline {
+                    if let headline {
                         Text(headline).font(.subheadline)
-                    } else if model.isTodayWorkoutCompleted {
+                    } else if completed {
                         Text("Today's session is complete.").font(.subheadline)
                     } else if model.coachThinking {
-                        Text("The coach is reading your data…").font(.subheadline)
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("The coach is reading your data…").font(.subheadline)
+                        }
                     } else if !model.aiCoachAvailable {
                         Text("Set up the coach").font(.subheadline)
                     } else if model.coachNotice != nil || model.coachIssue != nil {
@@ -91,9 +131,12 @@ struct HomeView: View {
                     } else {
                         Text("Ask the coach").font(.subheadline)
                     }
-                    if coachHeadline != nil {
+                    if headline != nil {
                         if model.coachThinking {
-                            Text("The coach is reading your data…").font(.caption).foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text("The coach is reading your data…").font(.caption).foregroundStyle(.secondary)
+                            }
                         } else if model.coachNotice != nil || model.coachIssue != nil {
                             Text("Your coach needs attention").font(.caption).foregroundStyle(.orange)
                         }
@@ -107,15 +150,15 @@ struct HomeView: View {
     }
 
     /// The coach's shape for the next days, one chip per day.
-    private func weekSection(_ week: [DailyPrescription.DayOutlook]) -> some View {
+    private func weekSection(_ week: [DailyPrescription.DayOutlook], todayCompleted: Bool) -> some View {
         InfoSection(hasInformation: model.state.plan != nil) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(week) { day in
                         NavigationLink {
-                            weekDestination(day)
+                            WeekDayDestination(day: day)
                         } label: {
-                            weekDayCard(day)
+                            weekDayCard(day, todayCompleted: todayCompleted)
                         }
                         .buttonStyle(.plain)
                         .accessibilityHint("Open session details")
@@ -135,15 +178,15 @@ struct HomeView: View {
         }
     }
 
-    private func weekDayCard(_ day: DailyPrescription.DayOutlook) -> some View {
+    private func weekDayCard(_ day: DailyPrescription.DayOutlook, todayCompleted: Bool) -> some View {
         let isToday = day.day == model.today
-        let completed = isToday && model.isTodayWorkoutCompleted
+        let completed = isToday && todayCompleted
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
                 Text(isToday ? String(localized: "Today") : Format.shortDay(day.day))
                     .font(.caption2.weight(.semibold))
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.system(size: 8, weight: .semibold))
+                Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).imageScale(.small)
                     .accessibilityHidden(true)
             }
             .foregroundStyle(isToday ? Color.accentColor : .secondary)
@@ -171,25 +214,11 @@ struct HomeView: View {
         .accessibilityValue(completed ? Text("Completed") : Text(""))
     }
 
-    @ViewBuilder private func weekDestination(_ day: DailyPrescription.DayOutlook) -> some View {
-        if day.day == model.today, let ride = model.completedRideToday {
-            RideDebriefView(rideID: ride.id)
-        } else if let session = model.state.session(on: day.day), let ride = model.completedRide(for: session) {
-            RideDebriefView(rideID: ride.id)
-        } else if day.day == model.today, let workout = model.todayWorkout, let ftp = model.workingFTP,
-                  workout.kind != .rest, !workout.steps.isEmpty {
-            WorkoutDetailView(workout: model.todayRideLocation == .outdoor ? (model.outdoorWorkout?.workout ?? workout) : workout,
-                              ftp: model.todayRideLocation == .outdoor ? (model.outdoorFTP ?? ftp) : ftp)
-        } else {
-            PlannedDayView(day: day)
-        }
-    }
-
     // MARK: Last session
 
     /// The most recent ride and where its debrief stands; tapping opens the full read.
     private func lastSessionSection(_ entry: AppState.RideIndexEntry) -> some View {
-        let report = model.ride(id: entry.id)?.debrief
+        let report = model.cachedRide(id: entry.id)?.debrief
         let status = model.debriefStatus[entry.id]
         return HomeSection("Last session") {
             NavigationLink {
@@ -222,13 +251,13 @@ struct HomeView: View {
 
     // MARK: Workout
 
-    @ViewBuilder private var workoutSection: some View {
+    @ViewBuilder private func workoutSection(completed: Bool, completedRide: AppState.RideIndexEntry?) -> some View {
         if let original = model.todayWorkout, let indoorFTP = model.workingFTP {
             let workout = model.todayRideLocation == .outdoor ? (model.outdoorWorkout?.workout ?? original) : original
             let ftp = model.todayRideLocation == .outdoor ? (model.outdoorFTP ?? indoorFTP) : indoorFTP
             HomeSection("Today's workout") {
-                if model.isTodayWorkoutCompleted {
-                    if let ride = model.completedRideToday {
+                if completed {
+                    if let ride = completedRide {
                         NavigationLink { RideDebriefView(rideID: ride.id) } label: {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(ride.name).font(.title3.weight(.semibold))
@@ -255,7 +284,7 @@ struct HomeView: View {
                         .pickerStyle(.segmented)
                         .disabled(model.coachThinking)
                     }
-                    NavigationLink { WorkoutDetailView(workout: workout, ftp: ftp) } label: {
+                    NavigationLink(value: TodayRoute.workout) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(workout.name).font(.title3.weight(.semibold))
                             Text(Format.minutes(workout.totalDuration)).font(.subheadline).foregroundStyle(.secondary)
@@ -271,18 +300,28 @@ struct HomeView: View {
                     }
                     .padding(.vertical, 4)
                     .listRowSeparator(.hidden, edges: .bottom)
+                    // Both start actions are the card's filled button; the List-level destination keeps the
+                    // outdoor one a real button rather than a navigation row.
                     if model.todayRideLocation == .outdoor {
-                        NavigationLink { OutdoorWorkoutView() } label: {
+                        Button { showOutdoorPrep = true } label: {
                             Label("Prepare bike computer", systemImage: "bicycle")
                                 .font(.headline)
-                                .frame(maxWidth: .infinity, minHeight: 32, alignment: .center)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
                         }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 16, trailing: 16))
+                        .listRowSeparator(.hidden)
                     } else {
-                        Button { showDevices = true } label: {
+                        Button {
+                            guard let todayWorkout = model.todayWorkout else { return }
+                            preRide = PreRideRequest(workout: todayWorkout, plannedSession: model.plannedToday)
+                        } label: {
                             Text("Start on trainer")
                                 .font(.headline)
                                 .multilineTextAlignment(.center)
-                                .frame(maxWidth: .infinity, minHeight: 32, alignment: .center)
+                                .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
@@ -362,22 +401,24 @@ struct HomeView: View {
     // MARK: Recovery signals
 
     private var recoverySection: some View {
-        metricsSection("Recovery signals", linkLabel: "Open recovery details", identifier: "recovery-signals", focus: .recovery,
-                       informationExpanded: $recoveryInformationExpanded) {
+        // One readiness evaluation per render, shared by the three tiles and the information text.
+        let signals = model.measuredSignals
+        return metricsSection("Recovery signals", linkLabel: "Open recovery details", identifier: "recovery-signals", focus: .recovery,
+                              informationExpanded: $recoveryInformationExpanded) {
             metricLayout {
-                recoveryMetric("HRV", symbol: "waveform.path.ecg", name: "hrv",
+                recoveryMetric("HRV", symbol: "waveform.path.ecg", name: "hrv", signals: signals,
                                value: model.todayWellness?.hrvMs.map { $0.formatted(.number.precision(.fractionLength(0))) }, unit: "ms")
                 Divider()
-                recoveryMetric("Sleep", symbol: "moon", name: "sleep",
+                recoveryMetric("Sleep", symbol: "moon", name: "sleep", signals: signals,
                                value: model.todayWellness?.sleepSeconds.map { (Double($0) / 3600).formatted(.number.precision(.fractionLength(1))) }, unit: "h")
                 Divider()
-                recoveryMetric("Resting HR", symbol: "heart", name: "restingHR",
+                recoveryMetric("Resting HR", symbol: "heart", name: "restingHR", signals: signals,
                                value: model.todayWellness?.restingHR.map { $0.formatted() }, unit: "bpm")
             }
         } information: {
             VStack(alignment: .leading, spacing: 4) {
                 Text("HRV, sleep and resting heart rate are compared with your recent history.")
-                if !model.measuredSignals.isSufficientlyInformed {
+                if !signals.isSufficientlyInformed {
                     Text("Few recovery signals today, so the prescription is conservative. Connect Apple Health or wear your watch to sleep for a sharper call.")
                 }
             }
@@ -423,22 +464,29 @@ struct HomeView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 0) {
-                        Button { informationExpanded.wrappedValue.toggle() } label: {
-                            Image(systemName: informationExpanded.wrappedValue ? "info.circle.fill" : "info.circle")
+                        Button {
+                            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                                informationExpanded.wrappedValue.toggle()
+                            }
+                        } label: {
+                            Label(informationExpanded.wrappedValue ? "Hide information" : "Show information",
+                                  systemImage: informationExpanded.wrappedValue ? "info.circle.fill" : "info.circle")
+                                .labelStyle(.iconOnly)
                                 .font(.body)
                                 .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(.rect)
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel(informationExpanded.wrappedValue ? Text("Hide information") : Text("Show information"))
                         .accessibilityIdentifier("\(identifier)-info")
                         Button { recoveryFocus = focus } label: {
-                            Image(systemName: "chevron.right")
+                            Label(linkLabel, systemImage: "chevron.right")
+                                .labelStyle(.iconOnly)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(Color.secondary)
                                 .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(.rect)
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel(Text(linkLabel))
                         .accessibilityIdentifier("\(identifier)-details")
                     }
                 }
@@ -447,9 +495,11 @@ struct HomeView: View {
                         .font(.subheadline).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                // The whole card is the target, including the space around the centered values.
                 Button { recoveryFocus = focus } label: {
                     content()
                         .padding(.trailing, 8)
+                        .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint(Text(linkLabel))
@@ -467,19 +517,26 @@ struct HomeView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func recoveryMetric(_ title: LocalizedStringKey, symbol: String, name: String, value: String?, unit: LocalizedStringKey) -> some View {
-        let signal = model.measuredSignals.signals.first { $0.name == name }
+    private func recoveryMetric(_ title: LocalizedStringKey, symbol: String, name: String, signals: Readiness,
+                                value: String?, unit: LocalizedStringKey) -> some View {
+        let signal = signals.signals.first { $0.name == name }
         let hasBaseline = signal.map { $0.verdict != .missing } ?? false
+        // The running sync may still bring today's value, so it is not "no data" yet. The spinner takes the
+        // value's place, as on the training load tiles, and the hidden texts keep the tile's height.
+        let loading = value == nil && model.isSyncing
         return VStack(alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .center, spacing: 6) {
             Image(systemName: symbol)
                 .font(.title).foregroundStyle(.secondary)
                 .frame(minHeight: 32)
                 .accessibilityHidden(true)
             metricValue(value ?? "–", unit: value == nil ? nil : unit)
+                .opacity(loading ? 0 : 1)
+                .accessibilityHidden(loading)
+                .overlay { if loading { ProgressView().controlSize(.small) } }
             Text(title).font(.subheadline)
             Group {
                 if value == nil {
-                    Text("no data")
+                    Text("no data").opacity(loading ? 0 : 1).accessibilityHidden(loading)
                 } else if let signal, hasBaseline {
                     Text(signal.verdictText)
                 } else {
@@ -495,8 +552,13 @@ struct HomeView: View {
     }
 
     private func loadMetric(_ title: LocalizedStringKey, abbreviation: String, value: Double?, signed: Bool = false) -> some View {
-        VStack(alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .center, spacing: 6) {
+        // The running sync may still bring the value; the hidden dash keeps the tile's height.
+        let loading = value == nil && model.isSyncing
+        return VStack(alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .center, spacing: 6) {
             metricValue(value.map { signed ? String(format: "%+.0f", $0) : $0.formatted(.number.precision(.fractionLength(0))) } ?? "–")
+                .opacity(loading ? 0 : 1)
+                .accessibilityHidden(loading)
+                .overlay { if loading { ProgressView().controlSize(.small) } }
             Text(title).font(.subheadline)
             Text(verbatim: abbreviation).font(.caption).foregroundStyle(.secondary)
         }
@@ -535,7 +597,7 @@ struct HomeView: View {
                 HStack {
                     Label("FTP estimate \(proposal) W, working \(current) W", systemImage: "chart.line.uptrend.xyaxis")
                     Spacer()
-                    Text("Review")
+                    Text("Review").foregroundStyle(.tint)
                 }
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -564,6 +626,31 @@ struct HomeView: View {
             elapsed += step.duration
         }
         return best.offset
+    }
+}
+
+/// Where a week-day card leads. A view of its own so the ride lookups run only when the card is opened,
+/// not for every card on every Home render.
+private struct WeekDayDestination: View {
+    @Environment(AppModel.self) private var model
+    let day: DailyPrescription.DayOutlook
+    /// Set once today's workout is on screen. It stays after a sync completes the day: switching to the debrief
+    /// would pop Ride outdoors or a route opened from the workout, and those show the completed state themselves.
+    @State private var showsTodayWorkout = false
+
+    var body: some View {
+        if day.day == model.today, let workout = model.todayWorkout, let ftp = model.workingFTP,
+           workout.kind != .rest, !workout.steps.isEmpty, showsTodayWorkout || model.completedRideToday == nil {
+            WorkoutDetailView(workout: model.todayRideLocation == .outdoor ? (model.outdoorWorkout?.workout ?? workout) : workout,
+                              ftp: model.todayRideLocation == .outdoor ? (model.outdoorFTP ?? ftp) : ftp)
+                .onAppear { showsTodayWorkout = true }
+        } else if day.day == model.today, let ride = model.completedRideToday {
+            RideDebriefView(rideID: ride.id)
+        } else if let session = model.state.session(on: day.day), let ride = model.completedRide(for: session) {
+            RideDebriefView(rideID: ride.id)
+        } else {
+            PlannedDayView(day: day)
+        }
     }
 }
 

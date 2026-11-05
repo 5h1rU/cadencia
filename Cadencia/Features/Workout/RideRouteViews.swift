@@ -106,6 +106,7 @@ struct PlannedRideRouteView: View {
     @State private var exportURL: URL?
     @State private var garminFile: GPXShareFile?
     @State private var error: String?
+    @State private var confirmRemoveRoute = false
     private var day: Day { Day(date) }
     private var session: PlannedSession? { model.state.session(on: day) }
     private var attachment: AppState.RideRoutePlan? { model.state.routePlan(on: day) }
@@ -134,7 +135,8 @@ struct PlannedRideRouteView: View {
                     EventRoutePreview(route: route, context: .plannedRide)
                     RideRouteMetrics(route: route)
                     if let name = attachment?.fileName { LabeledContent("Route file", value: name) }
-                    Button("Send to Garmin Connect", systemImage: "arrow.up.forward.app") {
+                    Button {
+                        guard !exporting else { return }
                         exporting = true; error = nil
                         let exportDay = day
                         Task {
@@ -148,14 +150,20 @@ struct PlannedRideRouteView: View {
                             }
                             catch { self.error = error.localizedDescription }
                         }
-                    }.disabled(exporting)
-                    if exporting { ProgressView("Preparing file…") }
+                    } label: {
+                        HStack {
+                            Label("Send to Garmin Connect", systemImage: "arrow.up.forward.app")
+                            if exporting { Spacer(); ProgressView().accessibilityLabel("Preparing file…") }
+                        }
+                    }
+                    .disabled(exporting)
+                    if let error { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.secondary) }
                     Text("Choose Garmin Connect in the share menu (More if needed). Choose a cycling course type, save it, then use Send to Device and sync your Edge.")
                         .font(.footnote).foregroundStyle(.secondary)
                     Link("Garmin course import help", destination: URL(string: "https://support.garmin.com/en-GB/?faq=wKuZXCaZRP4mWPX5aRz5h5")!)
                         .font(.footnote)
                     if let exportURL { ShareLink(item: exportURL) { Label("Share route GPX", systemImage: "square.and.arrow.up") } }
-                    if day >= model.today, !model.state.isWorkoutCompleted(on: day) { Button("Remove GPX", role: .destructive) { model.removeRideRoute(on: day) } }
+                    if day >= model.today, !model.state.isWorkoutCompleted(on: day) { Button("Remove GPX", role: .destructive) { confirmRemoveRoute = true } }
                 }
                 EventClimbsSection(route: route)
                 Section {
@@ -165,7 +173,6 @@ struct PlannedRideRouteView: View {
             } else if !editable {
                 Section { Text("Choose an upcoming cycling session to attach a planned route.").foregroundStyle(.secondary) }
             }
-            if let error { Section { Text(error).foregroundStyle(.secondary) } }
         }
         .navigationTitle("Planned route").navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $importing) {
@@ -179,6 +186,13 @@ struct PlannedRideRouteView: View {
                 garminFile = nil
                 if let message { error = message }
             }
+            .presentationDetents([.medium, .large])
+        }
+        // Removing deletes Cadencia's copy of the GPX; only a new import brings the route back.
+        .confirmationDialog("Remove this route?", isPresented: $confirmRemoveRoute, titleVisibility: .visible) {
+            Button("Remove GPX", role: .destructive) { model.removeRideRoute(on: day) }
+        } message: {
+            Text("Your session stays planned. To use this route later, import its GPX again.")
         }
         .onChange(of: attachment?.route.id) { _, _ in exportURL = nil; error = nil }
     }

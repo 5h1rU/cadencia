@@ -18,22 +18,20 @@ struct EventRoutePreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout())
+            let point = inspected
             layout {
                 Text("Route overview").font(.headline)
                 if !textSize.isAccessibilitySize { Spacer() }
-                RouteExplorerButton(route: displayed, selectedKm: $selectedKm)
+                RouteExplorerButton(route: displayed, selectedKm: $selectedKm, inListRow: true)
                     .font(.subheadline)
             }
             Map {
-                ForEach(Array(route.segments.enumerated()), id: \.offset) { _, segment in
-                    MapPolyline(coordinates: segment.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
-                        .stroke(.blue, lineWidth: 4)
-                }
+                RouteLines(segments: route.segments)
                 if let start = route.start {
-                    Marker("Start", coordinate: CLLocationCoordinate2D(latitude: start.latitude, longitude: start.longitude))
+                    Marker("Route start", coordinate: CLLocationCoordinate2D(latitude: start.latitude, longitude: start.longitude))
                         .annotationTitles(.hidden)
                 }
-                if let point = inspected {
+                if let point {
                     Marker("Selected point", coordinate: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude))
                         .annotationTitles(.hidden)
                 }
@@ -44,7 +42,7 @@ struct EventRoutePreview: View {
             .accessibilityLabel("Event route map")
             if let segments = displayed.profileSegments, !segments.isEmpty {
                 TerrainProfileView(segments: segments, climbs: displayed.climbs, selectedKm: $selectedKm, totalDistanceKm: displayed.distanceKm)
-                if let point = inspected {
+                if let point {
                     Text("At \(ClimbFormat.km(point.distanceKm)) · \(ClimbFormat.meters(point.altitudeM)) · \(ClimbFormat.gradient(point.gradientPercent))")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
@@ -66,6 +64,21 @@ struct EventRoutePreview: View {
         }
         .padding(.vertical, 4)
         .task(id: route.id) { let value = await TerrainRouteCache.prepared(route); if !Task.isCancelled { prepared = value } }
+    }
+}
+
+/// The route lines as their own map content: the inputs are the same on every selection tick,
+/// so SwiftUI skips rebuilding the polylines while the athlete scrubs the profile.
+/// Pass a stored color (a `static let`), not one built in `body`, so the input stays identical.
+struct RouteLines: MapContent {
+    let segments: [[RoutePoint]]
+    var color = Color.blue
+    var lineWidth: CGFloat = 4
+    var body: some MapContent {
+        ForEach(segments.indices, id: \.self) { index in
+            MapPolyline(coordinates: segments[index].map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
+                .stroke(color, lineWidth: lineWidth)
+        }
     }
 }
 

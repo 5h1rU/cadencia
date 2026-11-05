@@ -83,13 +83,16 @@ struct EventPlanFlow: View {
                 if step == .review { Task { await create() } }
                 else { step = Step(rawValue: step.rawValue + 1)! }
             } label: {
-                HStack {
-                    if saving { ProgressView().tint(.white) }
-                    Text(step == .review ? "Create plan" : "Continue").frame(maxWidth: .infinity)
-                }
-                .padding(.vertical, 6)
+                // The title keeps its place so the button never resizes. The spinner stays untinted
+                // (the disabled fill is gray) and regular-size rather than inheriting `.large`.
+                Text(step == .review ? "Create plan" : "Continue")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .opacity(saving ? 0 : 1)
+                    .overlay { if saving { ProgressView().controlSize(.regular) } }
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .disabled(!canContinue || importing || saving)
             .padding().background(.bar)
         }
@@ -186,7 +189,14 @@ struct EventPlanFlow: View {
 
     @ViewBuilder private var eventSections: some View {
         Section("Event") {
-            TextField("Event name", text: $draft.name).autocorrectionDisabled()
+            // Titled and marked required like the course step's fields: Continue needs a name and a location.
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Event name").font(.subheadline)
+                TextField("Required", text: $draft.name)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel(Text("Event name"))
+            }
+            .padding(.vertical, 2)
             DatePicker("Date", selection: $draft.date, in: model.today.date()..., displayedComponents: .date)
             Picker("Discipline", selection: $draft.discipline) {
                 ForEach(EventDetails.Discipline.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -199,9 +209,20 @@ struct EventPlanFlow: View {
             }
         }
         Section {
-            TextField("City or start location", text: $draft.location).autocorrectionDisabled()
+            VStack(alignment: .leading, spacing: 6) {
+                Text("City or start location").font(.subheadline)
+                TextField("Required", text: $draft.location)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel(Text("City or start location"))
+            }
+            .padding(.vertical, 2)
+            // A trailing spinner keeps the row's height while the search runs.
             Button { Task { await findLocation(reverse: false) } } label: {
-                if locating { ProgressView("Finding location…") } else { Label("Find location", systemImage: "mappin.and.ellipse") }
+                HStack {
+                    Label("Find location", systemImage: "mappin.and.ellipse")
+                    Spacer()
+                    if locating { ProgressView().accessibilityLabel("Finding location…") }
+                }
             }.disabled(locating || EventPlanDraft.text(draft.location) == nil)
             if let latitude = draft.latitude, let longitude = draft.longitude {
                 LabeledContent("Coordinates", value: String(format: "%.4f, %.4f", latitude, longitude))

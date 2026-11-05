@@ -341,6 +341,28 @@ final class UploadLedgerTests: XCTestCase {
         XCTAssertEqual(ledger.entry(for: ride)?.intervalsActivityID, "i9")
     }
 
+    func testRetryableIgnoresBackoffButNeverParkedOrConfirmedEntries() {
+        let uncertain = UUID(), parked = UUID(), confirmed = UUID(), otherAthlete = UUID()
+        var ledger = UploadLedger()
+        ledger.enqueue(rideID: ride, athleteID: "i1")
+        ledger.markAttempt(ride, at: now)
+        ledger.markFailure(ride, error: .status(502, ""), requestWasSent: true)
+        ledger.enqueue(rideID: uncertain, athleteID: "i1")
+        ledger.markAttempt(uncertain, at: now)
+        ledger.markFailure(uncertain, error: .transport("timeout"), requestWasSent: true)
+        ledger.enqueue(rideID: parked, athleteID: "i1")
+        ledger.markAttempt(parked, at: now)
+        ledger.markFailure(parked, error: .unauthorized, requestWasSent: true)
+        ledger.enqueue(rideID: confirmed, athleteID: "i1")
+        ledger.markConfirmed(confirmed, activityID: "i9", at: now)
+        ledger.enqueue(rideID: otherAthlete, athleteID: "i2")
+
+        XCTAssertTrue(ledger.due(for: "i1", now: now.addingTimeInterval(1)).isEmpty, "both failures are still in backoff")
+        XCTAssertEqual(Set(ledger.retryable(for: "i1").map(\.rideID)), [ride, uncertain])
+        XCTAssertEqual(ledger.retryable(for: "i2").map(\.rideID), [otherAthlete])
+        XCTAssertEqual(ledger.entry(for: uncertain)?.attempts, 1, "listing retryable entries changes nothing")
+    }
+
     func testEnqueueIsIdempotent() {
         var ledger = UploadLedger()
         ledger.enqueue(rideID: ride, athleteID: "i1")

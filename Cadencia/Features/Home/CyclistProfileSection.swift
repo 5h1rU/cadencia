@@ -11,8 +11,11 @@ struct CyclistProfileSection: View {
             } label: {
                 Group {
                     if model.cyclistProfileBusy {
-                        Text("Reading your riding history…")
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small)
+                            Text("Reading your riding history…")
+                                .foregroundStyle(.secondary)
+                        }
                     } else if model.cyclistProfileError != nil {
                         Text("Profile needs attention")
                             .foregroundStyle(.orange)

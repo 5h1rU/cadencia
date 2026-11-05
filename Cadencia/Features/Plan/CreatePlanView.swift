@@ -15,7 +15,14 @@ struct CreatePlanView: View {
     @State private var confirmRestart = false
     @State private var requestTask: Task<Void, Never>?
     @State private var speechTask: Task<Void, Never>?
+    /// Set when Start plan succeeds; see `reviewTarget`.
+    @State private var startedReview: ReviewTarget? = nil
+    /// Pushed from the scroll view, not from the button: the button goes away once the coach is connected,
+    /// and a link leaving the screen would pop Coach settings (and the ChatGPT welcome sheet) with it.
+    @State private var showsCoachSettings = false
     @FocusState private var focused: Bool
+    @ScaledMetric(relativeTo: .largeTitle) private var waveformSize = 42.0
+    @ScaledMetric(relativeTo: .largeTitle) private var finishSymbolSize = 50.0
 
     // Only the debug fixture provides a transcript. The regular screen always uses the microphone.
     @State var previewTranscript: String?
@@ -27,6 +34,20 @@ struct CreatePlanView: View {
     }
     private var recording: Bool { speech.isListening || previewTranscript != nil }
     private var canAnswer: Bool { model.aiCoachAvailable && !model.consultationBusy && model.consultationError == nil }
+
+    private struct ReviewTarget {
+        let draft: PlanConsultation.Draft
+        let sessionID: UUID
+    }
+
+    /// The draft behind Review plan. Starting the plan clears the consultation in the same update that closes
+    /// this cover; holding the started draft keeps the link, so the review stays on screen while the cover
+    /// animates away instead of popping back to an emptied consultation.
+    private var reviewTarget: ReviewTarget? {
+        if let startedReview { return startedReview }
+        guard let draft = reply?.draft, let session else { return nil }
+        return ReviewTarget(draft: draft, sessionID: session.id)
+    }
 
     var body: some View {
         NavigationStack {
@@ -47,6 +68,8 @@ struct CreatePlanView: View {
                             EventPlanFlow { dismiss() }
                         } label: {
                             Label("Prepare for an event", systemImage: "calendar")
+                                .frame(minHeight: 44)
+                                .contentShape(.rect)
                         }
                     }
                     if let messages = session?.messages, messages.count > 1 {
@@ -75,6 +98,7 @@ struct CreatePlanView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Your consultation")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(isPresented: $showsCoachSettings) { CoachSettingsView() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
                 if session?.messages.contains(where: { $0.role == .athlete }) == true {
@@ -105,7 +129,17 @@ struct CreatePlanView: View {
                         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { showProfile = false } } }
                 }
             }
-            .task { await model.beginPlanConsultation() }
+            .task {
+                // After Start plan the consultation is gone and the cover is closing: never open a new one.
+                guard startedReview == nil else { return }
+                await model.beginPlanConsultation()
+            }
+            // A coach connected without leaving this screen (the banner's sign-in, or dismissing a plan problem)
+            // starts the consultation here; `.task` only runs again after a pop.
+            .onChange(of: model.aiCoachAvailable) { _, available in
+                guard available, startedReview == nil, !model.consultationBusy else { return }
+                requestTask = Task { await model.beginPlanConsultation() }
+            }
             .onChange(of: speech.status) { old, new in
                 if old == .listening || old == .finishing, new != .listening && new != .finishing {
                     if !speech.transcript.isEmpty { answer = speech.transcript }
@@ -185,9 +219,16 @@ struct CreatePlanView: View {
     }
 
     private var sourceLabel: some View {
+        // "Reading" only until this account's history first lands: `lastSyncAt` is stamped then, before
+        // the Health read that `isSyncing` still covers. Later syncs keep showing the saved answer.
         Group {
             if hasRides { Text("Intervals.icu") }
-            else if model.isSyncing { Text("Reading ride history…") }
+            else if model.isSyncing && model.state.lastSyncAt == nil {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Reading ride history…")
+                }
+            }
             else { Text("No recent rides to review") }
         }
         .foregroundStyle(.secondary)
@@ -197,9 +238,10 @@ struct CreatePlanView: View {
         Button { showProfile = true } label: {
             Label("Profile details", systemImage: "chevron.right")
                 .labelStyle(ConsultationTrailingSymbol())
+                .frame(minHeight: 44)
+                .contentShape(.rect)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(Color.accentColor)
+        .buttonStyle(.borderless)
         .accessibilityIdentifier("consultation-profile")
     }
 
@@ -219,6 +261,23 @@ struct CreatePlanView: View {
             if let issue = model.coachIssue {
                 CoachIssueBanner(issue: issue) { model.dismissCoachIssue() }
             }
+            // Outside the coach states below: starting a finished draft never needs the coach, and a background
+            // coach failure that flips them must not pop the review.
+            if let target = reviewTarget {
+                NavigationLink {
+                    PlanConsultationReviewView(draft: target.draft, sessionID: target.sessionID) {
+                        startedReview = target
+                        dismiss()
+                    }
+                } label: {
+                    Text("Review plan")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityIdentifier("consultation-review-plan")
+            }
             if model.consultationBusy {
                 if let message = session?.messages.last, message.role == .athlete {
                     Text(verbatim: message.text)
@@ -230,7 +289,7 @@ struct CreatePlanView: View {
             } else if !model.aiCoachAvailable {
                 Text("Connect your coach to begin the consultation.")
                     .foregroundStyle(.secondary)
-                NavigationLink("Coach settings") { CoachSettingsView() }
+                Button("Coach settings") { showsCoachSettings = true }
                     .buttonStyle(.bordered)
             } else if let error = model.consultationError {
                 Text(verbatim: error)
@@ -238,15 +297,6 @@ struct CreatePlanView: View {
                 Button("Try again") { requestTask = Task { await model.requestPlanConsultation() } }
                     .buttonStyle(.bordered)
             } else {
-                if let draft = reply?.draft, let session {
-                    NavigationLink {
-                        PlanConsultationReviewView(draft: draft, sessionID: session.id) { dismiss() }
-                    } label: {
-                        Text("Review plan").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("consultation-review-plan")
-                }
                 if reply?.topic == .otherTraining {
                     Text("Gym, CrossFit, running, swimming, or anything you’d like to add.")
                         .foregroundStyle(.secondary)
@@ -283,6 +333,7 @@ struct CreatePlanView: View {
             } label: {
                 Label("Type instead", systemImage: "keyboard")
                     .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(.rect)
             }
             .disabled(speech.status == .finishing)
             Text("Review your words before sending.")
@@ -291,11 +342,15 @@ struct CreatePlanView: View {
                 .frame(maxWidth: .infinity)
         } else if speech.status == .preparing {
             ProgressView("Preparing voice input…")
-            Button("Type instead") {
+            Button {
                 speechTask?.cancel()
                 speech.cancel()
                 editingAnswer = true
                 focused = true
+            } label: {
+                Label("Type instead", systemImage: "keyboard")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(.rect)
             }
         } else {
             if speech.status == .denied {
@@ -312,9 +367,13 @@ struct CreatePlanView: View {
                         .focused($focused)
                         .accessibilityIdentifier("consultation-answer")
                     HStack {
-                        Button("Record answer", systemImage: "mic", action: startVoice)
-                            .labelStyle(.iconOnly)
-                            .frame(minWidth: 44, minHeight: 44)
+                        Button(action: startVoice) {
+                            Label("Record answer", systemImage: "mic")
+                                .labelStyle(.iconOnly)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.borderless)
                         Spacer()
                         Button("Send", action: { send(answer) })
                             .buttonStyle(.borderedProminent)
@@ -325,20 +384,33 @@ struct CreatePlanView: View {
                 .padding(16)
                 .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
             } else {
-                Button(action: startVoice) {
-                    Label("Answer by voice", systemImage: "mic.fill").frame(maxWidth: .infinity, minHeight: 32)
+                // With a draft, Review plan is the primary action and a voice revision steps back.
+                if reply?.draft != nil {
+                    answerByVoiceButton.buttonStyle(.bordered)
+                } else {
+                    answerByVoiceButton.buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canAnswer)
                 Button {
                     editingAnswer = true
                     focused = true
                 } label: {
-                    Label("Type instead", systemImage: "keyboard").frame(maxWidth: .infinity, minHeight: 44)
+                    Label("Type instead", systemImage: "keyboard")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(.rect)
                 }
                 .disabled(!canAnswer)
             }
         }
+    }
+
+    private var answerByVoiceButton: some View {
+        Button(action: startVoice) {
+            Label("Answer by voice", systemImage: "mic.fill")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+        }
+        .controlSize(.large)
+        .disabled(!canAnswer)
     }
 
     private var speechFailed: Bool {
@@ -348,10 +420,17 @@ struct CreatePlanView: View {
 
     private var voiceCard: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Label(speech.status == .finishing ? "Finishing transcript…" : "You’re speaking", systemImage: "mic")
-                .foregroundStyle(Color.accentColor)
+            Group {
+                // The final recognition pass can take a few seconds while the waveform is still.
+                if speech.status == .finishing {
+                    Label { Text("Finishing transcript…") } icon: { ProgressView().controlSize(.small) }
+                } else {
+                    Label("You’re speaking", systemImage: "mic")
+                }
+            }
+            .foregroundStyle(Color.accentColor)
             Image(systemName: "waveform")
-                .font(.system(size: 42))
+                .font(.system(size: waveformSize))
                 .foregroundStyle(Color.accentColor)
                 .symbolEffect(.variableColor.iterative, isActive: recording && !reduceMotion)
                 .frame(maxWidth: .infinity)
@@ -367,11 +446,12 @@ struct CreatePlanView: View {
             Button(action: finishVoice) {
                 VStack(spacing: 6) {
                     Image(systemName: "stop.circle.fill")
-                        .font(.system(size: 50))
+                        .font(.system(size: finishSymbolSize))
                         .accessibilityHidden(true)
                     Text("Finish answer").fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(.rect)
             }
             .disabled(speech.status == .finishing)
             .accessibilityIdentifier("consultation-finish-voice")

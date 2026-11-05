@@ -9,11 +9,19 @@ struct RouteExplorerButton: View {
     var title: String?
     @Binding var selectedKm: Double?
     var highlightedRange: ClosedRange<Double>?
+    /// In a List row only the button opens the explorer, not the whole row: borderless, with a 44 pt target.
+    /// Elsewhere (the climb screen's toolbar) it keeps the system button style.
+    var inListRow = false
     @State private var isPresented = false
 
     var body: some View {
-        Button { isPresented = true } label: {
-            Label("Full screen", systemImage: "arrow.up.left.and.arrow.down.right")
+        Group {
+            if inListRow {
+                Button { isPresented = true } label: { label.frame(minWidth: 44, minHeight: 44).contentShape(.rect) }
+                    .buttonStyle(.borderless)
+            } else {
+                Button { isPresented = true } label: { label }
+            }
         }
         .accessibilityHint("Opens the route explorer in landscape.")
         .fullScreenCover(isPresented: $isPresented, onDismiss: RouteExplorerOrientation.leave) {
@@ -21,6 +29,8 @@ struct RouteExplorerButton: View {
                               selectedKm: $selectedKm, highlightedRange: highlightedRange)
         }
     }
+
+    private var label: some View { Label("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") }
 }
 
 private struct ExplorerCourse {
@@ -80,6 +90,11 @@ private struct RouteExplorerView: View {
     @State private var camera: MapCameraPosition
     @State private var cameraDistance = 10_000.0
     @State private var followsSelection = false
+    /// Scrubbing stays local, so the screen behind the cover isn't re-rendered on every tick.
+    /// The presenter gets the inspected point back when the explorer closes.
+    @State private var selection: Double?
+    /// Stored once, so the route lines' input stays identical while scrubbing.
+    private static let contextLine = Color.gray.opacity(0.4)
 
     init(route: GPXRoute, climb: RouteClimb?, title: String, selectedKm: Binding<Double?>,
          highlightedRange: ClosedRange<Double>?) {
@@ -88,13 +103,14 @@ private struct RouteExplorerView: View {
         self.highlightedRange = highlightedRange
         _camera = State(initialValue: .rect(course.bounds))
         _mode = State(initialValue: course.profile.isEmpty ? .map : .both)
+        _selection = State(initialValue: selectedKm.wrappedValue)
     }
 
-    private var absoluteDistance: Double { course.origin + (selectedKm ?? 0) }
+    private var absoluteDistance: Double { course.origin + (selection ?? 0) }
     private var point: RoutePoint? { course.geometry.point(at: absoluteDistance) }
     private var terrainPoint: ClimbProfilePoint? { course.profilePoint(at: absoluteDistance) }
     private var distanceSelection: Binding<Double> {
-        Binding(get: { selectedKm ?? 0 }, set: { selectedKm = $0 })
+        Binding(get: { selection ?? 0 }, set: { selection = $0 })
     }
 
     var body: some View {
@@ -130,8 +146,9 @@ private struct RouteExplorerView: View {
         }
         .background(RouteExplorerRotation().frame(width: 0, height: 0))
         .statusBarHidden()
-        .onAppear { selectedKm = min(course.length, max(0, selectedKm ?? 0)) }
-        .onChange(of: selectedKm) { _, _ in if followsSelection { centerOnSelection() } }
+        .onAppear { selection = min(course.length, max(0, selection ?? 0)) }
+        .onChange(of: selection) { _, _ in if followsSelection { centerOnSelection() } }
+        .onDisappear { selectedKm = selection }
     }
 
     @ViewBuilder private func header(landscape: Bool) -> some View {
@@ -146,9 +163,11 @@ private struct RouteExplorerView: View {
         }
     }
     private var closeButton: some View {
-        Button { dismiss() } label: { Label("Close", systemImage: "xmark").labelStyle(.iconOnly).frame(width: 44, height: 36) }
-            .font(.system(size: 18, weight: .semibold))
-            .buttonStyle(.bordered).buttonBorderShape(.capsule)
+        // Hand the point back before the cover slides away, so the screen it reveals already shows it.
+        Button { selectedKm = selection; dismiss() } label: { Label("Close", systemImage: "xmark").labelStyle(.iconOnly) }
+            .font(.body.weight(.semibold))
+            .buttonStyle(.bordered).buttonBorderShape(.circle)
+            .controlSize(.large)
     }
     private var heading: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -170,18 +189,13 @@ private struct RouteExplorerView: View {
     private var map: some View {
         MapReader { proxy in
             Map(position: $camera, interactionModes: .all) {
-                ForEach(Array(course.route.segments.enumerated()), id: \.offset) { _, segment in
-                    MapPolyline(coordinates: segment.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
-                        .stroke(course.climb == nil ? Color.blue : Color.gray.opacity(0.4), lineWidth: course.climb == nil ? 4 : 2)
-                }
+                RouteLines(segments: course.route.segments, color: course.climb == nil ? Color.blue : Self.contextLine,
+                           lineWidth: course.climb == nil ? 4 : 2)
                 if course.climb != nil {
-                    ForEach(Array(course.geometry.segments.enumerated()), id: \.offset) { _, segment in
-                        MapPolyline(coordinates: segment.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) })
-                            .stroke(.blue, lineWidth: 5)
-                    }
+                    RouteLines(segments: course.geometry.segments, lineWidth: 5)
                 }
                 if let start = course.geometry.segments.first?.first {
-                    Marker("Start", systemImage: "flag", coordinate: CLLocationCoordinate2D(latitude: start.latitude, longitude: start.longitude))
+                    Marker("Route start", systemImage: "flag", coordinate: CLLocationCoordinate2D(latitude: start.latitude, longitude: start.longitude))
                         .tint(.green).annotationTitles(.hidden)
                 }
                 if let point {
@@ -198,7 +212,7 @@ private struct RouteExplorerView: View {
             .onTapGesture { location in
                 guard let coordinate = proxy.convert(location, from: .local),
                       let point = course.geometry.nearestPoint(latitude: coordinate.latitude, longitude: coordinate.longitude) else { return }
-                selectedKm = min(course.length, max(0, point.distanceKm - course.origin))
+                selection = min(course.length, max(0, point.distanceKm - course.origin))
             }
             .onMapCameraChange(frequency: .onEnd) { context in
                 cameraDistance = context.camera.distance
@@ -217,19 +231,19 @@ private struct RouteExplorerView: View {
                 if followsSelection { withAnimation { centerOnSelection() } }
             } label: {
                 Label("Follow selected point", systemImage: followsSelection ? "scope" : "location")
-                    .labelStyle(.iconOnly).frame(width: 44, height: 44)
+                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44).contentShape(.rect)
             }
-            .disabled(point == nil).tint(followsSelection ? .blue : .primary)
+            .disabled(point == nil).foregroundStyle(followsSelection ? Color.accentColor : Color.primary)
             .accessibilityAddTraits(followsSelection ? .isSelected : [])
             Button {
                 followsSelection = false
                 withAnimation { camera = .rect(course.bounds) }
             } label: {
                 Label(course.climb == nil ? LocalizedStringKey("Fit route") : LocalizedStringKey("Fit climb"), systemImage: "arrow.up.left.and.arrow.down.right")
-                    .labelStyle(.iconOnly).frame(width: 44, height: 44)
+                    .labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44).contentShape(.rect)
             }
         }
-        .font(.system(size: 20, weight: .semibold))
+        .font(.title3.weight(.semibold))
         .buttonStyle(.plain).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
     }
 
@@ -239,7 +253,7 @@ private struct RouteExplorerView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     inspectionSummary
                     TerrainProfileView(segments: course.profile, originKm: course.origin,
-                                       climbs: course.climb == nil ? course.route.climbs : [], selectedKm: $selectedKm,
+                                       climbs: course.climb == nil ? course.route.climbs : [], selectedKm: $selection,
                                        highlightedRange: highlightedRange, totalDistanceKm: course.length,
                                        height: max(textSize.isAccessibilitySize ? 280 : 145, geometry.size.height - 160))
                     GradientLegend()
@@ -255,16 +269,17 @@ private struct RouteExplorerView: View {
             inspectionSummary
             Slider(value: distanceSelection, in: 0...course.length) {
                 Text("Selected distance")
-            }.accessibilityValue(Text(ClimbFormat.km(selectedKm ?? 0)))
+            }.accessibilityValue(Text(ClimbFormat.km(selection ?? 0)))
         }.padding(.horizontal, 16).padding(.vertical, 8)
     }
 
     private var inspectionSummary: some View {
         let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8)) : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
+        let terrain = terrainPoint
         return layout {
-            metric(course.climb == nil ? "Route distance" : "Distance into climb", value: ClimbFormat.km(selectedKm ?? 0))
-            metric("Altitude", value: (terrainPoint?.altitudeM ?? point?.elevationM).map(ClimbFormat.meters) ?? String(localized: "Unknown"))
-            metric("Gradient over 100 m", value: ClimbFormat.gradient(terrainPoint?.gradientPercent))
+            metric(course.climb == nil ? "Route distance" : "Distance into climb", value: ClimbFormat.km(selection ?? 0))
+            metric("Altitude", value: (terrain?.altitudeM ?? point?.elevationM).map(ClimbFormat.meters) ?? String(localized: "Unknown"))
+            metric("Gradient over 100 m", value: ClimbFormat.gradient(terrain?.gradientPercent))
         }
     }
     private func metric(_ title: LocalizedStringKey, value: String) -> some View {

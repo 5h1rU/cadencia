@@ -57,9 +57,13 @@ struct LoadingView: View {
                 .tint(.accentColor)
 
             if let onContinue {
-                Button("Open Cadencia", action: onContinue)
-                    .font(.subheadline.weight(.medium))
-                    .frame(minHeight: 44)
+                Button(action: onContinue) {
+                    // The 44 pt target must be inside the label: a frame around the button is not tappable.
+                    Text("Open Cadencia")
+                        .frame(minHeight: 44)
+                        .contentShape(.rect)
+                }
+                .font(.subheadline.weight(.medium))
                 Text("Your training will keep syncing in the background.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)

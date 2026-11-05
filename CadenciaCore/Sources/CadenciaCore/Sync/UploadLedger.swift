@@ -60,6 +60,13 @@ public struct UploadLedger: Codable, Equatable, Sendable {
         pending(for: athleteID).filter { $0.isDue(now: now) }
     }
 
+    /// What an explicit retry may send now: pending and uncertain entries, backoff ignored. Parked
+    /// (`needsReconnect`) and confirmed entries never qualify. Safe because every upload reconciles by
+    /// `external_id` before posting.
+    public func retryable(for athleteID: String) -> [UploadEntry] {
+        pending(for: athleteID).filter { $0.state == .pending || $0.state == .uncertain }
+    }
+
     public mutating func enqueue(rideID: UUID, athleteID: String) {
         guard entry(for: rideID) == nil else { return }
         entries.append(UploadEntry(rideID: rideID, athleteID: athleteID))

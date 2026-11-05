@@ -18,6 +18,7 @@ struct SignInView: View {
                 Image(systemName: "figure.indoor.cycle")
                     .font(.system(size: 56, weight: .light))
                     .foregroundStyle(.tint)
+                    .accessibilityHidden(true)
                 VStack(spacing: 8) {
                     Text("Cadencia")
                         .font(.largeTitle.bold())
@@ -39,22 +40,28 @@ struct SignInView: View {
                         Button {
                             Task { await signInWithOAuth() }
                         } label: {
-                            HStack {
-                                if busy { ProgressView().tint(.white) }
-                                Text("Connect Intervals.icu")
-                            }
-                            .frame(maxWidth: .infinity)
+                            // The hidden title keeps the button from resizing; .regular stops the spinner inheriting .large.
+                            Text("Connect Intervals.icu")
+                                .font(.headline)
+                                .opacity(busy ? 0 : 1)
+                                .overlay { if busy { ProgressView().controlSize(.regular) } }
+                                .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                         .disabled(busy)
-                        Button("Use an API key instead") { showAPIKey = true }
-                            .font(.footnote)
+                        Button { showAPIKey = true } label: {
+                            Text("Use an API key instead")
+                                .font(.footnote)
+                                .frame(minHeight: 44)
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.borderless)
                     } else {
                         Button {
                             showAPIKey = true
                         } label: {
-                            Text("Connect with an API key").frame(maxWidth: .infinity)
+                            Text("Connect with an API key").font(.headline).frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
@@ -73,6 +80,7 @@ struct SignInView: View {
     }
 
     private func signInWithOAuth() async {
+        guard !busy else { return }
         busy = true
         defer { busy = false }
         error = nil
@@ -129,7 +137,8 @@ struct APIKeyView: View {
     }
 
     private func connect() async {
-        guard !busy else { return }
+        // The keyboard's Go reaches here even while Connect is disabled for an empty key.
+        guard !busy, !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         busy = true
         defer { busy = false }
         error = nil

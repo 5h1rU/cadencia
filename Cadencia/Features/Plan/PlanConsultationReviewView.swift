@@ -75,23 +75,30 @@ struct PlanConsultationReviewView: View {
                     if model.state.plan != nil { confirmReplace = true }
                     else { Task { await activate() } }
                 } label: {
-                    HStack {
-                        if saving { ProgressView() }
-                        Text("Start plan").frame(maxWidth: .infinity)
-                    }
+                    // The title keeps its place so the button never resizes. The spinner stays untinted
+                    // (the disabled fill is gray) and regular-size rather than inheriting `.large`.
+                    Text("Start plan")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .opacity(saving ? 0 : 1)
+                        .overlay { if saving { ProgressView().controlSize(.regular) } }
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .disabled(saving || model.consultationBusy)
                 .accessibilityIdentifier("consultation-start-plan")
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+            } footer: {
                 Text("Go back to the consultation if you want to change anything.")
-                    .foregroundStyle(.secondary)
             }
         }
         .listStyle(.insetGrouped)
         .navigationTitle("Review plan")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Replace your current plan?", isPresented: $confirmReplace, titleVisibility: .visible) {
-            Button("Start plan") { Task { await activate() } }
+            // Destructive: the current plan is replaced and can't be restored.
+            Button("Start plan", role: .destructive) { Task { await activate() } }
         } message: {
             Text("Your future cycling sessions will follow this plan. Completed rides stay in your history.")
         }
@@ -100,11 +107,13 @@ struct PlanConsultationReviewView: View {
     private func activate() async {
         guard !saving else { return }
         saving = true
-        defer { saving = false }
         do {
             try await model.activateConsultationPlan(draft, sessionID: sessionID)
+            // Success closes the cover. `saving` stays set, as in EventPlanFlow.create, so the spinner
+            // stays (and a second start stays blocked) while the cover slides away.
             finished()
         } catch {
+            saving = false
             notice = String(localized: "This draft needs an update. Go back and ask the coach to revise it.")
         }
     }
