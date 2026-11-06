@@ -32,7 +32,6 @@ struct CreatePlanView: View {
     private var hasRides: Bool {
         model.state.activities.contains { $0.isCycling && $0.day >= model.today.adding(days: -42) && $0.day <= model.today }
     }
-    private var recording: Bool { speech.isListening || previewTranscript != nil }
     private var canAnswer: Bool { model.aiCoachAvailable && !model.consultationBusy && model.consultationError == nil }
 
     private struct ReviewTarget {
@@ -304,7 +303,7 @@ struct CreatePlanView: View {
                     Text("Tell me what matters to you. We’ll shape the plan together.")
                         .foregroundStyle(.secondary)
                 }
-                if let suggestions = reply?.suggestedAnswers, !suggestions.isEmpty, !recording, !editingAnswer {
+                if let suggestions = reply?.suggestedAnswers, !suggestions.isEmpty, voicePhase == nil, !editingAnswer {
                     ViewThatFits(in: .horizontal) {
                         HStack { quickAnswers(suggestions) }
                         VStack(alignment: .leading) { quickAnswers(suggestions) }
@@ -313,6 +312,8 @@ struct CreatePlanView: View {
                 answerControls
             }
         }
+        // The voice card fades in where Answer by voice was, and the controls below glide instead of jumping.
+        .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: voicePhase)
     }
 
     private func quickAnswers(_ suggestions: [String]) -> some View {
@@ -323,11 +324,31 @@ struct CreatePlanView: View {
         }
     }
 
+    /// Where a voice answer stands, while there is one. Preparing shows the same card as listening, so nothing
+    /// moves when the microphone comes on.
+    private enum VoicePhase { case preparing, listening, finishing }
+
+    private var voicePhase: VoicePhase? {
+        if previewTranscript != nil { return .listening }
+        switch speech.status {
+        case .preparing: return .preparing
+        case .listening: return .listening
+        case .finishing: return .finishing
+        default: return nil
+        }
+    }
+
     @ViewBuilder private var answerControls: some View {
-        if recording || speech.status == .finishing {
-            voiceCard
+        if let phase = voicePhase {
+            voiceCard(phase)
             Button {
-                finishVoice()
+                // Before the microphone is on there is nothing to keep: cancel. Afterwards, keep what was heard.
+                if phase == .preparing {
+                    speechTask?.cancel()
+                    speech.cancel()
+                } else {
+                    finishVoice()
+                }
                 editingAnswer = true
                 focused = true
             } label: {
@@ -335,23 +356,11 @@ struct CreatePlanView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(.rect)
             }
-            .disabled(speech.status == .finishing)
+            .disabled(phase == .finishing)
             Text("Review your words before sending.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
-        } else if speech.status == .preparing {
-            ProgressView("Preparing voice input…")
-            Button {
-                speechTask?.cancel()
-                speech.cancel()
-                editingAnswer = true
-                focused = true
-            } label: {
-                Label("Type instead", systemImage: "keyboard")
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(.rect)
-            }
         } else {
             if speech.status == .denied {
                 Text("Microphone or speech access is off. You can still type your answer.")
@@ -374,6 +383,7 @@ struct CreatePlanView: View {
                                 .contentShape(.rect)
                         }
                         .buttonStyle(.borderless)
+                        .accessibilityAddTraits(.startsMediaSession)
                         Spacer()
                         Button("Send", action: { send(answer) })
                             .buttonStyle(.borderedProminent)
@@ -411,6 +421,7 @@ struct CreatePlanView: View {
         }
         .controlSize(.large)
         .disabled(!canAnswer)
+        .accessibilityAddTraits(.startsMediaSession)
     }
 
     private var speechFailed: Bool {
@@ -418,21 +429,26 @@ struct CreatePlanView: View {
         return false
     }
 
-    private var voiceCard: some View {
+    private func voiceCard(_ phase: VoicePhase) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             Group {
-                // The final recognition pass can take a few seconds while the waveform is still.
-                if speech.status == .finishing {
-                    Label { Text("Finishing transcript…") } icon: { ProgressView().controlSize(.small) }
-                } else {
+                switch phase {
+                // Preparing and the final recognition pass (a few seconds, waveform still) wait the same way.
+                case .preparing:
+                    Label { Text("Preparing voice input…") } icon: { ProgressView().controlSize(.small) }
+                case .listening:
                     Label("You’re speaking", systemImage: "mic")
+                case .finishing:
+                    Label { Text("Finishing transcript…") } icon: { ProgressView().controlSize(.small) }
                 }
             }
-            .foregroundStyle(Color.accentColor)
+            // Accent only while the microphone is live; the waits look like the screen's other inline waits.
+            .foregroundStyle(phase == .listening ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+            // Grey and still whenever the microphone is off, so it only lights up while it can hear you.
             Image(systemName: "waveform")
                 .font(.system(size: waveformSize))
-                .foregroundStyle(Color.accentColor)
-                .symbolEffect(.variableColor.iterative, isActive: recording && !reduceMotion)
+                .foregroundStyle(phase == .listening ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                .symbolEffect(.variableColor.iterative, isActive: phase == .listening && !reduceMotion)
                 .frame(maxWidth: .infinity)
                 .accessibilityHidden(true)
             if let transcript = previewTranscript ?? (speech.transcript.isEmpty ? nil : speech.transcript) {
@@ -440,8 +456,11 @@ struct CreatePlanView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier("consultation-transcript")
             } else {
+                // Shown only while it is true; the line is held otherwise, so the card never changes height.
                 Text("Listening…")
                     .foregroundStyle(.secondary)
+                    .opacity(phase == .listening ? 1 : 0)
+                    .accessibilityHidden(phase != .listening)
             }
             Button(action: finishVoice) {
                 VStack(spacing: 6) {
@@ -453,11 +472,12 @@ struct CreatePlanView: View {
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(.rect)
             }
-            .disabled(speech.status == .finishing)
+            .disabled(phase != .listening)
             .accessibilityIdentifier("consultation-finish-voice")
         }
         .padding(16)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
+        .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: phase)
     }
 
     private func startVoice() {

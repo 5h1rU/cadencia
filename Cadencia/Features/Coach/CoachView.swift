@@ -108,6 +108,7 @@ struct CoachView: View {
 /// live transcripts re-render only the composer, not the conversation. It never reads `model.state`.
 private struct CoachComposer: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let speech: SpeechRecognizer
     @State private var draft = ""
     @FocusState private var composing: Bool
@@ -132,18 +133,33 @@ private struct CoachComposer: View {
                 .padding(.horizontal)
                 .accessibilityElement(children: .combine)
             }
-            if speech.status == .preparing {
-                ProgressView("Preparing voice input…").padding(.horizontal)
-            } else if speech.status == .finishing {
-                ProgressView("Finishing transcript…").padding(.horizontal)
-            } else if speech.isListening {
+            // One status line for the whole voice note, the same height in every phase, so the field never jumps.
+            if speech.isCapturing {
                 HStack(spacing: 8) {
-                    Image(systemName: "waveform").symbolEffect(.variableColor.iterative, isActive: true).foregroundStyle(.red)
-                    Text(speech.transcript.isEmpty ? String(localized: "Listening…") : speech.transcript)
-                        .lineLimit(2).font(.footnote).foregroundStyle(.secondary)
+                    if speech.isListening {
+                        Image(systemName: "waveform")
+                            .symbolEffect(.variableColor.iterative, isActive: !reduceMotion)
+                            .foregroundStyle(.red)
+                            .accessibilityHidden(true)
+                    } else {
+                        ProgressView().controlSize(.small)
+                    }
+                    if speech.status == .preparing {
+                        Text("Preparing voice input…")
+                    } else if !speech.transcript.isEmpty {
+                        // Finishing keeps the words where they were heard; only the icon turns into a spinner.
+                        Text(verbatim: speech.transcript).lineLimit(2)
+                    } else if speech.isListening {
+                        Text("Listening…")
+                    } else {
+                        Text("Finishing transcript…")
+                    }
                     Spacer()
                 }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
                 .padding(.horizontal)
+                .accessibilityElement(children: .combine)
             }
             if case .denied = speech.status {
                 Text("Microphone or speech access is off. Enable it in Settings to use voice notes.").font(.footnote).foregroundStyle(.secondary).padding(.horizontal)
@@ -166,6 +182,8 @@ private struct CoachComposer: View {
                 .buttonStyle(.borderless)
                 .tint(speech.isListening ? Color.red : Color.accentColor)
                 .disabled(speech.status == .finishing || (model.coachBusy && !speech.isCapturing))
+                // Only while it starts a capture, so stopping keeps normal VoiceOver feedback (the microphone is already off then).
+                .accessibilityAddTraits(speech.isCapturing ? [] : .startsMediaSession)
                 TextField("Message the coach", text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.roundedBorder)
