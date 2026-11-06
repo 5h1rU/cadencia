@@ -157,7 +157,8 @@ final class IntervalsClientTests: XCTestCase {
         let req = t.requests[0]
         XCTAssertEqual(req.url.query, "upsertOnUid=true")
         let body = try JSONSerialization.jsonObject(with: req.body!) as! [String: Any]
-        XCTAssertEqual(body["uid"] as? String, "cadencia-\(session.id.uuidString.lowercased())")
+        XCTAssertEqual(body["uid"] as? String, "cadencia-ride-2026-10-28", "one planned ride per day: the day is the identity")
+        XCTAssertEqual(body["external_id"] as? String, "cadencia-ride-2026-10-28")
         XCTAssertEqual(body["start_date_local"] as? String, "2026-10-28T00:00:00")
         XCTAssertEqual(body["moving_time"] as? Int, 3600)
         let description = body["description"] as! String
@@ -283,7 +284,7 @@ final class OAuthTests: XCTestCase {
         XCTAssertEqual(pkce.verifier.count, 64)
         let url = oauth.authorizationURL(pkce: pkce, state: "s1")
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
-        XCTAssertEqual(items.first { $0.name == "scope" }?.value, "ACTIVITY:WRITE,WELLNESS:READ,CALENDAR:WRITE,SETTINGS:READ,CHATS:WRITE")
+        XCTAssertEqual(items.first { $0.name == "scope" }?.value, "ACTIVITY:WRITE,WELLNESS:WRITE,CALENDAR:WRITE,SETTINGS:WRITE,CHATS:WRITE")
         XCTAssertEqual(items.first { $0.name == "code_challenge_method" }?.value, "S256")
         XCTAssertEqual(items.first { $0.name == "code_challenge" }?.value, pkce.challenge)
 

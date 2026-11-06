@@ -7,6 +7,66 @@
     " " : {
 
     },
+    "Cadencia now saves how you feel, your weight, height, FTP, units and weekly availability in Intervals.icu. Reconnect once to allow it; until then these changes wait on this phone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadencia ahora guarda en Intervals.icu cómo te sientes, tu peso, tu altura, tu FTP, las unidades y tu disponibilidad semanal. Vuelve a conectar una vez para permitirlo; hasta entonces, estos cambios esperan en este teléfono."
+          }
+        }
+      }
+    },
+    "Indoor FTP is used when Intervals has one. Estimates use Intervals' eFTP when it has one, else the 42-day power curve, and only become the working FTP when you accept them. An accepted FTP is saved to Intervals." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se usa el FTP de interior cuando Intervals tiene uno. Las estimaciones usan el eFTP de Intervals cuando existe y, si no, la curva de potencia de 42 días, y solo pasan a ser tu FTP de trabajo cuando las aceptas. El FTP que aceptas se guarda en Intervals."
+          }
+        }
+      }
+    },
+    "Reconnect" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconectar"
+          }
+        }
+      }
+    },
+    "Reconnect Intervals.icu" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconectar Intervals.icu"
+          }
+        }
+      }
+    },
+    "Saved on this phone. Intervals.icu sync is pending." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado en este teléfono. La sincronización con Intervals.icu está pendiente."
+          }
+        }
+      }
+    },
+    "Your accepted FTP is waiting to be saved to Intervals.icu." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El FTP que aceptaste está pendiente de guardarse en Intervals.icu."
+          }
+        }
+      }
+    },
     "–" : {
       "localizations" : {
         "es" : {
@@ -4110,16 +4170,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Interior"
-          }
-        }
-      }
-    },
-    "Indoor FTP is used when Intervals has one. Estimates come from the 42-day power curve and only become the working FTP when you accept them." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se usa el FTP indoor cuando Intervals lo tiene. Las estimaciones salen de la curva de potencia de 42 días y solo pasan a ser el FTP de trabajo cuando las aceptas."
           }
         }
       }
@@ -8939,16 +8989,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Peso"
-          }
-        }
-      }
-    },
-    "Weight saved on this phone. Intervals.icu sync is pending." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El peso está guardado en este teléfono. La sincronización con Intervals.icu está pendiente."
           }
         }
       }

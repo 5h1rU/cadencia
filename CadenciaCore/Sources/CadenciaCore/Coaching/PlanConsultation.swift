@@ -44,12 +44,35 @@ public enum PlanConsultation {
     }
 
     public struct TimeAway: Codable, Equatable, Sendable, Identifiable {
+        /// Intervals' ad hoc availability event categories.
+        public enum Kind: String, Codable, Sendable { case holiday = "HOLIDAY", sick = "SICK", injured = "INJURED" }
         public var start: Day
         public var end: Day
         public var reason: String
+        /// Nil for periods from the consultation, which only gives a reason; see `resolvedKind`.
+        public var kind: Kind?
+        /// The Intervals `external_id` of this period's calendar entry, pinned at the first write so dates
+        /// moved in Intervals keep the same entry. A `CalendarEntry.foreignPrefix` id marks a period the
+        /// athlete entered in Intervals itself, which Cadencia reads but never writes.
+        public var externalID: String?
         public var id: String { start.iso + end.iso }
-        public init(start: Day, end: Day, reason: String) { self.start = start; self.end = end; self.reason = reason }
+        public init(start: Day, end: Day, reason: String, kind: Kind? = nil, externalID: String? = nil) {
+            self.start = start; self.end = end; self.reason = reason; self.kind = kind; self.externalID = externalID
+        }
         public func contains(_ day: Day) -> Bool { day >= start && day <= end }
+
+        /// The explicit kind, else one read from the reason (English or Spanish); a holiday otherwise.
+        public var resolvedKind: Kind {
+            if let kind { return kind }
+            // Whole-word prefixes, so "will" or "still" never reads as "ill".
+            let words = reason.lowercased().split { !$0.isLetter }
+            func mentions(_ stems: [String], exact: Set<String> = []) -> Bool {
+                words.contains { word in exact.contains(String(word)) || stems.contains { word.hasPrefix($0) } }
+            }
+            if mentions(["injur", "lesi"]) { return .injured }
+            if mentions(["sick", "illness", "enferm", "gripe", "covid"], exact: ["ill", "flu"]) { return .sick }
+            return .holiday
+        }
     }
 
     public struct WeeklyRide: Codable, Equatable, Sendable, Identifiable {

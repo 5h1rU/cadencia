@@ -52,15 +52,48 @@ public struct IntervalsClient: Sendable {
     /// Writes the recovery fields Cadencia owns for a day (Health-derived HRV, resting HR, sleep).
     /// Only non-nil fields are sent, so other sources keep their values.
     public func updateWellness(_ day: WellnessDay) async throws {
-        var body: [String: Any] = ["id": day.day.iso]
-        if let v = day.hrvMs { body["hrv"] = v }
-        if let v = day.restingHR { body["restingHR"] = v }
-        if let v = day.sleepSeconds { body["sleepSecs"] = v }
-        if let v = day.weightKg { body["weight"] = v }
-        if let v = day.soreness { body["soreness"] = v }
-        if let v = day.fatigue { body["fatigue"] = v }
-        let data = try JSONSerialization.data(withJSONObject: body)
-        _ = try await send(.put, "/api/v1/athlete/\(athleteID)/wellness/\(day.day.iso)", body: data, contentType: "application/json")
+        var update = WellnessUpdate(health: day)
+        update.soreness = day.soreness
+        update.fatigue = day.fatigue
+        try await updateWellness(update)
+    }
+
+    /// `PUT /wellness/{date}`: only the fields provided change. With `localDate` equal to the record's day,
+    /// Intervals also updates the athlete's current weight / resting HR in settings.
+    public func updateWellness(_ update: WellnessUpdate, localDate: Day? = nil) async throws {
+        let data = try JSONSerialization.data(withJSONObject: update.body, options: [.sortedKeys])
+        var query: [String: String] = [:]
+        if let localDate { query["localDate"] = localDate.iso }
+        _ = try await send(.put, "/api/v1/athlete/\(athleteID)/wellness/\(update.day.iso)", query: query, body: data, contentType: "application/json")
+    }
+
+    /// `PUT /wellness-bulk`: several days in one request, each keyed by its `id` (the day).
+    public func updateWellness(_ updates: [WellnessUpdate]) async throws {
+        guard !updates.isEmpty else { return }
+        if updates.count == 1 { return try await updateWellness(updates[0]) }
+        let data = try JSONSerialization.data(withJSONObject: updates.map(\.body), options: [.sortedKeys])
+        _ = try await send(.put, "/api/v1/athlete/\(athleteID)/wellness-bulk", body: data, contentType: "application/json")
+    }
+
+    // MARK: Settings
+
+    /// `PUT /sport-settings/Ride`: the cycling FTP (and indoor FTP, when the athlete uses one).
+    public func updateRideFTP(_ ftp: Int, athlete: AthleteProfile?) async throws {
+        let data = try JSONSerialization.data(withJSONObject: IntervalsAthleteFields.rideFTPBody(ftp: ftp, athlete: athlete), options: [.sortedKeys])
+        _ = try await send(.put, "/api/v1/athlete/\(athleteID)/sport-settings/Ride", body: data, contentType: "application/json")
+    }
+
+    /// `PUT /athlete/{id}` with only the given fields: height (sent in metres), `measurement_preference`
+    /// and the default weekly `training_availability`.
+    public func updateAthlete(heightCm: Double? = nil, measurementPreference: String? = nil,
+                              trainingAvailability: [IntervalsAvailabilityDay]? = nil) async throws {
+        var body: [String: Any] = [:]
+        if let heightCm { body["height"] = IntervalsAthleteFields.meters(fromCm: heightCm) }
+        if let measurementPreference { body["measurement_preference"] = measurementPreference }
+        if let trainingAvailability { body["training_availability"] = trainingAvailability.map(\.body) }
+        guard !body.isEmpty else { return }
+        let data = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+        _ = try await send(.put, "/api/v1/athlete/\(athleteID)", body: data, contentType: "application/json")
     }
 
     // MARK: Activities
@@ -205,6 +238,8 @@ public struct IntervalsClient: Sendable {
             "name": session.title,
             "external_id": PlanMirror.externalID(for: session),
             "indoor": session.location != .outdoor,
+            "icu_ftp": PlanMirror.eventFTP(for: session, ftp: ftp),
+            "tags": PlanMirror.tags(for: session.kind),
         ]
         let eventID = existingEventID ?? session.intervalsEventID
         if eventID == nil { body["uid"] = PlanMirror.uid(for: session) }
@@ -251,6 +286,41 @@ public struct IntervalsClient: Sendable {
         let response = try await send(.put, "/api/v1/athlete/\(athleteID)/events/bulk-delete", body: body, contentType: "application/json")
         struct Result: Decodable { let eventsDeleted: Int }
         return try Self.decoder.decode(Result.self, from: response.body).eventsDeleted
+    }
+
+    /// `PUT /events/bulk-delete`. A retired entry is named by its external id (Intervals then deletes every
+    /// copy the app created, all of which belong to it) and, when known, by its server id: deletion by
+    /// external id only covers events created by this OAuth app, not ones created with an API key.
+    /// Missing events are ignored.
+    @discardableResult
+    public func deleteEvents(_ deletions: [CalendarSync.Deletion]) async throws -> Int {
+        var items: [[String: Any]] = []
+        for externalID in Set(deletions.compactMap(\.externalID)).sorted() { items.append(["external_id": externalID]) }
+        for id in Set(deletions.compactMap(\.eventID)).sorted() { items.append(["id": id]) }
+        guard !items.isEmpty else { return 0 }
+        let body = try JSONSerialization.data(withJSONObject: items, options: [.sortedKeys])
+        let response = try await send(.put, "/api/v1/athlete/\(athleteID)/events/bulk-delete", body: body, contentType: "application/json")
+        struct Result: Decodable { let eventsDeleted: Int? }
+        return (try? Self.decoder.decode(Result.self, from: response.body).eventsDeleted) ?? 0
+    }
+
+    /// `POST /events/bulk?upsert=true`: with OAuth, an existing event of this app with the same external id
+    /// is updated instead of duplicated. Callers read the calendar first, which covers API-key accounts.
+    public func createCalendarEntries(_ entries: [CalendarEntry]) async throws -> [IntervalsEvent] {
+        guard !entries.isEmpty else { return [] }
+        let body = try JSONSerialization.data(withJSONObject: entries.map(\.body), options: [.sortedKeys])
+        let response = try await send(.post, "/api/v1/athlete/\(athleteID)/events/bulk", query: ["upsert": "true"],
+                                      body: body, contentType: "application/json")
+        // The ids are a convenience; the next pass finds the events by external id if this does not decode.
+        return (try? Self.decoder.decode([IntervalsEvent].self, from: response.body)) ?? []
+    }
+
+    public func updateCalendarEntry(_ entry: CalendarEntry, eventID: Int) async throws -> IntervalsEvent {
+        var fields = entry.body
+        fields["uid"] = nil
+        let body = try JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])
+        let response = try await send(.put, "/api/v1/athlete/\(athleteID)/events/\(eventID)", body: body, contentType: "application/json")
+        return try Self.decoder.decode(IntervalsEvent.self, from: response.body)
     }
 
     // MARK: OAuth
@@ -307,7 +377,10 @@ public struct IntervalsClient: Sendable {
 public struct IntervalsOAuth: Sendable {
     public static let authorizeURL = URL(string: "https://intervals.icu/oauth/authorize")!
     public static let tokenURL = URL(string: "https://intervals.icu/api/oauth/token")!
-    public static let defaultScopes = ["ACTIVITY:WRITE", "WELLNESS:READ", "CALENDAR:WRITE", "SETTINGS:READ", "CHATS:WRITE"]
+    /// WRITE implies READ. Wellness and settings are written since Intervals became the source of truth for
+    /// feedback, weight, FTP, height, units and availability; tokens issued with the earlier READ scopes are
+    /// detected by `IntervalsCredential.missingScopes` and the athlete is asked to reconnect.
+    public static let defaultScopes = ["ACTIVITY:WRITE", "WELLNESS:WRITE", "CALENDAR:WRITE", "SETTINGS:WRITE", "CHATS:WRITE"]
 
     public var clientID: String
     public var redirectURI: String

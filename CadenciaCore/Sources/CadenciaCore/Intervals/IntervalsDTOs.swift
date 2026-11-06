@@ -42,13 +42,19 @@ struct AthleteDTO: Decodable {
     let icu_weight: Double?
     let timezone: String?
     let sportSettings: [SportSettingsDTO]?
+    let height: Double?
+    let measurement_preference: String?
+    let training_availability: [IntervalsAvailabilityDay]?
 
     var profile: AthleteProfile {
         let ride = sportSettings?.first { ($0.types ?? []).contains("Ride") } ?? sportSettings?.first
         let displayName = name ?? [firstname, lastname].compactMap { $0 }.joined(separator: " ")
         return AthleteProfile(id: id, name: displayName, ftp: ride?.ftp, indoorFTP: ride?.indoor_ftp,
                               weightKg: icu_weight ?? weight, maxHR: ride?.max_hr, lthr: ride?.lthr,
-                              powerZones: ride?.power_zones ?? [], timezone: timezone)
+                              powerZones: ride?.power_zones ?? [], timezone: timezone,
+                              heightCm: height.flatMap(IntervalsAthleteFields.heightCm(fromMeters:)),
+                              measurementPreference: measurement_preference,
+                              trainingAvailability: training_availability.flatMap { $0.isEmpty ? nil : $0 })
     }
 }
 
@@ -65,15 +71,26 @@ struct WellnessDTO: Decodable {
     let readiness: Double?
     let soreness: Int?
     let fatigue: Int?
+    let sleepQuality: Int?
+    let motivation: Int?
+    let mood: Int?
+    let stress: Int?
+    let injury: Int?
+    let comments: String?
     let updated: String?
     let sportInfo: [SportInfoDTO]?
 
     var model: WellnessDay? {
         guard let day = Day(iso: id) else { return nil }
+        // Intervals' scale is 1…4; anything else (including -1, "unset") reads as no answer.
+        func rating(_ v: Int?) -> Int? { v.flatMap { (1...4).contains($0) ? $0 : nil } }
         return WellnessDay(day: day, hrvMs: hrv ?? hrvSDNN, restingHR: restingHR, sleepSeconds: sleepSecs, ctl: ctl, atl: atl,
-                           weightKg: weight, readinessReported: readiness, soreness: soreness, fatigue: fatigue,
+                           weightKg: weight, readinessReported: readiness, soreness: rating(soreness), fatigue: rating(fatigue),
                            updatedAt: updated.flatMap(IntervalsDates.parseDateTime),
-                           estimatedFTP: sportInfo?.first { $0.type == "Ride" }?.eftp)
+                           estimatedFTP: sportInfo?.first { $0.type == "Ride" }?.eftp,
+                           sleepQuality: rating(sleepQuality), motivation: rating(motivation), mood: rating(mood),
+                           stress: rating(stress), injury: rating(injury),
+                           comments: comments.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 })
     }
 }
 
@@ -175,6 +192,8 @@ struct ActivityDTO: Decodable {
     let trainer: Bool?
     let external_id: String?
     let paired_event_id: Int?
+    let compliance: Double?
+    let icu_rolling_ftp: Int?
 
     var model: ActivitySummary? {
         guard let start = start_date_local.flatMap(IntervalsDates.parseLocalDateTime) else { return nil }
@@ -183,7 +202,8 @@ struct ActivityDTO: Decodable {
                                trainingLoad: icu_training_load, intensity: icu_intensity, averageWatts: icu_average_watts,
                                normalizedWatts: icu_weighted_avg_watts, averageHR: average_heartrate, ftpAtTime: icu_ftp,
                                estimatedFTP: icu_pm_ftp, rpe: icu_rpe, feel: feel, isTrainer: trainer ?? false,
-                               externalID: external_id, pairedEventID: paired_event_id, elevationGainMeters: total_elevation_gain)
+                               externalID: external_id, pairedEventID: paired_event_id, elevationGainMeters: total_elevation_gain,
+                               compliance: compliance, rollingFTP: icu_rolling_ftp)
     }
 }
 
@@ -212,10 +232,23 @@ public struct IntervalsEvent: Codable, Equatable, Sendable, Identifiable {
     public let type: String?
     public let moving_time: Int?
     public let icu_training_load: Int?
+    // Optional native fields Cadencia reads back so edits made in Intervals win.
+    public let end_date_local: String?
+    public let indoor: Bool?
+    public let icu_ftp: Int?
+    public let tags: [String]?
+    /// Metres.
+    public let distance: Double?
+    public let training_availability: String?
 
     public var day: Day? { start_date_local.flatMap { Day(iso: $0) } }
+    /// Last day the event covers. Cadencia writes the inclusive last day; a missing end is a one-day event.
+    public var endDay: Day? { end_date_local.flatMap { Day(iso: $0) } ?? day }
+
+    /// One of Cadencia's planned rides (current day-based ids or legacy session-UUID ids). Cadencia's
+    /// other calendar entries (`CalendarEntry`) share the "cadencia-" prefix but are not plan sessions.
     public var isCadenciaOwned: Bool {
-        uid?.hasPrefix(PlanMirror.uidPrefix) == true || external_id?.hasPrefix(PlanMirror.uidPrefix) == true
+        PlanMirror.isSessionIdentifier(uid) || PlanMirror.isSessionIdentifier(external_id)
     }
 
     public var trainingEvent: TrainingEvent? {
@@ -227,7 +260,9 @@ public struct IntervalsEvent: Codable, Equatable, Sendable, Identifiable {
         case "RACE_C": priority = .c
         default: return nil
         }
-        return TrainingEvent(name: name, day: day, priority: priority, objective: description ?? "", isRace: true)
+        let isRace = !(tags ?? []).contains(CalendarEntry.notRaceTag)
+        return TrainingEvent(name: name, day: day, distanceKm: distance.flatMap { $0 > 0 ? $0 / 1000 : nil },
+                             priority: priority, objective: description ?? "", isRace: isRace)
     }
 }
 
@@ -235,18 +270,30 @@ public struct IntervalsEvent: Codable, Equatable, Sendable, Identifiable {
 ///
 /// Intervals counts every planned workout dated today in today's fitness, fatigue and form until midnight.
 /// A reinstall or a rebuilt plan gives sessions new ids, so without cleanup each push would add another
-/// planned workout on top of the old one and today's load would climb with every install.
+/// planned workout on top of the old one and today's load would climb with every install. Cadencia keeps at
+/// most one planned ride per day, so the identity is the day itself: `cadencia-ride-YYYY-MM-DD`. Earlier
+/// versions used the session UUID (`cadencia-<uuid>`, or the bare UUID); those copies are still recognised.
 public enum PlanMirror {
     public static let uidPrefix = "cadencia-"
+    public static let sessionPrefix = "cadencia-ride-"
 
-    public static func uid(for session: PlannedSession) -> String { uidPrefix + session.id.uuidString.lowercased() }
+    public static func externalID(for day: Day) -> String { sessionPrefix + day.iso }
+    public static func externalID(for session: PlannedSession) -> String { externalID(for: session.day) }
+    /// Same as the external id, so a create with `upsertOnUid` also lands on the day's existing event.
+    public static func uid(for session: PlannedSession) -> String { externalID(for: session) }
+    static func legacyID(for session: PlannedSession) -> String { uidPrefix + session.id.uuidString.lowercased() }
 
-    /// Intervals can replace a supplied UID on creation. The external id survives unchanged.
-    public static func externalID(for session: PlannedSession) -> String { uid(for: session) }
+    /// A planned-ride identifier: the day-based form or any other "cadencia-" id that is not one of
+    /// Cadencia's other calendar entries (legacy session UUIDs).
+    public static func isSessionIdentifier(_ value: String?) -> Bool {
+        guard let value, value.hasPrefix(uidPrefix) else { return false }
+        return value.hasPrefix(sessionPrefix) || !CalendarEntry.isEntryIdentifier(value)
+    }
 
     public static func matches(_ event: IntervalsEvent, session: PlannedSession) -> Bool {
-        event.id == session.intervalsEventID || event.uid == uid(for: session)
-            || event.external_id == externalID(for: session)
+        let current = externalID(for: session), legacy = legacyID(for: session)
+        return event.id == session.intervalsEventID || event.uid == current || event.external_id == current
+            || event.uid == legacy || event.external_id == legacy
             || event.external_id?.lowercased() == session.id.uuidString.lowercased()
     }
 
@@ -256,14 +303,79 @@ public enum PlanMirror {
         return candidates.first { $0.id == session.intervalsEventID } ?? candidates.max { $0.id < $1.id }
     }
 
-    /// Cadencia-owned events that no session in the current plan accounts for. Other apps' and the
-    /// athlete's own events are never touched.
+    /// Cadencia-owned planned rides that no session in the current plan accounts for. Other apps' and the
+    /// athlete's own events, and Cadencia's non-ride calendar entries, are never touched.
     public static func staleEvents(_ events: [IntervalsEvent], sessions: [PlannedSession]) -> [IntervalsEvent] {
         let keep = Set(sessions.compactMap { existingEvent(for: $0, in: events)?.id })
         return events.filter { event in
             let owned = event.isCadenciaOwned || sessions.contains { matches(event, session: $0) }
             return owned && !keep.contains(event.id)
         }
+    }
+
+    /// External ids of days whose planned ride is gone: the retired days minus any day that has a session
+    /// again. Safe for `bulk-delete` by external id because the id names the whole day.
+    public static func retiredExternalIDs(days: [Day], keeping sessions: [PlannedSession]) -> [String] {
+        let kept = Set(sessions.map(\.day))
+        return Set(days.filter { !kept.contains($0) }).sorted().map(externalID(for:))
+    }
+
+    // MARK: Native fields
+
+    /// The planned-ride fields Intervals has natively: `indoor`, `icu_ftp` (the FTP the indoor targets are
+    /// a percentage of) and a `tags` entry with the `SessionKind`.
+    public struct NativeFields: Codable, Equatable, Sendable {
+        public var indoor: Bool
+        /// Indoor sessions only; an outdoor event's `icu_ftp` is the outdoor FTP its watts were scaled to.
+        public var ftp: Int?
+        public var kind: SessionKind
+        public init(indoor: Bool, ftp: Int?, kind: SessionKind) { self.indoor = indoor; self.ftp = ftp; self.kind = kind }
+    }
+
+    /// What `IntervalsClient.upsertPlannedWorkout` writes for this session with `ftp` as the target FTP.
+    public static func nativeFields(for session: PlannedSession, ftp: Int) -> NativeFields {
+        let indoor = session.location != .outdoor
+        return NativeFields(indoor: indoor, ftp: indoor ? (session.prescriptionFTP ?? ftp) : nil, kind: session.kind)
+    }
+
+    public static func eventFTP(for session: PlannedSession, ftp: Int) -> Int {
+        session.location == .outdoor ? ftp : (session.prescriptionFTP ?? ftp)
+    }
+
+    public static func tags(for kind: SessionKind) -> [String] { [kind.rawValue] }
+
+    static func kind(fromTags tags: [String]?) -> SessionKind? {
+        tags?.lazy.compactMap { SessionKind(rawValue: $0) }.first
+    }
+
+    /// Folds edits made to this session's event in Intervals back into the session. Only fields Cadencia
+    /// has not changed since its last write are adopted, so an unsent local change is never lost.
+    /// Returns whether anything changed.
+    @discardableResult
+    public static func adopt(_ event: IntervalsEvent, into session: inout PlannedSession) -> Bool {
+        guard let mirrored = session.mirrored, matches(event, session: session),
+              session.status != .completed, session.status != .skipped else { return false }
+        let localIndoor = session.location != .outdoor
+        let localFTP = localIndoor ? (session.prescriptionFTP ?? mirrored.ftp) : nil
+        guard localIndoor == mirrored.indoor, localFTP == mirrored.ftp, session.kind == mirrored.kind else { return false }
+        let indoor = event.indoor ?? mirrored.indoor
+        let remote = NativeFields(indoor: indoor, ftp: indoor ? (event.icu_ftp ?? mirrored.ftp) : nil,
+                                  kind: kind(fromTags: event.tags) ?? mirrored.kind)
+        guard remote != mirrored else { return false }
+        session.location = remote.indoor ? .indoor : .outdoor
+        if remote.indoor, let ftp = remote.ftp { session.prescriptionFTP = ftp }
+        // A rest day stays a rest day: the calendar never turns a planned rest into riding.
+        if remote.kind != .rest, mirrored.kind != .rest { session.kind = remote.kind }
+        session.mirrored = remote
+        return true
+    }
+
+    /// An activity Intervals paired with this session's event completes it; its compliance comes along.
+    /// Nil when nothing is paired. Never un-completes a session completed on this phone.
+    public static func completion(for session: PlannedSession, activities: [ActivitySummary]) -> Double?? {
+        guard let id = session.intervalsEventID,
+              let activity = activities.first(where: { $0.pairedEventID == id }) else { return nil }
+        return .some(activity.compliance)
     }
 }
 

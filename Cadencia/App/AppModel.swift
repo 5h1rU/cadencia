@@ -32,7 +32,8 @@ final class AppModel {
     private(set) var consultationBusy = false
     private(set) var consultationError: String?
     private var consultationRequestID: UUID?
-    private var syncingProfileWeight = false
+    @ObservationIgnored private var flushingOutbox = false
+    @ObservationIgnored private var flushRequested = false
     private(set) var isUploading = false
     /// Rides whose finish is still running: file, index and upload entry, Apple Health, the first upload.
     private(set) var finishingRides: Set<UUID> = []
@@ -359,6 +360,13 @@ final class AppModel {
         await refresh()
     }
 
+    /// Signs in again with OAuth to grant the scopes this token lacks (`missingIntervalsScopes`), then sends
+    /// what waited for them. The same athlete keeps all local data.
+    func reconnectIntervals() async throws {
+        try await signInWithOAuth()
+        await flushIntervalsOutbox()
+    }
+
     func signInWithOAuth() async throws {
         let token = try await OAuthSignIn().signIn(transport: transport)
         let credential = IntervalsCredential.oauth(accessToken: token.access_token, scopes: token.scopes)
@@ -552,6 +560,8 @@ final class AppModel {
         guard let client else { return nil }
         isSyncing = true
         defer { isSyncing = false }
+        // Before the first read: reading back replaces the caches, so local-only data must be queued first.
+        migrateToIntervalsIfNeeded()
 
         // Each fetch is independent: a failing request (for example a malformed power-curve query)
         // must not discard the athlete, wellness, and activities that did arrive. The first failure
@@ -567,7 +577,7 @@ final class AppModel {
                 account = athlete.id
                 syncTaskAccount = athlete.id
             }
-            mutate { $0.athlete = athlete }
+            mutate { $0.adoptIntervalsAthlete(athlete) }
         } catch { failures.append(("athlete", error)) }
         // Signed out or switched while a request failed: report and stamp nothing for the old account.
         guard isSignedIn, athleteID == account else { return nil }
@@ -576,15 +586,19 @@ final class AppModel {
             syncError = String(localized: "Intervals rejected the credential. Reconnect in Settings.")
         } else {
             do {
-                let wellness = try await client.wellness(oldest: today.adding(days: -90), newest: today)
+                let range = today.adding(days: -90)...today
+                let wellness = try await client.wellness(oldest: range.lowerBound, newest: range.upperBound)
                 guard isSignedIn, athleteID == account else { return nil }
-                mutate { $0.mergeWellness(wellness) }
+                mutate { $0.adoptIntervalsWellness(wellness, range: range) }
             } catch { failures.append(("wellness", error)) }
 
             do {
                 let activities = try await client.activities(oldest: today.adding(days: -42), newest: today)
                 guard isSignedIn, athleteID == account else { return nil }
-                mutate { $0.activities = activities }
+                mutate {
+                    $0.activities = activities
+                    $0.adoptIntervalsCompletion(activities)
+                }
                 try await importOutdoorRides(activities)
             } catch { failures.append(("activities", error)) }
 
@@ -595,9 +609,14 @@ final class AppModel {
             } catch { failures.append(("power curve", error)) }
 
             do {
-                let events = try await client.events(oldest: today, newest: today.adding(days: 42))
+                let window = today...today.adding(days: 42)
+                let events = try await client.events(oldest: window.lowerBound, newest: window.upperBound)
                 guard isSignedIn, athleteID == account else { return nil }
-                mutate { $0.calendarEvents = events }
+                let day = today
+                mutate {
+                    $0.calendarEvents = events
+                    $0.adoptIntervalsCalendar(events, window: window, today: day)
+                }
             } catch { failures.append(("calendar", error)) }
 
             guard isSignedIn, athleteID == account else { return nil }
@@ -633,9 +652,9 @@ final class AppModel {
     private func runFollowUps(account: String) async {
         func current() -> Bool { isSignedIn && athleteID == account }
         guard current() else { return }
-        await syncProfileWeight()
+        await flushIntervalsOutbox()
         guard current() else { return }
-        await retirePlanEvents()
+        await retireCalendarEvents()
         guard current() else { return }
         let mirrored = await askCoachForToday()
         guard current() else { return }
@@ -643,6 +662,8 @@ final class AppModel {
         guard current() else { return }
         // A coach decision already mirrored the week; nothing in between changes what is mirrored.
         if !mirrored { await pushWeekToIntervals() }
+        guard current() else { return }
+        await mirrorCalendarEntries()
         guard current() else { return }
         await debriefRecentRides()
     }
@@ -666,8 +687,9 @@ final class AppModel {
                     $0.cyclistMeasurements = current
                 }
             }
-            if state.settings.pushWellnessToIntervals, let client, let todayHealth = days.first(where: { $0.day == today }) {
-                try? await client.updateWellness(todayHealth)
+            if state.settings.pushWellnessToIntervals, isSignedIn, let todayHealth = days.first(where: { $0.day == today }) {
+                mutate { $0.enqueue(WellnessUpdate(health: todayHealth)) }
+                await flushIntervalsOutbox()
             }
         } catch {
             syncError = error.localizedDescription
@@ -909,6 +931,7 @@ final class AppModel {
         fb.legs = legs
         if let motivation { fb.motivation = motivation }
         mutate { $0.setFeedback(fb) }
+        Task { await flushIntervalsOutbox() }
         reaskCoach()
     }
 
@@ -917,12 +940,15 @@ final class AppModel {
     private func recomputeFTPEstimate() {
         let since = today.adding(days: -42)
         let efforts = state.activities.filter { $0.isCycling && $0.day >= since && $0.movingTime >= 12 * 60 && ($0.intensity ?? 0) >= 85 }.count
-        let estimate = FTPEstimator().estimate(curve: state.powerCurve, sustainedEfforts: efforts)
+        let eftp = FTPEstimator.intervalsEFTP(activities: state.activities, wellness: state.wellness, today: today)
+        let estimate = FTPEstimator().estimate(curve: state.powerCurve, sustainedEfforts: efforts, intervalsEFTP: eftp)
         mutate { $0.ftpEstimate = estimate }
     }
 
+    /// Queues the FTP for Intervals' Ride settings; it is the working FTP until Intervals confirms it.
     func acceptFTP(_ watts: Int) {
         mutate { $0.acceptedFTP = watts; $0.dismissedFTPProposal = nil }
+        Task { await flushIntervalsOutbox() }
         reaskCoach()
     }
 
@@ -930,7 +956,7 @@ final class AppModel {
         mutate { $0.dismissedFTPProposal = ftpProposal }
     }
 
-    /// Drops the locally accepted FTP so the Intervals value becomes the working FTP again.
+    /// Drops an accepted FTP that has not reached Intervals yet, so the Intervals value is the working FTP again.
     func useIntervalsFTP() {
         mutate { $0.acceptedFTP = nil; $0.dismissedFTPProposal = nil }
         reaskCoach()
@@ -1029,13 +1055,14 @@ final class AppModel {
             current.merge(.init(weight: update.weightKg.map { .init(value: $0, measuredAt: now, source: .athlete) },
                                 height: update.heightCm.map { .init(value: $0, measuredAt: now, source: .athlete) }))
             $0.cyclistMeasurements = current
-            if let kg = update.weightKg { $0.profileWeightPendingSync = .init(day: today, kg: kg) }
+            if let kg = update.weightKg { $0.enqueue(WellnessUpdate(day: today, weightKg: kg)) }
+            if let cm = update.heightCm { $0.updateOutbox { $0.heightCm = cm } }
             if let ftp = update.ftp { $0.acceptedFTP = ftp; $0.dismissedFTPProposal = nil }
             $0.planConsultation?.reply?.profileUpdate = nil
         }
-        // Saved locally above. The Intervals weight PUT does not hold up Save; a failure stays pending
-        // (`profileWeightPendingSync`) and the next sync retries it.
-        Task { await syncProfileWeight() }
+        // Saved locally above. The Intervals writes do not hold up Save; a failure stays queued in the
+        // outbox and the next sync retries it.
+        Task { await flushIntervalsOutbox() }
         reaskCoach()
     }
 
@@ -1047,20 +1074,69 @@ final class AppModel {
         var current = state.cyclistMeasurements ?? CyclistMeasurements()
         current.merge(measurements)
         guard current != state.cyclistMeasurements, current.weight != nil || current.height != nil else { return false }
-        mutate { $0.cyclistMeasurements = current }
+        let previous = state.cyclistMeasurements
+        mutate {
+            $0.cyclistMeasurements = current
+            // An explicit import is the athlete's new measurement: Intervals gets it too.
+            if let w = current.weight, w != previous?.weight { $0.enqueue(WellnessUpdate(day: Day(w.measuredAt), weightKg: w.value)) }
+            if let h = current.height, h != previous?.height { $0.updateOutbox { $0.heightCm = h.value } }
+        }
+        Task { await flushIntervalsOutbox() }
         return true
     }
 
-    private func syncProfileWeight() async {
-        guard !syncingProfileWeight, let pending = state.profileWeightPendingSync, let client else { return }
-        syncingProfileWeight = true
-        defer { syncingProfileWeight = false }
+    /// Queues, once, what older versions kept only on this phone (see `IntervalsMigration`).
+    private func migrateToIntervalsIfNeeded() {
+        guard isSignedIn, (state.intervalsMigrationVersion ?? 0) < IntervalsMigration.version else { return }
+        mutate { s in
+            let pendingWeight = s.profileWeightPendingSync.map { WellnessUpdate(day: $0.day, weightKg: $0.kg) }
+            s.intervalsOutbox = IntervalsMigration.outbox(feedback: Array(s.feedbackByDay.values), wellness: s.wellness,
+                measurements: s.cyclistMeasurements, athlete: s.athlete, unitsMetric: s.settings.unitsMetric,
+                availability: s.planAvailability, pendingWeight: pendingWeight, existing: s.intervalsOutbox ?? .init())
+            if s.intervalsOutbox?.isEmpty == true { s.intervalsOutbox = nil }
+            s.profileWeightPendingSync = nil
+            // Legacy queued deletions by server id join the external-id queue.
+            let legacy = (s.retiredPlanEventIDs ?? []).map { CalendarSync.Deletion(externalID: nil, eventID: $0) }
+            if !legacy.isEmpty { s.retiredCalendarEvents = (s.retiredCalendarEvents ?? []) + legacy }
+            s.retiredPlanEventIDs = nil
+            if var plan = s.plan { CalendarSync.pinIdentifiers(in: &plan); s.plan = plan }
+            s.intervalsMigrationVersion = IntervalsMigration.version
+        }
+    }
+
+    /// Scopes the Intervals token lacks for Cadencia's writes. Non-empty: Settings asks to reconnect;
+    /// the affected changes wait in the outbox meanwhile.
+    var missingIntervalsScopes: [IntervalsScope] { credential?.missingScopes ?? [] }
+
+    /// Sends the outbox and drops what Intervals confirmed. One flush runs at a time; a call during a flush
+    /// makes it go round once more for what was queued meanwhile.
+    func flushIntervalsOutbox() async {
+        if flushingOutbox { flushRequested = true; return }
+        flushingOutbox = true
+        defer { flushingOutbox = false }
+        repeat {
+            flushRequested = false
+            await flushOutboxOnce()
+        } while flushRequested
+    }
+
+    private func flushOutboxOnce() async {
+        guard let client, isSignedIn, state.intervalsOutbox != nil || state.acceptedFTP != nil else { return }
         let account = athleteID
-        do {
-            try await client.updateWellness(WellnessDay(day: pending.day, weightKg: pending.kg))
-            guard account == athleteID, isSignedIn, state.profileWeightPendingSync == pending else { return }
-            mutate { $0.profileWeightPendingSync = nil }
-        } catch { /* Kept for retry on refresh; the profile editor shows the pending sync. */ }
+        let outbox = state.intervalsOutbox ?? IntervalsOutbox()
+        let result = await client.flush(outbox, ftp: state.acceptedFTP, athlete: state.athlete, today: today)
+        guard account == athleteID, isSignedIn else { return }
+        mutate { s in
+            s.updateOutbox { $0.removeConfirmed(result) }
+            if let ftp = result.ftp, s.acceptedFTP == ftp {
+                if let athlete = s.athlete { s.athlete = IntervalsAthleteFields.applying(ftp: ftp, to: athlete) }
+                s.acceptedFTP = nil
+            }
+            if let cm = result.heightCm, var athlete = s.athlete { athlete.heightCm = cm; s.athlete = athlete }
+            if let preference = result.measurementPreference, var athlete = s.athlete { athlete.measurementPreference = preference; s.athlete = athlete }
+            if let days = result.availability, var athlete = s.athlete { athlete.trainingAvailability = days; s.athlete = athlete }
+        }
+        if let failure = result.failure { syncError = failure }
     }
 
     /// Explicit acceptance is the only place a consultation can replace an active plan.
@@ -1081,37 +1157,74 @@ final class AppModel {
                 }
             }
             plan.isActive = true
+            CalendarSync.pinIdentifiers(in: &plan)
+            let newDays = Set(plan.sessions.map(\.day))
             mutate {
-                let retired = previous.filter { $0.day >= today && $0.status != .completed }
-                    .compactMap(\.intervalsEventID).filter { !reused.contains($0) }
-                $0.retiredPlanEventIDs = Array(Set(($0.retiredPlanEventIDs ?? []) + retired))
+                let retired = previous.filter { $0.day >= today && $0.status != .completed && !newDays.contains($0.day) }
+                    .map { CalendarSync.Deletion(externalID: PlanMirror.externalID(for: $0.day), eventID: $0.intervalsEventID.flatMap { reused.contains($0) ? nil : $0 }) }
+                $0.retiredCalendarEvents = ($0.retiredCalendarEvents ?? []) + retired
                 $0.plan = plan
                 if !completedToday { $0.today = nil }
                 $0.planConsultation = nil
+                if let availability = $0.planAvailability { $0.updateOutbox { $0.availability = availability } }
             }
         }
         // The plan is active; the calendar and the coach follow in a model-owned task, so the review
         // screen can close now and nothing is lost if the caller goes away.
         Task {
-            await retirePlanEvents()
+            await retireCalendarEvents()
+            await flushIntervalsOutbox()
             if !(await askCoachForToday()) { await pushWeekToIntervals() }
+            await mirrorCalendarEntries()
         }
     }
 
-    private func retirePlanEvents() async {
-        guard state.retiredPlanEventIDs?.isEmpty == false else { return }
+    /// Deletes the planned rides of replaced or discarded plans: by day external id (every copy this app
+    /// created) and by server id when known (API-key accounts, legacy ids). A day that has a planned ride
+    /// again keeps its event. Retried by every sync until it succeeds.
+    private func retireCalendarEvents() async {
+        guard state.retiredCalendarEvents?.isEmpty == false else { return }
         await acquireCalendar()
         defer { releaseCalendar() }
-        guard let client, !Task.isCancelled else { return }
+        guard let client, !Task.isCancelled, credential?.grants(.calendarWrite) == true else { return }
         let account = athleteID
-        for id in state.retiredPlanEventIDs ?? [] {
-            do {
-                try await client.deleteEvent(id: id)
-            } catch HTTPError.status(404, _) {
-                // A preceding mirror or retry already removed this session.
-            } catch { return }
+        let queued = state.retiredCalendarEvents ?? []
+        let sessions = calendarSessions
+        let rideDays = Set(sessions.map { PlanMirror.externalID(for: $0.day) })
+        let keptIDs = Set(sessions.compactMap(\.intervalsEventID))
+        let deletions = queued.compactMap { d -> CalendarSync.Deletion? in
+            let externalID = d.externalID.flatMap { rideDays.contains($0) ? nil : $0 }
+            let eventID = d.eventID.flatMap { keptIDs.contains($0) ? nil : $0 }
+            return externalID == nil && eventID == nil ? nil : .init(externalID: externalID, eventID: eventID)
+        }
+        do { try await client.deleteEvents(deletions) } catch { return }
+        guard account == athleteID, isSignedIn else { return }
+        mutate { s in
+            s.retiredCalendarEvents?.removeAll { queued.contains($0) }
+            if s.retiredCalendarEvents?.isEmpty == true { s.retiredCalendarEvents = nil }
+        }
+    }
+
+    /// Brings the plan's goal event, time away and other training on the Intervals calendar in line with the
+    /// plan, without overwriting what the athlete changed there (see `CalendarSync`).
+    func mirrorCalendarEntries() async {
+        await acquireCalendar()
+        defer { releaseCalendar() }
+        guard let client, isSignedIn, !Task.isCancelled, credential?.grants(.calendarWrite) == true else { return }
+        let account = athleteID, day = today
+        if var plan = state.plan {
+            CalendarSync.pinIdentifiers(in: &plan)
+            mutate { $0.plan = plan }
+        }
+        let desired = CalendarEntry.entries(for: state.plan, today: day)
+        let base = state.calendarEntryBase ?? [:]
+        guard !desired.isEmpty || !base.isEmpty else { return }
+        do {
+            let next = try await client.syncCalendarEntries(desired, base: base, today: day)
             guard account == athleteID, isSignedIn else { return }
-            mutate { $0.retiredPlanEventIDs?.removeAll { $0 == id } }
+            mutate { $0.calendarEntryBase = next.isEmpty ? nil : next }
+        } catch {
+            syncError = "Intervals calendar: \(error.localizedDescription)"
         }
     }
 
@@ -1121,28 +1234,36 @@ final class AppModel {
     func createPlan(_ request: PlanBuilder.Request) async {
         var plan = PlanBuilder().build(request)
         plan.isActive = true
+        CalendarSync.pinIdentifiers(in: &plan)
         mutate { s in
             s.plan = plan
             if s.planConsultation?.messages.contains(where: { $0.role == .athlete }) != true { s.planConsultation = nil }
+            if let availability = s.planAvailability { s.updateOutbox { $0.availability = availability } }
         }
         Task {
+            await flushIntervalsOutbox()
             if !(await askCoachForToday()) { await pushWeekToIntervals() }
+            await mirrorCalendarEntries()
         }
     }
 
-    /// Removes the plan at once. Its upcoming Intervals events are queued in `retiredPlanEventIDs` in the
-    /// same change, then deleted under the calendar lock (and retried by every sync until they are gone).
-    /// The coach is asked again without the caller waiting for it.
+    /// Removes the plan at once. Its upcoming planned rides are queued in `retiredCalendarEvents` in the
+    /// same change, then deleted under the calendar lock (and retried by every sync until they are gone);
+    /// its other calendar entries follow from the empty plan. The athlete's weekly availability stays in
+    /// Intervals. The coach is asked again without the caller waiting for it.
     func discardPlan() async {
         guard let plan = state.plan else { return }
-        let eventIDs = plan.sessions.filter { $0.day >= today }.compactMap(\.intervalsEventID)
+        let horizon = today.adding(days: 14)
+        let deletions = plan.sessions.filter { $0.day >= today && $0.status != .completed && ($0.intervalsEventID != nil || $0.day <= horizon) }
+            .map { CalendarSync.Deletion(externalID: PlanMirror.externalID(for: $0.day), eventID: $0.intervalsEventID) }
         mutate { s in
-            s.retiredPlanEventIDs = Array(Set((s.retiredPlanEventIDs ?? []) + eventIDs))
+            s.retiredCalendarEvents = (s.retiredCalendarEvents ?? []) + deletions
             s.plan = nil
             // An unanswered consultation's opening was written about this plan; the next Create a plan starts fresh.
             if s.planConsultation?.messages.contains(where: { $0.role == .athlete }) != true { s.planConsultation = nil }
         }
-        await retirePlanEvents()
+        await retireCalendarEvents()
+        await mirrorCalendarEntries()
         reaskCoach()
     }
 
@@ -1213,7 +1334,11 @@ final class AppModel {
         let allSessions = calendarSessions
         guard !allSessions.isEmpty else { return }
         let horizon = today.adding(days: 7)
-        let retained = allSessions.filter { $0.day >= today && $0.kind != .rest && $0.status != .skipped }
+        let plan = state.plan
+        // Race day is the goal event's calendar entry (`mirrorCalendarEntries`), not a second planned ride,
+        // unless the athlete explicitly sent that day's workout to their device.
+        let retained = allSessions.filter { $0.day >= today && $0.kind != .rest && $0.status != .skipped
+            && (!CalendarEntry.raceDaySession($0, in: plan) || $0.deliveredWorkout != nil) }
         let sessions = retained.filter { $0.day <= horizon && $0.status != .completed }
         do {
             // A failed read aborts the write pass. Never blindly create when reconciliation failed.
@@ -1235,7 +1360,8 @@ final class AppModel {
             }
             // Mirroring changes today's projected load. Refresh it before displaying the result.
             let days = try await client.wellness(oldest: today, newest: today)
-            if athleteID == account, isSignedIn { mutate { $0.mergeWellness(days) } }
+            let day = today
+            if athleteID == account, isSignedIn { mutate { $0.adoptIntervalsWellness(days, range: day...day) } }
         } catch {
             syncError = "Intervals calendar: \(error.localizedDescription)"
             return
@@ -1314,9 +1440,11 @@ final class AppModel {
     }
 
     private func saveCalendarEvent(_ id: Int, session: PlannedSession, ftp: Int) {
+        let written = PlanMirror.nativeFields(for: session, ftp: ftp)
         mutate { s in
             if let i = s.plan?.sessions.firstIndex(where: { $0.id == session.id }) {
                 s.plan?.sessions[i].intervalsEventID = id
+                s.plan?.sessions[i].mirrored = written
                 if session.location == .outdoor {
                     s.plan?.sessions[i].deliveredWorkout = session.workout
                     s.plan?.sessions[i].deliveredFTP = ftp
@@ -1324,6 +1452,7 @@ final class AppModel {
             }
             if let i = s.standaloneSessions?.firstIndex(where: { $0.id == session.id }) {
                 s.standaloneSessions?[i].intervalsEventID = id
+                s.standaloneSessions?[i].mirrored = written
                 if session.location == .outdoor {
                     s.standaloneSessions?[i].deliveredWorkout = session.workout
                     s.standaloneSessions?[i].deliveredFTP = ftp
@@ -1851,7 +1980,10 @@ final class AppModel {
         ride.feedback = fb
         try? await saveRide(ride)
         mutate { $0.setFeedback(fb) }
-        Task { await syncFeedback(for: rideID) }
+        Task {
+            await syncFeedback(for: rideID)
+            await flushIntervalsOutbox()
+        }
     }
 
     private func syncFeedback(for rideID: UUID) async {
@@ -2094,8 +2226,17 @@ final class AppModel {
 
     // MARK: Settings
 
+    /// Units live in Intervals (`measurement_preference`); the rest are this device's settings.
     func updateSettings(_ body: (inout AppState.Settings) -> Void) {
-        mutate { body(&$0.settings) }
+        let wasMetric = state.settings.unitsMetric
+        mutate { s in
+            body(&s.settings)
+            if s.settings.unitsMetric != wasMetric {
+                let preference = IntervalsAthleteFields.measurementPreference(metric: s.settings.unitsMetric)
+                s.updateOutbox { $0.measurementPreference = preference }
+            }
+        }
+        if state.settings.unitsMetric != wasMetric { Task { await flushIntervalsOutbox() } }
     }
 
     func setLLMKey(_ key: String) {

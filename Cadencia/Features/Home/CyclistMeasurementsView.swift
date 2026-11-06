@@ -79,8 +79,8 @@ struct CyclistMeasurementsView: View {
                     if let value = model.state.cyclistMeasurements?.height { source("Height", value) }
                 }
             }
-            if model.state.profileWeightPendingSync != nil {
-                Text("Weight saved on this phone. Intervals.icu sync is pending.")
+            if model.state.hasPendingProfileSync {
+                Text("Saved on this phone. Intervals.icu sync is pending.")
                     .foregroundStyle(.secondary)
             }
             Section {

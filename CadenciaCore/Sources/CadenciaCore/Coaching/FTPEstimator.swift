@@ -39,6 +39,34 @@ public struct PowerCurvePoint: Codable, Equatable, Sendable {
 public struct FTPEstimator: Sendable {
     public init() {}
 
+    /// Intervals' own eFTP, preferred over the curve heuristics: the rolling FTP on the newest cycling
+    /// activity in the window (`icu_rolling_ftp`), else the newest daily Ride eFTP from wellness. Both are
+    /// Intervals' fit of the same 42-day power curve the heuristics read, so the numbers are comparable;
+    /// the per-activity `icu_pm_ftp` is not (one ride's curve) and stays a corroboration signal only.
+    public static func intervalsEFTP(activities: [ActivitySummary], wellness: [WellnessDay], today: Day, windowDays: Int = 42) -> Int? {
+        let since = today.adding(days: -windowDays)
+        if let rolling = activities.filter({ $0.isCycling && $0.day >= since && $0.day <= today && ($0.rollingFTP ?? 0) > 0 })
+            .max(by: { $0.startDateLocal < $1.startDateLocal })?.rollingFTP {
+            return rolling
+        }
+        return wellness.last { $0.day >= since && $0.day <= today && ($0.estimatedFTP ?? 0) > 0 }?.estimatedFTP.map { Int($0.rounded()) }
+    }
+
+    /// Intervals' eFTP when there is one; otherwise the strongest curve heuristic below.
+    public func estimate(curve: [PowerCurvePoint], sustainedEfforts: Int, intervalsEFTP: Int?, windowDays: Int = 42) -> FTPEstimate? {
+        guard let intervalsEFTP, intervalsEFTP > 0 else { return estimate(curve: curve, sustainedEfforts: sustainedEfforts, windowDays: windowDays) }
+        return FTPEstimate(watts: intervalsEFTP, confidence: Self.confidence(sustainedEfforts), sustainedEfforts: sustainedEfforts,
+                           basis: "Intervals.icu eFTP", windowDays: windowDays)
+    }
+
+    static func confidence(_ sustainedEfforts: Int) -> FTPEstimate.Confidence {
+        switch sustainedEfforts {
+        case ..<2: return .low
+        case 2...4: return .moderate
+        default: return .high
+        }
+    }
+
     public func estimate(curve: [PowerCurvePoint], sustainedEfforts: Int, windowDays: Int = 42) -> FTPEstimate? {
         let byDuration = Dictionary(curve.map { ($0.seconds, $0.watts) }, uniquingKeysWith: max)
         var candidates: [(watts: Double, basis: String)] = []
@@ -52,14 +80,8 @@ public struct FTPEstimator: Sendable {
             if cp > 0 { candidates.append((cp, "critical power (3/12 min)")) }
         }
         guard let best = candidates.max(by: { $0.watts < $1.watts }) else { return nil }
-
-        let confidence: FTPEstimate.Confidence
-        switch sustainedEfforts {
-        case ..<2: confidence = .low
-        case 2...4: confidence = .moderate
-        default: confidence = .high
-        }
-        return FTPEstimate(watts: Int(best.watts.rounded()), confidence: confidence, sustainedEfforts: sustainedEfforts, basis: best.basis, windowDays: windowDays)
+        return FTPEstimate(watts: Int(best.watts.rounded()), confidence: Self.confidence(sustainedEfforts), sustainedEfforts: sustainedEfforts,
+                           basis: best.basis, windowDays: windowDays)
     }
 
     /// Decide whether to propose a working-FTP change. Only propose increases ≥ 2 % or decreases ≥ 5 %

@@ -89,8 +89,10 @@ struct AppState: Codable, Equatable {
         var kg: Double
     }
 
+    /// Cache of Intervals' athlete: FTP, height, units and weekly availability live there.
     var athlete: AthleteProfile?
-    /// FTP the athlete accepted in the app. Falls back to the Intervals value until a review is accepted.
+    /// An FTP the athlete accepted in the app that Intervals does not hold yet (the Ride sport settings).
+    /// Cleared once the write is confirmed; until then it is the working FTP.
     var acceptedFTP: Int?
     var wellness: [WellnessDay] = []
     var activities: [ActivitySummary] = []
@@ -111,6 +113,8 @@ struct AppState: Codable, Equatable {
         var minutes: Int
     }
     var today: TodayState?
+    /// Cache of Intervals' wellness (feel, sleep, motivation, mood, stress, injury, comments) plus each
+    /// ride's RPE. Rebuilt from every wellness read; local edits wait in `intervalsOutbox`.
     var feedbackByDay: [String: SubjectiveFeedback] = [:]
     var ledger = UploadLedger()
     var rideIndex: [RideIndexEntry] = []
@@ -121,8 +125,18 @@ struct AppState: Codable, Equatable {
     var cyclistProfile: CyclistProfile.Report?
     var cyclistMeasurements: CyclistMeasurements?
     var planConsultation: PlanConsultation.Session?
+    /// Superseded by `intervalsOutbox`; read once by the version 1 migration.
     var profileWeightPendingSync: PendingProfileWeight?
+    /// Superseded by `retiredCalendarEvents`; read once by the version 1 migration.
     var retiredPlanEventIDs: [Int]?
+    /// Changes not yet confirmed by Intervals. Optional so older state files decode.
+    var intervalsOutbox: IntervalsOutbox?
+    /// What Cadencia last wrote for its non-ride calendar entries (goal event, time away, other training).
+    var calendarEntryBase: [String: CalendarEntryBase]?
+    /// Planned rides of a replaced or discarded plan, deleted by external id (and server id when known).
+    var retiredCalendarEvents: [CalendarSync.Deletion]?
+    /// `IntervalsMigration.version` once local-only data has been queued for Intervals.
+    var intervalsMigrationVersion: Int?
     /// Persisted before the first automatic request, including failed/cancelled attempts.
     var cyclistProfileAutomaticAttemptedAt: Date?
     var settings = Settings()
@@ -223,7 +237,102 @@ struct AppState: Codable, Equatable {
         }
     }
 
-    mutating func setFeedback(_ feedback: SubjectiveFeedback) { feedbackByDay[feedback.day.iso] = feedback }
+    /// Shows the feedback at once and queues what changed for the day's Intervals wellness record.
+    mutating func setFeedback(_ feedback: SubjectiveFeedback) {
+        let previous = feedbackByDay[feedback.day.iso]
+        feedbackByDay[feedback.day.iso] = feedback
+        enqueue(WellnessUpdate(changingFrom: previous, to: feedback))
+    }
+
+    mutating func enqueue(_ update: WellnessUpdate) {
+        guard !update.isEmpty else { return }
+        var outbox = intervalsOutbox ?? IntervalsOutbox()
+        outbox.enqueue(update)
+        intervalsOutbox = outbox
+    }
+
+    mutating func updateOutbox(_ body: (inout IntervalsOutbox) -> Void) {
+        var outbox = intervalsOutbox ?? IntervalsOutbox()
+        body(&outbox)
+        intervalsOutbox = outbox.isEmpty ? nil : outbox
+    }
+
+    /// The plan's weekly availability as Intervals' `training_availability`, other training included.
+    var planAvailability: [IntervalsAvailabilityDay]? {
+        guard let plan, plan.isActive else { return nil }
+        return IntervalsAvailability.days(from: plan.availability,
+            otherSports: IntervalsAvailability.otherSports(plan.consultation?.otherTraining ?? []))
+    }
+
+    var hasPendingProfileSync: Bool {
+        intervalsOutbox.map { $0.heightCm != nil || $0.wellness.contains { $0.weightKg != nil } } ?? false
+            || profileWeightPendingSync != nil
+    }
+
+    // MARK: Reading Intervals back
+
+    /// Athlete-level values from Intervals, except where a local change is still on its way there.
+    mutating func adoptIntervalsAthlete(_ fresh: AthleteProfile) {
+        athlete = fresh
+        let outbox = intervalsOutbox ?? IntervalsOutbox()
+        if let ftp = acceptedFTP, IntervalsAthleteFields.holds(ftp: ftp, athlete: fresh) { acceptedFTP = nil }
+        if outbox.heightCm == nil, let cm = fresh.heightCm,
+           cyclistMeasurements?.height.map({ abs($0.value - cm) >= 0.5 }) ?? true {
+            var m = cyclistMeasurements ?? CyclistMeasurements()
+            m.height = .init(value: cm, measuredAt: Date(), source: .intervals)
+            cyclistMeasurements = m
+        }
+        if outbox.measurementPreference == nil, let metric = IntervalsAthleteFields.isMetric(fresh.measurementPreference) {
+            settings.unitsMetric = metric
+        }
+        if outbox.availability == nil, let days = fresh.trainingAvailability, var current = plan, current.isActive {
+            current.availability = IntervalsAvailability.applying(days, to: current.availability)
+            if var details = current.consultation {
+                details.weeklyRides = IntervalsAvailability.applying(current.availability, to: details.weeklyRides)
+                current.consultation = details
+            }
+            plan = current
+        }
+    }
+
+    /// Intervals' wellness over `range`: subjective fields replace the cache (a field cleared in Intervals
+    /// is cleared here), the feedback cache is rebuilt with queued edits on top, and queued edits Intervals
+    /// already shows are dropped.
+    mutating func adoptIntervalsWellness(_ days: [WellnessDay], range: ClosedRange<Day>) {
+        var byDay = Dictionary(uniqueKeysWithValues: wellness.map { ($0.day, $0) })
+        for d in days { byDay[d.day] = IntervalsReadBack.wellness(byDay[d.day], remote: d) }
+        wellness = byDay.values.sorted { $0.day < $1.day }
+        updateOutbox { $0.dropReflected(in: days) }
+        feedbackByDay = IntervalsReadBack.feedback(cached: feedbackByDay, remote: days, range: range,
+                                                   pending: intervalsOutbox?.wellness ?? [])
+    }
+
+    /// Sessions whose Intervals event has a paired activity are completed, with its compliance.
+    mutating func adoptIntervalsCompletion(_ activities: [ActivitySummary]) {
+        func apply(_ session: inout PlannedSession) {
+            guard let compliance = PlanMirror.completion(for: session, activities: activities) else { return }
+            session.status = .completed
+            session.compliance = compliance
+        }
+        if var p = plan { for i in p.sessions.indices { apply(&p.sessions[i]) }; plan = p }
+        if var s = standaloneSessions { for i in s.indices { apply(&s[i]) }; standaloneSessions = s }
+    }
+
+    /// Edits made in the Intervals calendar over `window`: planned rides' indoor flag, FTP and type, the goal
+    /// event and time away. Only what Cadencia has not changed since its last write is taken.
+    mutating func adoptIntervalsCalendar(_ events: [IntervalsEvent], window: ClosedRange<Day>, today: Day) {
+        func adopt(_ session: inout PlannedSession) {
+            guard window.contains(session.day), let event = PlanMirror.existingEvent(for: session, in: events),
+                  PlanMirror.adopt(event, into: &session) else { return }
+            if session.day == today, self.today?.day == today { self.today?.rideLocation = session.location }
+        }
+        if var p = plan {
+            for i in p.sessions.indices { adopt(&p.sessions[i]) }
+            CalendarSync.adopt(events, window: window, into: &p, base: calendarEntryBase ?? [:])
+            plan = p
+        }
+        if var s = standaloneSessions { for i in s.indices { adopt(&s[i]) }; standaloneSessions = s }
+    }
 
     func wellness(on day: Day) -> WellnessDay? { wellness.first { $0.day == day } }
 

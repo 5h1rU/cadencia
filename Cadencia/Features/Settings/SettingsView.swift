@@ -10,7 +10,11 @@ struct SettingsView: View {
                 Section("Account") {
                     NavigationLink { AccountView() } label: {
                         LabeledContent {
-                            Text(model.state.athlete?.name ?? "")
+                            if model.missingIntervalsScopes.isEmpty {
+                                Text(model.state.athlete?.name ?? "")
+                            } else {
+                                Text("Reconnect").foregroundStyle(.orange)
+                            }
                         } label: {
                             Label("Intervals.icu", systemImage: "person.crop.circle")
                         }
@@ -56,6 +60,19 @@ struct AccountView: View {
     @Environment(AppModel.self) private var model
     @State private var confirmSignOut = false
     @State private var signingOut = false
+    @State private var reconnecting = false
+    @State private var reconnectError: String?
+
+    private func reconnect() async {
+        reconnecting = true
+        defer { reconnecting = false }
+        do {
+            try await model.reconnectIntervals()
+            reconnectError = nil
+        } catch {
+            reconnectError = error.localizedDescription
+        }
+    }
 
     var body: some View {
         List {
@@ -68,6 +85,23 @@ struct AccountView: View {
                 Text("Connection")
             } information: {
                 Text("Your credential lives only in this phone's Keychain.")
+            }
+            if !model.missingIntervalsScopes.isEmpty {
+                Section {
+                    Button {
+                        Task { await reconnect() }
+                    } label: {
+                        HStack {
+                            Text("Reconnect Intervals.icu")
+                            Spacer()
+                            if reconnecting { ProgressView() }
+                        }
+                    }
+                    .disabled(reconnecting)
+                    if let reconnectError { Text(verbatim: reconnectError).font(.subheadline).foregroundStyle(.secondary) }
+                } footer: {
+                    Text("Cadencia now saves how you feel, your weight, height, FTP, units and weekly availability in Intervals.icu. Reconnect once to allow it; until then these changes wait on this phone.")
+                }
             }
             Section {
                 if !model.pendingUploads.isEmpty {
@@ -215,11 +249,14 @@ struct FTPSettingsView: View {
             } header: {
                 Text("FTP")
             } information: {
-                Text("Indoor FTP is used when Intervals has one. Estimates come from the 42-day power curve and only become the working FTP when you accept them.")
+                Text("Indoor FTP is used when Intervals has one. Estimates use Intervals' eFTP when it has one, else the 42-day power curve, and only become the working FTP when you accept them. An accepted FTP is saved to Intervals.")
             }
             Section {
                 Button("Review estimate") { showReview = true }.disabled(model.state.ftpEstimate == nil)
                 if model.state.acceptedFTP != nil {
+                    Text("Your accepted FTP is waiting to be saved to Intervals.icu.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     Button("Use the Intervals value again") { model.useIntervalsFTP() }
                 }
             }

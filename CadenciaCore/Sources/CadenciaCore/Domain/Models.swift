@@ -82,9 +82,16 @@ public struct AthleteProfile: Codable, Equatable, Sendable {
     public var lthr: Int?
     public var powerZones: [Int] // upper bound of each zone as % of FTP, Intervals convention
     public var timezone: String?
+    /// Intervals stores height in metres on the athlete; Cadencia works in centimetres.
+    public var heightCm: Double?
+    /// Intervals' `measurement_preference`: "meters" or "feet".
+    public var measurementPreference: String?
+    /// The athlete's default weekly availability as Intervals stores it. Nil when Intervals has none.
+    public var trainingAvailability: [IntervalsAvailabilityDay]?
 
     public init(id: String, name: String, ftp: Int? = nil, indoorFTP: Int? = nil, weightKg: Double? = nil,
-                maxHR: Int? = nil, lthr: Int? = nil, powerZones: [Int] = [], timezone: String? = nil) {
+                maxHR: Int? = nil, lthr: Int? = nil, powerZones: [Int] = [], timezone: String? = nil,
+                heightCm: Double? = nil, measurementPreference: String? = nil, trainingAvailability: [IntervalsAvailabilityDay]? = nil) {
         self.id = id
         self.name = name
         self.ftp = ftp
@@ -94,6 +101,9 @@ public struct AthleteProfile: Codable, Equatable, Sendable {
         self.lthr = lthr
         self.powerZones = powerZones
         self.timezone = timezone
+        self.heightCm = heightCm
+        self.measurementPreference = measurementPreference
+        self.trainingAvailability = trainingAvailability
     }
 
     /// FTP used for prescriptions: indoor FTP when set, otherwise outdoor.
@@ -118,10 +128,20 @@ public struct WellnessDay: Codable, Equatable, Sendable, Identifiable {
     public var updatedAt: Date?
     /// Intervals' running cycling eFTP, distinct from an estimate based on a single ride.
     public var estimatedFTP: Double?
+    // Subjective wellness, all on Intervals' 1 (good) … 4 (bad) scale. See `IntervalsWellnessScale`.
+    public var sleepQuality: Int?
+    public var motivation: Int?
+    public var mood: Int?
+    public var stress: Int?
+    public var injury: Int?
+    /// The day's wellness comment.
+    public var comments: String?
 
     public init(day: Day, hrvMs: Double? = nil, restingHR: Int? = nil, sleepSeconds: Int? = nil,
                 ctl: Double? = nil, atl: Double? = nil, weightKg: Double? = nil, readinessReported: Double? = nil,
-                soreness: Int? = nil, fatigue: Int? = nil, updatedAt: Date? = nil, estimatedFTP: Double? = nil) {
+                soreness: Int? = nil, fatigue: Int? = nil, updatedAt: Date? = nil, estimatedFTP: Double? = nil,
+                sleepQuality: Int? = nil, motivation: Int? = nil, mood: Int? = nil, stress: Int? = nil, injury: Int? = nil,
+                comments: String? = nil) {
         self.day = day
         self.hrvMs = hrvMs
         self.restingHR = restingHR
@@ -134,6 +154,12 @@ public struct WellnessDay: Codable, Equatable, Sendable, Identifiable {
         self.fatigue = fatigue
         self.updatedAt = updatedAt
         self.estimatedFTP = estimatedFTP
+        self.sleepQuality = sleepQuality
+        self.motivation = motivation
+        self.mood = mood
+        self.stress = stress
+        self.injury = injury
+        self.comments = comments
     }
 
     /// Training Stress Balance (form) = CTL − ATL.
@@ -156,6 +182,12 @@ public struct WellnessDay: Codable, Equatable, Sendable, Identifiable {
         m.fatigue = other.fatigue ?? fatigue
         m.updatedAt = [updatedAt, other.updatedAt].compactMap { $0 }.max()
         m.estimatedFTP = other.estimatedFTP ?? estimatedFTP
+        m.sleepQuality = other.sleepQuality ?? sleepQuality
+        m.motivation = other.motivation ?? motivation
+        m.mood = other.mood ?? mood
+        m.stress = other.stress ?? stress
+        m.injury = other.injury ?? injury
+        m.comments = other.comments ?? comments
         return m
     }
 }
@@ -182,12 +214,17 @@ public struct ActivitySummary: Codable, Equatable, Sendable, Identifiable {
     public var externalID: String?
     public var pairedEventID: Int?
     public var elevationGainMeters: Double?
+    /// % match to the paired planned workout, as Intervals computes it.
+    public var compliance: Double?
+    /// Intervals' rolling eFTP at the time of this activity (`icu_rolling_ftp`).
+    public var rollingFTP: Int?
 
     public init(id: String, name: String, type: String, startDateLocal: Date, movingTime: TimeInterval,
                 distanceMeters: Double? = nil, trainingLoad: Int? = nil, intensity: Double? = nil,
                 averageWatts: Int? = nil, normalizedWatts: Int? = nil, averageHR: Int? = nil, ftpAtTime: Int? = nil,
                 estimatedFTP: Int? = nil, rpe: Int? = nil, feel: Int? = nil, isTrainer: Bool = false,
-                externalID: String? = nil, pairedEventID: Int? = nil, elevationGainMeters: Double? = nil) {
+                externalID: String? = nil, pairedEventID: Int? = nil, elevationGainMeters: Double? = nil,
+                compliance: Double? = nil, rollingFTP: Int? = nil) {
         self.id = id
         self.name = name
         self.type = type
@@ -207,6 +244,8 @@ public struct ActivitySummary: Codable, Equatable, Sendable, Identifiable {
         self.externalID = externalID
         self.pairedEventID = pairedEventID
         self.elevationGainMeters = elevationGainMeters
+        self.compliance = compliance
+        self.rollingFTP = rollingFTP
     }
 
     public var day: Day { Day(startDateLocal) }
@@ -507,6 +546,11 @@ public struct PlannedSession: Codable, Equatable, Sendable, Identifiable {
     public var route: GPXRoute?
     public var routeFileName: String?
     public var routeSourceIndex: Int?
+    /// The native Intervals fields as Cadencia last wrote them. A difference from the calendar read
+    /// means the athlete edited the event in Intervals; see `PlanMirror.adopt`.
+    public var mirrored: PlanMirror.NativeFields?
+    /// Intervals' compliance of the activity paired with this session's event, once it is completed.
+    public var compliance: Double?
 
     public init(id: UUID = UUID(), day: Day, kind: SessionKind, title: String, targetMinutes: Int,
                 targetLoad: Int? = nil, status: Status = .provisional, workout: Workout? = nil,
@@ -549,6 +593,9 @@ public struct TrainingEvent: Codable, Equatable, Sendable, Identifiable {
 
     public var course: EventCourse?
     public var details: EventDetails?
+    /// The Intervals `external_id` of this event's calendar entry, pinned at the first write so a date
+    /// moved in Intervals keeps the same entry. Nil until then.
+    public var externalID: String?
 
     public init(id: UUID = UUID(), name: String, day: Day, distanceKm: Double? = nil, priority: Priority = .a, objective: String = "", isRace: Bool = false,
                 course: EventCourse? = nil, details: EventDetails? = nil) {
@@ -657,21 +704,32 @@ public struct TrainingPlan: Codable, Equatable, Sendable, Identifiable {
 
 // MARK: - Subjective feedback
 
+/// How the athlete feels on a day. Intervals is the source of truth: everything except `rpe` lives in the
+/// day's wellness record (`IntervalsWellnessScale` maps the scales); `rpe` and the legs-derived `feel`
+/// belong to the ride's activity.
 public struct SubjectiveFeedback: Codable, Equatable, Sendable {
     public enum Legs: String, Codable, Sendable { case fresh, ok, heavy }
     public var day: Day
     public var rpe: Int?                 // 1…10 after a session
     public var legs: Legs?
-    public var sleepQuality: Int?        // 1…5
-    public var motivation: Int?          // 1…5
+    public var sleepQuality: Int?        // 1 (poor) … 5 (great)
+    public var motivation: Int?          // 1 (none) … 5 (very high)
     public var note: String?
+    // Intervals' own scale, 1 (good) … 4 (bad): mood great…grumpy, stress low…extreme, injury none…injured.
+    public var mood: Int?
+    public var stress: Int?
+    public var injury: Int?
 
-    public init(day: Day, rpe: Int? = nil, legs: Legs? = nil, sleepQuality: Int? = nil, motivation: Int? = nil, note: String? = nil) {
+    public init(day: Day, rpe: Int? = nil, legs: Legs? = nil, sleepQuality: Int? = nil, motivation: Int? = nil, note: String? = nil,
+                mood: Int? = nil, stress: Int? = nil, injury: Int? = nil) {
         self.day = day
         self.rpe = rpe
         self.legs = legs
         self.sleepQuality = sleepQuality
         self.motivation = motivation
         self.note = note
+        self.mood = mood
+        self.stress = stress
+        self.injury = injury
     }
 }
