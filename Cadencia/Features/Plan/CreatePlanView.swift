@@ -27,7 +27,7 @@ struct CreatePlanView: View {
     // Only the debug fixture provides a transcript. The regular screen always uses the microphone.
     @State var previewTranscript: String?
 
-    private var session: PlanConsultation.Session? { model.state.planConsultation }
+    private var session: PlanConsultation.Session? { model.planConsultation }
     private var reply: PlanConsultation.Reply? { session?.reply }
     private var hasRides: Bool {
         model.state.activities.contains { $0.isCycling && $0.day >= model.today.adding(days: -42) && $0.day <= model.today }

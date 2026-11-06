@@ -41,6 +41,8 @@ const challengeOf = (verifier: string) =>
 
 export interface OAuthConfig {
   readonly clientId: string;
+  /** Issued with the OAuth app in Intervals.icu settings. Only the server holds it. */
+  readonly clientSecret: Redacted.Redacted<string>;
   /** The callback registered for this OAuth app in Intervals: `<origin>/auth/intervals/callback`. */
   readonly redirectUri: string;
 }
@@ -106,6 +108,7 @@ export const callbackRoute = (config: OAuthConfig) =>
         headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
         body: new URLSearchParams({
           client_id: config.clientId,
+          client_secret: Redacted.value(config.clientSecret),
           code,
           code_verifier: flow.value.verifier,
           redirect_uri: config.redirectUri,

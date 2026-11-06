@@ -1,0 +1,3389 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Cadencia",
+    "version": "1"
+  },
+  "paths": {
+    "/v1/RecordDailyDecision": {
+      "post": {
+        "tags": [
+          "CoachDeviceApi"
+        ],
+        "operationId": "RecordDailyDecision",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "DecisionAlreadyAccepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionAlreadyAcceptedEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "planId": {
+                        "type": "string"
+                      },
+                      "workout": {
+                        "$ref": "#/components/schemas/Workout"
+                      },
+                      "note": {
+                        "$ref": "#/components/schemas/CoachNote"
+                      },
+                      "evidence": {
+                        "$ref": "#/components/schemas/EvidenceSnapshot"
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "interpretedOn": {
+                        "$ref": "#/components/schemas/InterpretedOn"
+                      }
+                    },
+                    "required": [
+                      "planId",
+                      "workout",
+                      "note",
+                      "evidence",
+                      "model",
+                      "interpretedOn"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/SendMessage": {
+      "post": {
+        "tags": [
+          "CoachDeviceApi"
+        ],
+        "operationId": "SendMessage",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "messageId": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "messageId",
+                      "text"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/RecordCoachReply": {
+      "post": {
+        "tags": [
+          "CoachDeviceApi"
+        ],
+        "operationId": "RecordCoachReply",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "messageId": {
+                        "type": "string"
+                      },
+                      "inReplyTo": {
+                        "type": "string"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "intent": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/components/schemas/Intent"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "interpretedOn": {
+                        "$ref": "#/components/schemas/InterpretedOn"
+                      }
+                    },
+                    "required": [
+                      "messageId",
+                      "inReplyTo",
+                      "text",
+                      "intent",
+                      "model",
+                      "interpretedOn"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/StartConsultation": {
+      "post": {
+        "tags": [
+          "CoachDeviceApi"
+        ],
+        "operationId": "StartConsultation",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConsultationAlreadyStarted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsultationAlreadyStartedEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/RecordCoachQuestion": {
+      "post": {
+        "tags": [
+          "CoachDeviceApi"
+        ],
+        "operationId": "RecordCoachQuestion",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConsultationNotOpen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsultationNotOpenEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "interpretedOn": {
+                        "$ref": "#/components/schemas/InterpretedOn"
+                      }
+                    },
+                    "required": [
+                      "text",
+                      "model",
+                      "interpretedOn"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/AnswerQuestion": {
+      "post": {
+        "tags": [
+          "CoachDeviceApi"
+        ],
+        "operationId": "AnswerQuestion",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConsultationNotOpen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsultationNotOpenEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/RecordDraft": {
+      "post": {
+        "tags": [
+          "CoachDeviceApi"
+        ],
+        "operationId": "RecordDraft",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConsultationNotOpen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsultationNotOpenEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "draft": {
+                        "$ref": "#/components/schemas/PlanDraft"
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "interpretedOn": {
+                        "$ref": "#/components/schemas/InterpretedOn"
+                      }
+                    },
+                    "required": [
+                      "draft",
+                      "model",
+                      "interpretedOn"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/AcceptDraft": {
+      "post": {
+        "tags": [
+          "CoachDeviceApi"
+        ],
+        "operationId": "AcceptDraft",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ConsultationNotOpen | NoDraft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConsultationNotOpenEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/NoDraftEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "planId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "planId"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/RecordProfileAttempt": {
+      "post": {
+        "tags": [
+          "CoachDeviceApi"
+        ],
+        "operationId": "RecordProfileAttempt",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "AutomaticAttemptUsed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomaticAttemptUsedEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "automatic": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "automatic"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/RecordProfile": {
+      "post": {
+        "tags": [
+          "CoachDeviceApi"
+        ],
+        "operationId": "RecordProfile",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "report": {
+                        "$ref": "#/components/schemas/RiderReport"
+                      },
+                      "model": {
+                        "type": "string"
+                      },
+                      "interpretedOn": {
+                        "$ref": "#/components/schemas/InterpretedOn"
+                      }
+                    },
+                    "required": [
+                      "report",
+                      "model",
+                      "interpretedOn"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/AcceptIntent": {
+      "post": {
+        "tags": [
+          "AthleteCoachApi"
+        ],
+        "operationId": "AcceptIntent",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "NoOpenIntent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoOpenIntentEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "messageId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "messageId"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/DismissIntent": {
+      "post": {
+        "tags": [
+          "AthleteCoachApi"
+        ],
+        "operationId": "DismissIntent",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "NoOpenIntent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoOpenIntentEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "messageId": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "messageId"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/DismissFtpProposal": {
+      "post": {
+        "tags": [
+          "AthleteCoachApi"
+        ],
+        "operationId": "DismissFtpProposal",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "ftp": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "ftp"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/TodayDecision/{key}": {
+      "get": {
+        "tags": [
+          "AthleteCoachApi"
+        ],
+        "operationId": "getTodayDecision",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "stream",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "Infinity",
+                    "-Infinity",
+                    "NaN"
+                  ]
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TodayDecisionState"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "ConsistencyTimeout | Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnauthorizedEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ConversationThread/{key}": {
+      "get": {
+        "tags": [
+          "AthleteCoachApi"
+        ],
+        "operationId": "getConversationThread",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "stream",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "Infinity",
+                    "-Infinity",
+                    "NaN"
+                  ]
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConversationThreadState"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "ConsistencyTimeout | Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnauthorizedEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ConsultationView/{key}": {
+      "get": {
+        "tags": [
+          "AthleteCoachApi"
+        ],
+        "operationId": "getConsultationView",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "stream",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "Infinity",
+                    "-Infinity",
+                    "NaN"
+                  ]
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConsultationViewState"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "ConsistencyTimeout | Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnauthorizedEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/RiderProfileCard/{key}": {
+      "get": {
+        "tags": [
+          "AthleteCoachApi"
+        ],
+        "operationId": "getRiderProfileCard",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "stream",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "Infinity",
+                    "-Infinity",
+                    "NaN"
+                  ]
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/RiderProfileCardState"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "ConsistencyTimeout | Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnauthorizedEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/MoveSession": {
+      "post": {
+        "tags": [
+          "AthletePlanningApi"
+        ],
+        "operationId": "MoveSession",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SessionNotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionNotFoundEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "PlanNotActive | DayTaken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PlanNotActiveEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DayTakenEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "DayOutsidePlan | Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DayOutsidePlanEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnauthorizedEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "type": "object",
+                    "properties": {
+                      "sessionId": {
+                        "type": "string"
+                      },
+                      "toDay": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "sessionId",
+                      "toDay"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/RecordDayRequirement": {
+      "post": {
+        "tags": [
+          "AthletePlanningApi"
+        ],
+        "operationId": "RecordDayRequirement",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "PlanNotActive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanNotActiveEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "DayOutsidePlan | Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DayOutsidePlanEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnauthorizedEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "$ref": "#/components/schemas/DayRequirement"
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/RetirePlan": {
+      "post": {
+        "tags": [
+          "AthletePlanningApi"
+        ],
+        "operationId": "RetirePlan",
+        "parameters": [],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "PlanNotActive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanNotActiveEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target": {
+                    "type": "string"
+                  },
+                  "commandId": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "input": {
+                    "not": {
+                      "type": "null"
+                    }
+                  }
+                },
+                "required": [
+                  "target",
+                  "input"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
+    "/v1/CurrentPlan/{key}": {
+      "get": {
+        "tags": [
+          "AthletePlanningApi"
+        ],
+        "operationId": "getCurrentPlan",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "name": "stream",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[+-]?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:[Ee][+-]?\\d+)?$"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "Infinity",
+                    "-Infinity",
+                    "NaN"
+                  ]
+                }
+              ]
+            },
+            "required": false
+          }
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/CurrentPlanState"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "NotYours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotYoursEncoded"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "ConsistencyTimeout | Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/UnauthorizedEncoded"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "UnauthorizedEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "Unauthorized"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "ConsistencyTimeoutEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "ConsistencyTimeout"
+            ]
+          },
+          "view": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "stream": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "_tag",
+          "view",
+          "key",
+          "stream",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "NotYoursEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "NotYours"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "PlanNotActiveEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "PlanNotActive"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "DayOutsidePlanEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "DayOutsidePlan"
+            ]
+          },
+          "day": {
+            "type": "string"
+          },
+          "startDay": {
+            "type": "string"
+          },
+          "endDay": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "day",
+          "startDay",
+          "endDay"
+        ],
+        "additionalProperties": false
+      },
+      "SessionNotFoundEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "SessionNotFound"
+            ]
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "sessionId"
+        ],
+        "additionalProperties": false
+      },
+      "DayTakenEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "DayTaken"
+            ]
+          },
+          "day": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "day"
+        ],
+        "additionalProperties": false
+      },
+      "NoOpenIntentEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "NoOpenIntent"
+            ]
+          },
+          "messageId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "messageId"
+        ],
+        "additionalProperties": false
+      },
+      "AutomaticAttemptUsedEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "AutomaticAttemptUsed"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "NoDraftEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "NoDraft"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "ConsultationNotOpenEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "ConsultationNotOpen"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "ConsultationAlreadyStartedEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "ConsultationAlreadyStarted"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "DecisionAlreadyAcceptedEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "DecisionAlreadyAccepted"
+            ]
+          },
+          "fingerprint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "fingerprint"
+        ],
+        "additionalProperties": false
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "reply": {
+            "type": "null"
+          },
+          "stream": {
+            "type": "string"
+          },
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "reply",
+          "stream",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "Workout": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SessionKind"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkoutStep"
+            }
+          },
+          "intensityCeiling": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "steps",
+          "rationale"
+        ],
+        "additionalProperties": false
+      },
+      "WorkoutStep": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "durationSeconds": {
+            "type": "number"
+          },
+          "startIntensity": {
+            "type": "number"
+          },
+          "endIntensity": {
+            "type": "number"
+          },
+          "cadenceRpm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "durationSeconds",
+          "startIntensity",
+          "endIntensity"
+        ],
+        "additionalProperties": false
+      },
+      "CoachNote": {
+        "type": "object",
+        "properties": {
+          "headline": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "session": {
+            "type": "string"
+          },
+          "watch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "headline",
+          "body",
+          "session",
+          "watch"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceSnapshot": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "type": "string"
+          },
+          "readiness": {
+            "$ref": "#/components/schemas/Readiness"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DayConditions"
+            }
+          },
+          "eventDays": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "fingerprint",
+          "readiness",
+          "days",
+          "eventDays"
+        ],
+        "additionalProperties": false
+      },
+      "Readiness": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/ReadinessLevel"
+          },
+          "score": {
+            "type": "integer"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "score",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
+      "DayConditions": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "maxMinutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unavailable": {
+            "type": "boolean"
+          },
+          "hardOtherTraining": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "day",
+          "maxMinutes",
+          "unavailable",
+          "hardOtherTraining"
+        ],
+        "additionalProperties": false
+      },
+      "Intent": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "limits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DayLimit"
+            }
+          }
+        },
+        "required": [
+          "planId",
+          "summary",
+          "limits"
+        ],
+        "additionalProperties": false
+      },
+      "DayLimit": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "maxMinutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unavailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "day",
+          "maxMinutes",
+          "unavailable"
+        ],
+        "additionalProperties": false
+      },
+      "PlanDraft": {
+        "type": "object",
+        "properties": {
+          "athleteId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "goal": {
+            "$ref": "#/components/schemas/GoalKind"
+          },
+          "objective": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "startDay": {
+            "type": "string"
+          },
+          "endDay": {
+            "type": "string"
+          },
+          "phases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanPhase"
+            }
+          },
+          "longRideWeekday": {
+            "type": "integer"
+          },
+          "event": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftEvent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DraftSession"
+            }
+          }
+        },
+        "required": [
+          "athleteId",
+          "title",
+          "goal",
+          "objective",
+          "rationale",
+          "startDay",
+          "endDay",
+          "phases",
+          "longRideWeekday",
+          "event",
+          "sessions"
+        ],
+        "additionalProperties": false
+      },
+      "PlanPhase": {
+        "type": "object",
+        "properties": {
+          "focus": {
+            "$ref": "#/components/schemas/PhaseFocus"
+          },
+          "startWeek": {
+            "type": "integer"
+          },
+          "endWeek": {
+            "type": "integer"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "focus",
+          "startWeek",
+          "endWeek",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
+      "DraftEvent": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string"
+          },
+          "distanceKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isRace": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "day",
+          "distanceKm",
+          "isRace"
+        ],
+        "additionalProperties": false
+      },
+      "DraftSession": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SessionKind"
+          },
+          "title": {
+            "type": "string"
+          },
+          "targetMinutes": {
+            "type": "integer"
+          },
+          "purpose": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "kind",
+          "title",
+          "targetMinutes",
+          "purpose"
+        ],
+        "additionalProperties": false
+      },
+      "RiderReport": {
+        "type": "object",
+        "properties": {
+          "riderType": {
+            "$ref": "#/components/schemas/RiderType"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/ProfileConfidence"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "strengths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "development": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "caveats": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "oldest": {
+            "type": "string"
+          },
+          "newest": {
+            "type": "string"
+          },
+          "rideCount": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "riderType",
+          "confidence",
+          "headline",
+          "summary",
+          "strengths",
+          "development",
+          "evidence",
+          "caveats",
+          "oldest",
+          "newest",
+          "rideCount"
+        ],
+        "additionalProperties": false
+      },
+      "CurrentPlanState": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "active",
+              "retired"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "startDay": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endDay": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanPhase"
+            }
+          },
+          "longRideWeekday": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "event": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GoalEvent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlannedSession"
+            }
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DayRequirement"
+            }
+          }
+        },
+        "required": [
+          "planId",
+          "status",
+          "title",
+          "goal",
+          "startDay",
+          "endDay",
+          "phases",
+          "longRideWeekday",
+          "event",
+          "sessions",
+          "requirements"
+        ],
+        "additionalProperties": false
+      },
+      "PlannedSession": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SessionKind"
+          },
+          "title": {
+            "type": "string"
+          },
+          "targetMinutes": {
+            "type": "integer"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "workout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Workout"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "externalId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "day",
+          "kind",
+          "title",
+          "targetMinutes",
+          "purpose",
+          "status",
+          "workout",
+          "externalId"
+        ],
+        "additionalProperties": false
+      },
+      "GoalEvent": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "day": {
+            "type": "string"
+          },
+          "distanceKm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isRace": {
+            "type": "boolean"
+          },
+          "objective": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "day",
+          "distanceKm",
+          "isRace",
+          "objective"
+        ],
+        "additionalProperties": false
+      },
+      "DayRequirement": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "maxMinutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "day",
+          "instructions",
+          "maxMinutes"
+        ],
+        "additionalProperties": false
+      },
+      "TodayDecisionState": {
+        "type": "object",
+        "properties": {
+          "athleteId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "none",
+              "pending",
+              "accepted",
+              "refused"
+            ]
+          },
+          "workout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Workout"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoachNote"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EvidenceSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interpretedOn": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InterpretedOn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "athleteId",
+          "day",
+          "attempt",
+          "status",
+          "workout",
+          "note",
+          "evidence",
+          "model",
+          "interpretedOn",
+          "refusal"
+        ],
+        "additionalProperties": false
+      },
+      "ConversationThreadState": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadMessage"
+            }
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "additionalProperties": false
+      },
+      "ThreadMessage": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "athlete",
+              "coach"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Intent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "intentStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposed",
+                  "accepted",
+                  "dismissed",
+                  "applied",
+                  "refused"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "messageId",
+          "role",
+          "text",
+          "at",
+          "intent",
+          "intentStatus",
+          "refusal",
+          "model"
+        ],
+        "additionalProperties": false
+      },
+      "ConsultationViewState": {
+        "type": "object",
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open",
+              "accepted",
+              "created",
+              "refused"
+            ]
+          },
+          "turns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsultationTurn"
+            }
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanDraft"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "planId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "stage",
+          "turns",
+          "draft",
+          "planId",
+          "refusal"
+        ],
+        "additionalProperties": false
+      },
+      "ConsultationTurn": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "coach",
+              "athlete"
+            ]
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "RiderProfileCardState": {
+        "type": "object",
+        "properties": {
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiderReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dismissedFtp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "report",
+          "model",
+          "dismissedFtp"
+        ],
+        "additionalProperties": false
+      },
+      "SessionKind": {
+        "type": "string",
+        "enum": [
+          "rest",
+          "recovery",
+          "endurance",
+          "tempo",
+          "threshold",
+          "vo2max",
+          "openerActivation",
+          "longRide",
+          "groupRide",
+          "race",
+          "strength"
+        ]
+      },
+      "GoalKind": {
+        "type": "string",
+        "enum": [
+          "climbing",
+          "ftp",
+          "durability",
+          "endurance",
+          "vo2max",
+          "event",
+          "strength"
+        ]
+      },
+      "PhaseFocus": {
+        "type": "string",
+        "enum": [
+          "prepare",
+          "base",
+          "build",
+          "peak",
+          "taper",
+          "consolidate",
+          "recover"
+        ]
+      },
+      "ReadinessLevel": {
+        "type": "string",
+        "enum": [
+          "rest",
+          "easy",
+          "normal",
+          "strong"
+        ]
+      },
+      "InterpretedOn": {
+        "type": "string",
+        "enum": [
+          "ios"
+        ]
+      },
+      "SessionStatus": {
+        "type": "string",
+        "enum": [
+          "provisional",
+          "concrete",
+          "published",
+          "skipped",
+          "changedInIntervals",
+          "removedInIntervals"
+        ]
+      },
+      "RiderType": {
+        "type": "string",
+        "enum": [
+          "climber",
+          "puncheur",
+          "sprinter",
+          "timeTrialist",
+          "endurance",
+          "allRounder",
+          "developing"
+        ]
+      },
+      "ProfileConfidence": {
+        "type": "string",
+        "enum": [
+          "limited",
+          "moderate",
+          "high"
+        ]
+      }
+    },
+    "securitySchemes": {}
+  },
+  "security": [],
+  "tags": [
+    {
+      "name": "CoachDeviceApi"
+    },
+    {
+      "name": "AthleteCoachApi"
+    },
+    {
+      "name": "AthletePlanningApi"
+    }
+  ]
+}

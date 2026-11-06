@@ -1,0 +1,608 @@
+{
+  "commands" : {
+    "acceptDraft" : {
+      "body" : {
+        "input" : {
+          "planId" : "i100:p1"
+        },
+        "target" : "i100:c1"
+      },
+      "command" : "AcceptDraft"
+    },
+    "acceptIntent" : {
+      "body" : {
+        "input" : {
+          "messageId" : "m2"
+        },
+        "target" : "i100:2026-11"
+      },
+      "command" : "AcceptIntent"
+    },
+    "answerQuestion" : {
+      "body" : {
+        "input" : {
+          "text" : "Six weeks of base, three rides a week."
+        },
+        "target" : "i100:c1"
+      },
+      "command" : "AnswerQuestion"
+    },
+    "dismissIntent" : {
+      "body" : {
+        "input" : {
+          "messageId" : "m6"
+        },
+        "target" : "i100:2026-11"
+      },
+      "command" : "DismissIntent"
+    },
+    "moveSession" : {
+      "body" : {
+        "input" : {
+          "sessionId" : "2026-11-12",
+          "toDay" : "2026-11-13"
+        },
+        "target" : "i100:p1"
+      },
+      "command" : "MoveSession"
+    },
+    "recordCoachQuestion" : {
+      "body" : {
+        "input" : {
+          "interpretedOn" : "ios",
+          "model" : "gpt-5.5",
+          "text" : "What should your riding feel like?"
+        },
+        "target" : "i100:c1"
+      },
+      "command" : "RecordCoachQuestion"
+    },
+    "recordCoachReplyAway" : {
+      "body" : {
+        "input" : {
+          "inReplyTo" : "m5",
+          "intent" : {
+            "limits" : [
+              {
+                "day" : "2026-11-14",
+                "maxMinutes" : null,
+                "unavailable" : true
+              }
+            ],
+            "planId" : "i100:p1",
+            "summary" : "Saturday off, then."
+          },
+          "interpretedOn" : "ios",
+          "messageId" : "m6",
+          "model" : "gpt-5.5",
+          "text" : "Saturday off, then."
+        },
+        "target" : "i100:2026-11"
+      },
+      "command" : "RecordCoachReply"
+    },
+    "recordCoachReplyWithIntent" : {
+      "body" : {
+        "input" : {
+          "inReplyTo" : "m1",
+          "intent" : {
+            "limits" : [
+              {
+                "day" : "2026-11-12",
+                "maxMinutes" : 40,
+                "unavailable" : false
+              }
+            ],
+            "planId" : "i100:p1",
+            "summary" : "I'll shorten Thursday to 40 minutes."
+          },
+          "interpretedOn" : "ios",
+          "messageId" : "m2",
+          "model" : "gpt-5.5",
+          "text" : "I'll shorten Thursday to 40 minutes."
+        },
+        "target" : "i100:2026-11"
+      },
+      "command" : "RecordCoachReply"
+    },
+    "recordCoachReplyWithoutIntent" : {
+      "body" : {
+        "input" : {
+          "inReplyTo" : "m3",
+          "intent" : null,
+          "interpretedOn" : "ios",
+          "messageId" : "m4",
+          "model" : "gpt-5.5",
+          "text" : "You're welcome."
+        },
+        "target" : "i100:2026-11"
+      },
+      "command" : "RecordCoachReply"
+    },
+    "recordDailyDecisionAccepted" : {
+      "body" : {
+        "input" : {
+          "evidence" : {
+            "days" : [
+              {
+                "day" : "2026-11-10",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-11",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-12",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-13",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-14",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-15",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-16",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-17",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              }
+            ],
+            "eventDays" : [
+
+            ],
+            "fingerprint" : "fp-1",
+            "readiness" : {
+              "level" : "normal",
+              "score" : 62,
+              "summary" : "Typical HRV and sleep."
+            }
+          },
+          "interpretedOn" : "ios",
+          "model" : "gpt-5.5",
+          "note" : {
+            "body" : "Ready.",
+            "headline" : "Easy endurance",
+            "session" : "One hour in Z2.",
+            "watch" : null
+          },
+          "planId" : "i100:p1",
+          "workout" : {
+            "kind" : "endurance",
+            "name" : "Easy endurance",
+            "rationale" : "Typical HRV.",
+            "steps" : [
+              {
+                "durationSeconds" : 3600,
+                "endIntensity" : 0.65000000000000002,
+                "name" : "65%",
+                "startIntensity" : 0.65000000000000002
+              }
+            ]
+          }
+        },
+        "target" : "i100:2026-11-10"
+      },
+      "command" : "RecordDailyDecision"
+    },
+    "recordDailyDecisionRefused" : {
+      "body" : {
+        "input" : {
+          "evidence" : {
+            "days" : [
+              {
+                "day" : "2026-11-10",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-11",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-12",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-13",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-14",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-15",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-16",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              },
+              {
+                "day" : "2026-11-17",
+                "hardOtherTraining" : false,
+                "maxMinutes" : null,
+                "unavailable" : false
+              }
+            ],
+            "eventDays" : [
+
+            ],
+            "fingerprint" : "fp-1",
+            "readiness" : {
+              "level" : "normal",
+              "score" : 62,
+              "summary" : "Typical HRV and sleep."
+            }
+          },
+          "interpretedOn" : "ios",
+          "model" : "gpt-5.5",
+          "note" : {
+            "body" : "Ready.",
+            "headline" : "Easy endurance",
+            "session" : "One hour in Z2.",
+            "watch" : null
+          },
+          "planId" : "i100:p1",
+          "workout" : {
+            "intensityCeiling" : 1,
+            "kind" : "threshold",
+            "name" : "Threshold",
+            "rationale" : "",
+            "steps" : [
+              {
+                "durationSeconds" : 900,
+                "endIntensity" : 0.59999999999999998,
+                "name" : "60%",
+                "startIntensity" : 0.59999999999999998
+              },
+              {
+                "durationSeconds" : 1800,
+                "endIntensity" : 0.97999999999999998,
+                "name" : "98%",
+                "startIntensity" : 0.97999999999999998
+              },
+              {
+                "durationSeconds" : 900,
+                "endIntensity" : 0.55000000000000004,
+                "name" : "55%",
+                "startIntensity" : 0.55000000000000004
+              }
+            ]
+          }
+        },
+        "target" : "i100:2026-11-10"
+      },
+      "command" : "RecordDailyDecision"
+    },
+    "recordDayRequirement" : {
+      "body" : {
+        "input" : {
+          "day" : "2026-11-12",
+          "instructions" : "Thursday I only have 40 minutes.",
+          "maxMinutes" : null
+        },
+        "target" : "i100:p1"
+      },
+      "command" : "RecordDayRequirement"
+    },
+    "recordDraft" : {
+      "body" : {
+        "input" : {
+          "draft" : {
+            "athleteId" : "i100",
+            "endDay" : "2026-12-20",
+            "event" : null,
+            "goal" : "endurance",
+            "longRideWeekday" : 1,
+            "objective" : "Build an aerobic base",
+            "phases" : [
+              {
+                "endWeek" : 4,
+                "focus" : "base",
+                "startWeek" : 1,
+                "summary" : "Aerobic base"
+              },
+              {
+                "endWeek" : 5,
+                "focus" : "build",
+                "startWeek" : 5,
+                "summary" : "Longer tempo"
+              },
+              {
+                "endWeek" : 6,
+                "focus" : "recover",
+                "startWeek" : 6,
+                "summary" : "Absorb"
+              }
+            ],
+            "rationale" : "Six weeks of easy volume.",
+            "sessions" : [
+              {
+                "day" : "2026-11-10",
+                "kind" : "endurance",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 60,
+                "title" : "Easy endurance"
+              },
+              {
+                "day" : "2026-11-12",
+                "kind" : "tempo",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 60,
+                "title" : "Sweet spot"
+              },
+              {
+                "day" : "2026-11-15",
+                "kind" : "longRide",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 120,
+                "title" : "Long ride"
+              },
+              {
+                "day" : "2026-11-17",
+                "kind" : "endurance",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 60,
+                "title" : "Easy endurance"
+              },
+              {
+                "day" : "2026-11-19",
+                "kind" : "tempo",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 60,
+                "title" : "Sweet spot"
+              },
+              {
+                "day" : "2026-11-22",
+                "kind" : "longRide",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 120,
+                "title" : "Long ride"
+              },
+              {
+                "day" : "2026-11-24",
+                "kind" : "endurance",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 60,
+                "title" : "Easy endurance"
+              },
+              {
+                "day" : "2026-11-26",
+                "kind" : "tempo",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 60,
+                "title" : "Sweet spot"
+              },
+              {
+                "day" : "2026-11-29",
+                "kind" : "longRide",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 120,
+                "title" : "Long ride"
+              },
+              {
+                "day" : "2026-12-01",
+                "kind" : "endurance",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 60,
+                "title" : "Easy endurance"
+              },
+              {
+                "day" : "2026-12-03",
+                "kind" : "tempo",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 60,
+                "title" : "Sweet spot"
+              },
+              {
+                "day" : "2026-12-06",
+                "kind" : "longRide",
+                "purpose" : "Aerobic base",
+                "targetMinutes" : 120,
+                "title" : "Long ride"
+              },
+              {
+                "day" : "2026-12-08",
+                "kind" : "endurance",
+                "purpose" : "Longer tempo",
+                "targetMinutes" : 60,
+                "title" : "Easy endurance"
+              },
+              {
+                "day" : "2026-12-10",
+                "kind" : "tempo",
+                "purpose" : "Longer tempo",
+                "targetMinutes" : 60,
+                "title" : "Sweet spot"
+              },
+              {
+                "day" : "2026-12-13",
+                "kind" : "longRide",
+                "purpose" : "Longer tempo",
+                "targetMinutes" : 120,
+                "title" : "Long ride"
+              },
+              {
+                "day" : "2026-12-15",
+                "kind" : "recovery",
+                "purpose" : "Absorb",
+                "targetMinutes" : 40,
+                "title" : "Recovery spin"
+              },
+              {
+                "day" : "2026-12-17",
+                "kind" : "recovery",
+                "purpose" : "Absorb",
+                "targetMinutes" : 40,
+                "title" : "Recovery spin"
+              },
+              {
+                "day" : "2026-12-20",
+                "kind" : "recovery",
+                "purpose" : "Absorb",
+                "targetMinutes" : 80,
+                "title" : "Recovery spin"
+              }
+            ],
+            "startDay" : "2026-11-09",
+            "title" : "Base block"
+          },
+          "interpretedOn" : "ios",
+          "model" : "gpt-5.5"
+        },
+        "target" : "i100:c1"
+      },
+      "command" : "RecordDraft"
+    },
+    "recordProfile" : {
+      "body" : {
+        "input" : {
+          "interpretedOn" : "ios",
+          "model" : "gpt-5.5",
+          "report" : {
+            "caveats" : [
+
+            ],
+            "confidence" : "moderate",
+            "development" : [
+              "Short power"
+            ],
+            "evidence" : [
+              "20 rides"
+            ],
+            "headline" : "A steady endurance rider",
+            "newest" : "2026-11-08",
+            "oldest" : "2026-08-01",
+            "rideCount" : 20,
+            "riderType" : "endurance",
+            "strengths" : [
+              "Pacing"
+            ],
+            "summary" : "Long, even rides."
+          }
+        },
+        "target" : "i100"
+      },
+      "command" : "RecordProfile"
+    },
+    "recordProfileAttempt" : {
+      "body" : {
+        "input" : {
+          "automatic" : true
+        },
+        "target" : "i100"
+      },
+      "command" : "RecordProfileAttempt"
+    },
+    "retirePlan" : {
+      "body" : {
+        "input" : {
+
+        },
+        "target" : "i100:p1"
+      },
+      "command" : "RetirePlan"
+    },
+    "sendMessage" : {
+      "body" : {
+        "input" : {
+          "messageId" : "m1",
+          "text" : "Thursday I only have 40 minutes."
+        },
+        "target" : "i100:2026-11"
+      },
+      "command" : "SendMessage"
+    },
+    "sendMessageAway" : {
+      "body" : {
+        "input" : {
+          "messageId" : "m5",
+          "text" : "Saturday I'm away."
+        },
+        "target" : "i100:2026-11"
+      },
+      "command" : "SendMessage"
+    },
+    "sendMessageThanks" : {
+      "body" : {
+        "input" : {
+          "messageId" : "m3",
+          "text" : "Thanks!"
+        },
+        "target" : "i100:2026-11"
+      },
+      "command" : "SendMessage"
+    },
+    "startConsultation" : {
+      "body" : {
+        "input" : {
+
+        },
+        "target" : "i100:c1"
+      },
+      "command" : "StartConsultation"
+    }
+  },
+  "order" : [
+    "startConsultation",
+    "recordCoachQuestion",
+    "answerQuestion",
+    "recordDraft",
+    "acceptDraft",
+    "recordDailyDecisionRefused",
+    "recordDailyDecisionAccepted",
+    "sendMessage",
+    "recordCoachReplyWithIntent",
+    "acceptIntent",
+    "sendMessageThanks",
+    "recordCoachReplyWithoutIntent",
+    "sendMessageAway",
+    "recordCoachReplyAway",
+    "dismissIntent",
+    "recordProfileAttempt",
+    "recordProfile",
+    "recordDayRequirement",
+    "moveSession",
+    "retirePlan"
+  ]
+}

@@ -46,23 +46,6 @@ final class PlanConsultationTests: XCTestCase {
         XCTAssertThrowsError(try bad.makePlan(today: today))
     }
 
-    func testDailyCoachCannotReintroduceRideDuringVacation() throws {
-        let draft = draft()
-        let day = draft.details.timeAway[0].start
-        let plan = try draft.makePlan(today: today)
-        let readiness = Readiness(level: .normal, score: 60, signals: [], missingData: [], summary: "")
-        let brief = CoachBrief(today: day, locale: "en", athlete: .init(ftp: 240), ftpEstimate: nil,
-                               powerCurve: [], wellness: [], feedback: [:], activities: [], plan: plan,
-                               upcomingEvent: nil, availableMinutes: nil, recentCoachNotes: [], measured: readiness)
-        let json = #"{"readiness":{"level":"normal"},"workout":{"name":"Ride","kind":"endurance","steps":[{"name":"Ride","minutes":30,"intensity":0.65}]}}"#
-        XCTAssertThrowsError(try DailyPrescription.parse(Data(json.utf8), measured: brief.measured, today: day,
-                                                         availableMinutes: nil, model: "test", brief: brief)) { error in
-            guard case DailyPrescription.ValidationError.sessionIntent = error else {
-                return XCTFail("Expected the consultation constraint to reject the ride: \(error)")
-            }
-        }
-    }
-
     func testOlderHealthSampleCannotReplaceConfirmedProfileValue() throws {
         let confirmed = CyclistMeasurements.Measurement(value: 75, measuredAt: today.date(), source: .athlete)
         var body = CyclistMeasurements(weight: confirmed)

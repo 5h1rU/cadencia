@@ -551,6 +551,11 @@ public struct PlannedSession: Codable, Equatable, Sendable, Identifiable {
     public var mirrored: PlanMirror.NativeFields?
     /// Intervals' compliance of the activity paired with this session's event, once it is completed.
     public var compliance: Double?
+    /// The `external_id` the backend publishes this session under in Intervals; nil for a session that is
+    /// not part of a backend plan (a daily workout without a plan), which uses the day-based id.
+    public var externalID: String?
+    /// The backend's id of this session in its plan, which `MoveSession` addresses.
+    public var backendID: String?
 
     public init(id: UUID = UUID(), day: Day, kind: SessionKind, title: String, targetMinutes: Int,
                 targetLoad: Int? = nil, status: Status = .provisional, workout: Workout? = nil,
@@ -666,6 +671,10 @@ public struct TrainingPlan: Codable, Equatable, Sendable, Identifiable {
     public var isActive: Bool
     /// Optional so existing saved plans still decode. No body measurements belong here.
     public var consultation: PlanConsultation.Details?
+    /// The backend's id of this plan (`<athleteId>:<key>`), which commands about it address.
+    public var backendID: String?
+    /// What the athlete asked of particular days (`RecordDayRequirement`), as the plan recorded it.
+    public var requirements: [CoachIntent.WorkoutRequest]?
 
     public init(id: UUID = UUID(), goal: GoalKind, secondaryGoal: GoalKind? = nil, title: String, startDay: Day, endDay: Day,
                 event: TrainingEvent? = nil, availability: Availability, phases: [TrainingPhase],

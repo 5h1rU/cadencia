@@ -15,6 +15,10 @@ enum AppConfig {
         return IntervalsOAuth(clientID: intervalsOAuthClientID, redirectURI: intervalsOAuthRedirectURI)
     }
 
+    /// Cadencia's backend (`web/`), which keeps the plan and the coach's memory. Nil until it is deployed;
+    /// set it to the Worker's origin (for example `https://cadencia.example.workers.dev`).
+    static let backendURL: URL? = nil
+
     static let defaultLLMEndpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
     /// Only until the account's model list has loaded once; Settings then switches to a listed model.
     static let defaultLLMModel = LLMCoach.defaultModel

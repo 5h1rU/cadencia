@@ -22,11 +22,6 @@ final class SessionIntentTests: XCTestCase {
         return Workout(name: "Event activation", kind: .openerActivation, steps: steps, intensityCeiling: work)
     }
 
-    private func prescription(_ workout: Workout, level: Readiness.Level = .normal) -> DailyPrescription {
-        .init(readiness: .init(level: level, score: 60, signals: [], missingData: [], summary: ""), workout: workout,
-              week: [], note: .init(headline: "", body: "", session: ""), flags: [], model: "test")
-    }
-
     private func answer(_ workout: Workout) throws -> String {
         let steps: [[String: Any]] = workout.steps.map {
             ["name": $0.name, "minutes": $0.duration / 60, "from": $0.startIntensity, "to": $0.endIntensity]
@@ -41,112 +36,23 @@ final class SessionIntentTests: XCTestCase {
         .init(status: 200, body: try JSONSerialization.data(withJSONObject: ["choices": [["message": ["content": content]]]]))
     }
 
-    func testActivationIsRelativeToEachAthletesFTPAndAllowsDifferentProtocols() throws {
-        for ftp in [140, 265, 390] {
-            for intensity in [0.95, 1.05, 1.3] {
-                let workout = opener(work: intensity)
-                try PrescriptionValidator().validate(prescription(workout), brief: brief(ftp: ftp))
-                XCTAssertEqual(workout.targetWatts(ftp: ftp, at: 600), Int((Double(ftp) * intensity).rounded()))
-            }
-        }
-    }
-
-    func testEasyOnlyRideCannotBeMislabeledAsOpener() {
-        for intensity in [0.5, 0.75, 0.85] {
-            XCTAssertThrowsError(try PrescriptionValidator().validate(prescription(opener(work: intensity)), brief: brief()))
-        }
-    }
-
-    func testRecoveryCanDowngradeAnOpenerWithoutForcingIntensity() throws {
-        let alternative = Workout(name: "Recovery instead of activation", kind: .recovery,
-                                  steps: [.init(name: "Easy", duration: 1200, intensity: 0.5)], intensityCeiling: 0.55)
-        for level in [Readiness.Level.easy, .rest] {
-            try PrescriptionValidator().validate(prescription(alternative, level: level), brief: brief())
-        }
-    }
-
-    func testOpenerNeedsConfirmedEventOnFollowingDayRegardlessOfPriorityOrRaceType() throws {
-        try PrescriptionValidator().validate(prescription(opener()), brief: brief())
-        for offset: Int? in [nil, -1, 0, 2, 14] {
-            XCTAssertThrowsError(try PrescriptionValidator().validate(prescription(opener()), brief: brief(eventOffset: offset)))
-        }
-        var planned = brief(eventOffset: nil)
-        let event = TrainingEvent(name: "Planned race", day: day.adding(days: 1), priority: .a, isRace: true)
-        let plan = PlanBuilder().build(.init(goal: .event, startDay: day, endDay: event.day, event: event, availability: .typical))
-        planned.plan = .init(plan, today: day)
-        try PrescriptionValidator().validate(prescription(opener()), brief: planned)
-    }
-
-    func testLongOrDenseWorkAndIncompleteRecoveryAreRejected() {
-        let validator = PrescriptionValidator()
-        XCTAssertThrowsError(try validator.validate(prescription(opener(workSeconds: 240, recoverySeconds: 300)), brief: brief()))
-        XCTAssertThrowsError(try validator.validate(prescription(opener(workSeconds: 180, recoverySeconds: 180)), brief: brief()))
-        XCTAssertThrowsError(try validator.validate(prescription(opener(workSeconds: 60, recoverySeconds: 30)), brief: brief()))
-        var noFinalRecovery = opener()
-        noFinalRecovery.steps.removeLast(2)
-        XCTAssertThrowsError(try validator.validate(prescription(noFinalRecovery), brief: brief()))
-    }
-
-    func testSplittingAnEffortIntoStepsCannotBypassContinuousLimit() {
-        var workout = opener()
-        workout.steps = [.init(name: "Warm-up", duration: 1800, intensity: 0.5)]
-            + (0..<4).map { _ in WorkoutStep(name: "Split activation", duration: 60, intensity: 1.1) }
-            + [.init(name: "Recovery", duration: 1800, intensity: 0.5)]
-        XCTAssertThrowsError(try PrescriptionValidator().validate(prescription(workout), brief: brief()))
-    }
-
-    func testTempoDominatedRideAndActivationWithoutWarmupAreNotOpeners() {
-        var workout = opener()
-        workout.steps[0] = .init(name: "Sustained tempo", duration: 1800, intensity: 0.85)
-        XCTAssertThrowsError(try PrescriptionValidator().validate(prescription(workout), brief: brief()))
-        workout = opener()
-        workout.steps.removeFirst()
-        XCTAssertThrowsError(try PrescriptionValidator().validate(prescription(workout), brief: brief()))
-    }
-
-    func testZeroCeilingCannotSilenceRidingTargets() throws {
-        let json = #"{"readiness":{"level":"normal"},"workout":{"name":"Ride","kind":"endurance","ceiling":0,"steps":[{"name":"Main","minutes":30,"intensity":0.65}]}}"#
-        XCTAssertThrowsError(try DailyPrescription.parse(Data(json.utf8), measured: brief().measured, today: day,
-                                                        availableMinutes: 60, model: "test"))
-    }
-
-    func testRampsCountOnlyTheActualTimeInActivationAndRecoveryZones() throws {
-        var workout = opener()
-        workout.steps = [.init(name: "Warm-up", duration: 1200, intensity: 0.5),
-                         .init(name: "Ramp activation", duration: 300, startIntensity: 0.8, endIntensity: 1.0),
-                         .init(name: "Recovery", duration: 300, intensity: 0.5)]
-        try PrescriptionValidator().validate(prescription(workout), brief: brief())
-        workout.steps[1].duration = 600
-        XCTAssertThrowsError(try PrescriptionValidator().validate(prescription(workout), brief: brief()))
-    }
-
-    func testWeekMustAgreeWithConcreteWorkout() {
-        var p = prescription(opener())
-        p.week = [.init(day: day, kind: .endurance, minutes: 30, title: "Different purpose")]
-        XCTAssertThrowsError(try PrescriptionValidator().validate(p, brief: brief()))
-    }
-
-    func testInvalidPurposeIsCorrectedOnceBeforeReturningExecutableWorkout() async throws {
-        let transport = FakeTransport(responses: [try response(answer(opener(work: 0.75))), try response(answer(opener()))])
+    /// Whether a session fits the plan is Planning's to decide on the backend; its refusal reaches the model.
+    func testPlanRefusalIsGivenToTheModelForACorrectedDecision() async throws {
+        let transport = FakeTransport(responses: [try response(answer(opener()))])
         let coach = LLMCoach(transport: transport, endpoint: URL(string: "https://example.invalid/chat")!, apiKey: "test")
-        let result = try await coach.prescribe(brief: brief())
-        XCTAssertEqual(result.workout.steps[1].startIntensity, 1.12)
-        XCTAssertEqual(transport.requests.count, 2)
-        let correction = String(decoding: transport.requests[1].body!, as: UTF8.self)
-        XCTAssertTrue(correction.contains("failed session validation"))
+        let result = try await coach.prescribe(brief: brief(), refusal: "HardensPlannedSession: planned=\"endurance\"")
+        XCTAssertEqual(result.workout.kind, .openerActivation)
+        XCTAssertEqual(transport.requests.count, 1)
+        let request = String(decoding: transport.requests[0].body!, as: UTF8.self)
+        XCTAssertTrue(request.contains("refused your previous decision"))
+        XCTAssertTrue(request.contains("HardensPlannedSession"))
     }
 
-    func testRepeatedInvalidOpenerFailsWithoutReturningPartialDecision() async throws {
-        let bad = try response(answer(opener(work: 0.75)))
-        let transport = FakeTransport(responses: [bad, bad])
+    func testFirstAskCarriesNoRefusal() async throws {
+        let transport = FakeTransport(responses: [try response(answer(opener()))])
         let coach = LLMCoach(transport: transport, endpoint: URL(string: "https://example.invalid/chat")!, apiKey: "test")
-        do {
-            _ = try await coach.prescribe(brief: brief())
-            XCTFail("Both invalid prescriptions must be rejected")
-        } catch let error as DailyPrescription.ValidationError {
-            guard case .sessionIntent = error else { return XCTFail("Unexpected error: \(error)") }
-        }
-        XCTAssertEqual(transport.requests.count, 2)
+        _ = try await coach.prescribe(brief: brief())
+        XCTAssertFalse(String(decoding: transport.requests[0].body!, as: UTF8.self).contains("refused"))
     }
 
     func testChatPreservesArbitraryWorkoutRequirementsAsAnAction() async throws {

@@ -53,7 +53,7 @@ struct HomeView: View {
                     NavigationLink { PlannedRideRouteView(day: model.today, chooseDate: true) } label: { Label("Plan a route", systemImage: "map") }
                     NavigationLink { RideHistoryView() } label: { Label("Ride history", systemImage: "clock.arrow.circlepath") }
                 }
-                if let week = ai?.week, !week.isEmpty, model.todayWorkout != nil { weekSection(week, todayCompleted: todayCompleted) }
+                if !model.weekOutlook.isEmpty, model.todayWorkout != nil { weekSection(model.weekOutlook, todayCompleted: todayCompleted) }
                 CyclistProfileSection()
             }
             .listStyle(.insetGrouped)
@@ -89,8 +89,6 @@ struct HomeView: View {
     }
 
     // MARK: Coach briefing
-
-    private var ai: DailyPrescription? { model.state.today?.day == model.today ? model.state.today?.ai : nil }
 
     /// Use the same headline as the detail screen, including the completed ride's debrief.
     private func coachHeadline(completed: Bool, completedRide: AppState.RideIndexEntry?) -> String? {

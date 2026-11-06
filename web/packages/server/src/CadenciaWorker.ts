@@ -46,6 +46,7 @@ export default class CadenciaWorker extends Cloudflare.Worker<CadenciaWorker>()(
     // The OAuth app registered in Intervals.icu for the web; its callback is
     // `<public origin>/auth/intervals/callback`.
     const intervalsClientId = yield* Config.String("INTERVALS_CLIENT_ID");
+    const intervalsClientSecret = yield* Config.Redacted("INTERVALS_CLIENT_SECRET");
     const planningApi = yield* overPlanning(AthletePlanningApi);
     const coachApi = yield* overCoach(AthleteCoachApi);
     const sessionKey = yield* SessionKey;
@@ -62,7 +63,15 @@ export default class CadenciaWorker extends Cloudflare.Worker<CadenciaWorker>()(
         const request = yield* HttpServerRequest;
         const url = new URL(request.url, "http://localhost");
         const path = url.pathname;
-        const oauth = { clientId: intervalsClientId, redirectUri: `${url.origin}/auth/intervals/callback` };
+        // The request's URL carries only the path; the public origin is the app's host,
+        // which the app Worker keeps when it forwards the request.
+        const host = request.headers["host"] ?? url.host;
+        const origin = `${host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https"}://${host}`;
+        const oauth = {
+          clientId: intervalsClientId,
+          clientSecret: intervalsClientSecret,
+          redirectUri: `${origin}/auth/intervals/callback`,
+        };
         const signedIn = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
           effect.pipe(Effect.provideService(SessionKey, sessionKey), Effect.provideService(Connections, connections));
         if (path === "/api/session") return yield* signedIn(sessionRoute);

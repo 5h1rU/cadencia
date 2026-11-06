@@ -43,13 +43,16 @@ struct AppState: Codable, Equatable {
 
     struct TodayState: Codable, Equatable {
         var day: Day
+        /// The workout to ride today: the one the plan accepted (the `TodayDecision` view), or the coach's
+        /// own on a day without a plan, which the backend has nothing to record against.
         var workout: Workout
         var readiness: Readiness
-        /// The AI coach's decision, when one was accepted for this day. `workout`/`readiness` already
-        /// reflect it; this keeps the note, the week outlook, flags and the model for the UI.
-        /// Optional so a state saved before the AI coach still decodes.
-        var ai: DailyPrescription?
-        /// `CoachBrief.fingerprint` of the inputs `ai` was computed from; a different one means re-ask.
+        /// The coach's note and model for that workout, as the decision recorded them.
+        var note: CoachNote?
+        var model: String?
+        var decidedAt: Date?
+        /// `CoachBrief.fingerprint` of the inputs the decision was made from (the evidence's fingerprint);
+        /// a different one means ask again.
         var aiFingerprint: String?
         var rideLocation: RideLocation?
         var prescriptionFTP: Int?
@@ -57,7 +60,7 @@ struct AppState: Codable, Equatable {
         /// Survives plan changes and restarts, including a daily workout recorded without a plan.
         var completedRideID: UUID?
 
-        var isAICoached: Bool { ai != nil }
+        var isAICoached: Bool { model != nil }
     }
 
     struct OutdoorHandoff: Codable, Equatable {
@@ -66,22 +69,23 @@ struct AppState: Codable, Equatable {
         var savedAt: Date
     }
 
-    struct CoachMessage: Codable, Equatable, Identifiable {
-        enum Role: String, Codable { case athlete, coach }
-        var id = UUID()
-        var role: Role
-        var text: String
-        var sentAt = Date()
-        var intent: CoachIntent?
-        var applied = false
-        var sourceMessageID: UUID?
-        var workoutProposal: WorkoutProposal?
+    /// A view of the backend kept for the next launch. It decodes to nil, never fails the whole state, when the
+    /// backend's shape changed: the next read fills it again.
+    struct ViewCache<Value: Codable & Equatable>: Codable, Equatable {
+        var value: Value?
+        init(_ value: Value?) { self.value = value }
+        init(from decoder: Decoder) throws { value = try? decoder.singleValueContainer().decode(Value.self) }
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            try c.encode(value)
+        }
     }
 
-    struct WorkoutProposal: Codable, Equatable {
-        var prescription: DailyPrescription
-        var basisFingerprint: String
-        var ftp: Int
+    /// The consultation the athlete has open, by its backend id, and its view.
+    struct ConsultationCache: Codable, Equatable {
+        var id: String
+        var startedOn: Day
+        var view: ViewCache<CadenciaAPI.ConsultationViewState>
     }
 
     struct PendingProfileWeight: Codable, Equatable {
@@ -101,7 +105,12 @@ struct AppState: Codable, Equatable {
     var powerCurve: [PowerCurvePoint] = []
     var ftpEstimate: FTPEstimate?
     var dismissedFTPProposal: Int?
+    /// The backend's `CurrentPlan` view in the app's terms (`TrainingPlan(_:context:)`), with what Intervals
+    /// adds: completed sessions and the plan's availability, time away and other training. Only reading the
+    /// view or Intervals changes it; every change to the plan itself is a command to the backend.
     var plan: TrainingPlan?
+    /// The Intervals-native and device-only parts of the current plan (`PlanContext`).
+    var planContext: PlanContext?
     /// Daily sessions exported without a plan remain identifiable when a ride syncs on a later day.
     var standaloneSessions: [PlannedSession]?
     /// Independent of coach revisions: softening/removing a prescription never deletes a course.
@@ -118,13 +127,13 @@ struct AppState: Codable, Equatable {
     var feedbackByDay: [String: SubjectiveFeedback] = [:]
     var ledger = UploadLedger()
     var rideIndex: [RideIndexEntry] = []
-    var coachMessages: [CoachMessage] = []
-    /// Applied requirements survive refreshes, but only affect their own day.
-    var workoutRequests: [String: CoachIntent.WorkoutRequest]?
-    /// Optional for existing state files. Profile generation is independent of the daily coach.
-    var cyclistProfile: CyclistProfile.Report?
+    /// Caches of the backend's views: this month's conversation, today's decision, the rider profile and the
+    /// open consultation. The backend holds them; these only show them until the next read.
+    var coachThread: ViewCache<CadenciaAPI.ConversationThreadState>?
+    var todayDecision: ViewCache<CadenciaAPI.TodayDecisionState>?
+    var riderProfile: ViewCache<CadenciaAPI.RiderProfileCardState>?
+    var consultation: ConsultationCache?
     var cyclistMeasurements: CyclistMeasurements?
-    var planConsultation: PlanConsultation.Session?
     /// Superseded by `intervalsOutbox`; read once by the version 1 migration.
     var profileWeightPendingSync: PendingProfileWeight?
     /// Superseded by `retiredCalendarEvents`; read once by the version 1 migration.
@@ -176,65 +185,78 @@ struct AppState: Codable, Equatable {
 
     func feedback(for day: Day) -> SubjectiveFeedback? { feedbackByDay[day.iso] }
 
+    /// The rider profile the backend recorded.
+    var cyclistProfile: CyclistProfile.Report? { riderProfile?.value.flatMap(CyclistProfile.Report.init) }
+
+    /// This month's conversation with the coach, oldest first.
+    var coachMessages: [CadenciaAPI.ThreadMessage] { coachThread?.value?.messages ?? [] }
+
+    /// What the athlete asked of `day`, as the plan recorded it.
+    func workoutRequest(on day: Day) -> CoachIntent.WorkoutRequest? {
+        plan?.requirements?.first { $0.day == day }
+    }
+
+    /// What the athlete told the coach lately and the plan took on: the messages whose proposals were applied.
     func appliedCoachNotes(on day: Day) -> [String] {
-        coachMessages.enumerated().compactMap { index, message in
-            guard message.role == .coach, message.applied, message.sentAt > day.adding(days: -7).date(),
-                  message.intent?.workoutRequest == nil else { return nil }
-            if let id = message.sourceMessageID {
-                return coachMessages.first { $0.id == id && $0.role == .athlete }?.text
-            }
-            // Messages from older app versions did not retain their source id.
-            return coachMessages[..<index].last { $0.role == .athlete }?.text
+        let messages = coachMessages
+        return messages.indices.compactMap { index -> String? in
+            let message = messages[index]
+            guard message.role == .coach, message.intentStatus == .applied,
+                  let at = BackendDate.parse(message.at), at > day.adding(days: -7).date() else { return nil }
+            return messages[..<index].last { $0.role == .athlete }?.text
         }.suffix(5).map { $0 }
     }
 
-    mutating func applyCoachIntent(_ intent: CoachIntent, on day: Day) {
-        if var currentPlan = plan ?? intent.event.map({ event in
-            PlanBuilder().build(.init(goal: .event, startDay: day, endDay: event.day, event: event, availability: .typical))
-        }) {
-            currentPlan.isActive = true
-            plan = WeekReviser().apply(intent, to: currentPlan, today: day).plan
-        }
-        if let legs = intent.feeling {
-            var feedback = feedback(for: day) ?? SubjectiveFeedback(day: day)
-            feedback.legs = legs
-            setFeedback(feedback)
-        }
-        if let request = intent.workoutRequest, request.day >= day {
-            if workoutRequests == nil { workoutRequests = [:] }
-            workoutRequests?[request.day.iso] = request
+    /// Today's workout from a decision: the plan's accepted one, or the coach's own on a day without a plan.
+    mutating func takeDecision(workout: Workout, readiness: Readiness, note: CoachNote?, model: String?, day: Day, ftp: Int?) {
+        guard !isWorkoutCompleted(on: day) else { return }
+        let previous = today?.day == day ? today : nil
+        today = TodayState(day: day, workout: workout, readiness: readiness, note: note, model: model, decidedAt: Date())
+        today?.rideLocation = previous?.rideLocation
+        today?.prescriptionFTP = ftp
+        if let i = plan?.sessions.firstIndex(where: { $0.day == day }), let status = plan?.sessions[i].status,
+           status == .provisional || status == .generated {
+            plan?.sessions[i].workout = workout
+            plan?.sessions[i].status = .generated
+            plan?.sessions[i].prescriptionFTP = ftp
+        } else if let i = standaloneSessions?.firstIndex(where: { $0.day == day && $0.status != .completed && $0.status != .skipped }) {
+            standaloneSessions?[i].workout = workout
+            standaloneSessions?[i].status = .generated
+            standaloneSessions?[i].kind = workout.kind
+            standaloneSessions?[i].title = workout.name
+            standaloneSessions?[i].targetMinutes = Int((workout.totalDuration / 60).rounded())
+            standaloneSessions?[i].targetLoad = workout.estimatedLoad
+            standaloneSessions?[i].prescriptionFTP = ftp
+        } else if session(on: day) == nil, workout.kind != .rest {
+            if standaloneSessions == nil { standaloneSessions = [] }
+            standaloneSessions?.append(PlannedSession(day: day, kind: workout.kind, title: workout.name,
+                targetMinutes: Int((workout.totalDuration / 60).rounded()), targetLoad: workout.estimatedLoad,
+                status: .generated, workout: workout, location: today?.rideLocation, prescriptionFTP: ftp))
         }
     }
 
-    /// One local transaction shared by automatic decisions and reviewed chat proposals.
-    mutating func acceptPrescription(_ prescription: DailyPrescription, day: Day, ftp: Int?) {
-        guard !isWorkoutCompleted(on: day) else { return }
-        let previous = today?.day == day ? today : nil
-        today = TodayState(day: day, workout: prescription.workout, readiness: prescription.readiness, ai: prescription)
-        today?.rideLocation = previous?.rideLocation
-        today?.prescriptionFTP = ftp
-        attachTodayWorkout(prescription.workout, day: day)
-        if let i = plan?.sessions.firstIndex(where: { $0.day == day }), plan?.sessions[i].status == .generated {
-            plan?.sessions[i].kind = prescription.workout.kind
-            plan?.sessions[i].title = prescription.workout.name
-            plan?.sessions[i].targetMinutes = Int((prescription.workout.totalDuration / 60).rounded())
-            plan?.sessions[i].targetLoad = prescription.workout.estimatedLoad
-            plan?.sessions[i].note = prescription.note.session
+    /// Replaces the plan with the backend's `CurrentPlan` view, and lays over it what Intervals holds: the
+    /// sessions' calendar events and completed rides, availability, time away and other training.
+    mutating func adoptBackendPlan(_ view: CadenciaAPI.CurrentPlanState?) {
+        let fresh = view.flatMap { TrainingPlan($0, context: planContext) }
+        if let fresh, planContext?.planId != fresh.backendID { planContext = nil }
+        if fresh == nil { planContext = nil }
+        plan = fresh.map { plan in
+            var plan = plan
+            let events = calendarEvents ?? []
+            for i in plan.sessions.indices {
+                plan.sessions[i].intervalsEventID = PlanMirror.existingEvent(for: plan.sessions[i], in: events)?.id
+                if plan.sessions[i].day == today?.day, let today, today.workout.kind == plan.sessions[i].kind,
+                   plan.sessions[i].workout == nil || plan.sessions[i].workout?.name == today.workout.name {
+                    plan.sessions[i].prescriptionFTP = today.prescriptionFTP
+                }
+            }
+            if let days = athlete?.trainingAvailability, planContext?.availability != nil {
+                plan.availability = IntervalsAvailability.applying(days, to: plan.availability)
+            }
+            return plan
         }
-        if let i = standaloneSessions?.firstIndex(where: { $0.day == day && $0.status != .completed && $0.status != .skipped }) {
-            standaloneSessions?[i].workout = prescription.workout
-            standaloneSessions?[i].status = .generated
-            standaloneSessions?[i].kind = prescription.workout.kind
-            standaloneSessions?[i].title = prescription.workout.name
-            standaloneSessions?[i].targetMinutes = Int((prescription.workout.totalDuration / 60).rounded())
-            standaloneSessions?[i].targetLoad = prescription.workout.estimatedLoad
-            standaloneSessions?[i].prescriptionFTP = ftp
-        } else if session(on: day) == nil, prescription.workout.kind != .rest {
-            if standaloneSessions == nil { standaloneSessions = [] }
-            standaloneSessions?.append(PlannedSession(day: day, kind: prescription.workout.kind, title: prescription.workout.name,
-                targetMinutes: Int((prescription.workout.totalDuration / 60).rounded()), targetLoad: prescription.workout.estimatedLoad,
-                status: .generated, workout: prescription.workout, location: today?.rideLocation, prescriptionFTP: ftp))
-        }
+        adoptIntervalsCompletion(activities)
     }
 
     /// Shows the feedback at once and queues what changed for the day's Intervals wellness record.
@@ -292,6 +314,10 @@ struct AppState: Codable, Equatable {
                 current.consultation = details
             }
             plan = current
+            if planContext?.planId == current.backendID {
+                planContext?.availability = current.availability
+                planContext?.details = current.consultation
+            }
         }
     }
 
@@ -318,8 +344,9 @@ struct AppState: Codable, Equatable {
         if var s = standaloneSessions { for i in s.indices { apply(&s[i]) }; standaloneSessions = s }
     }
 
-    /// Edits made in the Intervals calendar over `window`: planned rides' indoor flag, FTP and type, the goal
-    /// event and time away. Only what Cadencia has not changed since its last write is taken.
+    /// Edits made in the Intervals calendar over `window`: the goal event and time away of the plan, and a
+    /// daily workout's indoor flag, FTP and type. Only what Cadencia has not changed since its last write is
+    /// taken. The plan's own sessions are the backend's: it notices their changes in Intervals itself.
     mutating func adoptIntervalsCalendar(_ events: [IntervalsEvent], window: ClosedRange<Day>, today: Day) {
         func adopt(_ session: inout PlannedSession) {
             guard window.contains(session.day), let event = PlanMirror.existingEvent(for: session, in: events),
@@ -327,8 +354,11 @@ struct AppState: Codable, Equatable {
             if session.day == today, self.today?.day == today { self.today?.rideLocation = session.location }
         }
         if var p = plan {
-            for i in p.sessions.indices { adopt(&p.sessions[i]) }
-            CalendarSync.adopt(events, window: window, into: &p, base: calendarEntryBase ?? [:])
+            for i in p.sessions.indices { p.sessions[i].intervalsEventID = PlanMirror.existingEvent(for: p.sessions[i], in: events)?.id }
+            if CalendarSync.adopt(events, window: window, into: &p, base: calendarEntryBase ?? [:]), planContext?.planId == p.backendID {
+                planContext?.details = p.consultation
+                if let event = p.event { planContext?.event = event }
+            }
             plan = p
         }
         if var s = standaloneSessions { for i in s.indices { adopt(&s[i]) }; standaloneSessions = s }
@@ -367,16 +397,6 @@ struct AppState: Codable, Equatable {
             today?.completedRideID = ride.id
             today?.outdoorHandoff = nil
         }
-    }
-
-    /// Attaches today's concrete workout to the plan's session for that day, if there is one still open.
-    mutating func attachTodayWorkout(_ workout: Workout, day: Day) {
-        guard let i = plan?.sessions.firstIndex(where: { $0.day == day }),
-              let status = plan?.sessions[i].status, status == .provisional || status == .generated else { return }
-        plan?.sessions[i].workout = workout
-        plan?.sessions[i].status = .generated
-        let ftp = today?.prescriptionFTP ?? workingFTP
-        plan?.sessions[i].prescriptionFTP = ftp
     }
 
     mutating func mergeWellness(_ days: [WellnessDay]) {

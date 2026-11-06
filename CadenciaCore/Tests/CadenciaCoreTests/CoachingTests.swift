@@ -208,38 +208,6 @@ final class PlanBuilderTests: XCTestCase {
     }
 }
 
-final class WeekReviserTests: XCTestCase {
-    let monday = Day(year: 2026, month: 10, day: 26)
-
-    func makePlan() -> TrainingPlan {
-        PlanBuilder().build(.init(goal: .endurance, startDay: monday, endDay: monday.adding(days: 27), availability: .typical))
-    }
-
-    func testEventOnSundayPinsPriorityAndSoftensTheTwoDaysBefore() {
-        let today = monday.adding(days: 2) // Wednesday
-        let sunday = monday.adding(days: 6)
-        let intent = CoachIntent(event: TrainingEvent(name: "Group ride 200 km", day: sunday, distanceKm: 200, priority: .a, objective: "arrive fresh"),
-                                 constraints: [.init(day: monday.adding(days: 3), maxMinutes: 40)])
-        let rev = WeekReviser().apply(intent, to: makePlan(), today: today)
-        let week = rev.plan.sessions(inWeekOf: today)
-        XCTAssertEqual(week.first { $0.day == sunday }?.kind, .groupRide)
-        XCTAssertEqual(week.first { $0.day == sunday }?.isPriority, true)
-        XCTAssertEqual(week.first { $0.day == sunday.adding(days: -1) }?.kind, .openerActivation)
-        XCTAssertEqual(week.first { $0.day == monday.adding(days: 3) }?.targetMinutes, 40)
-        XCTAssertTrue(rev.changed.contains { $0.day == sunday })
-        // Thursday is 40 min and was a hard day in .typical availability? Either way it must not exceed the cap.
-        XCTAssertTrue(week.filter { $0.day == monday.adding(days: 3) }.allSatisfy { $0.targetMinutes <= 40 })
-    }
-
-    func testConstraintsInThePastAreIgnored() {
-        let today = monday.adding(days: 3)
-        let intent = CoachIntent(constraints: [.init(day: monday.adding(days: 1), unavailable: true)])
-        let rev = WeekReviser().apply(intent, to: makePlan(), today: today)
-        XCTAssertTrue(rev.changed.isEmpty)
-        XCTAssertEqual(rev.plan.sessions.first { $0.day == monday.adding(days: 1) }?.status, .provisional)
-    }
-}
-
 final class ChatGPTPlanCoachTests: XCTestCase {
     let context = CoachContext(today: Day(year: 2026, month: 10, day: 28))
 

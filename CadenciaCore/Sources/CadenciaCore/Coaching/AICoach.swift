@@ -355,7 +355,6 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
 
     public enum ValidationError: Error, Equatable, Sendable {
         case unknownReadiness(String), unknownKind(String), noSteps, stepOutOfRange(String), tooLong(Int), badDay(String)
-        case sessionIntent(String)
     }
 
     /// Hard limits on what the model may send to the trainer.
@@ -423,10 +422,8 @@ public struct DailyPrescription: Codable, Equatable, Sendable {
         }
         week.sort { $0.day < $1.day }
 
-        let prescription = DailyPrescription(readiness: readiness, workout: workout, week: week, note: note,
-                                             flags: w.flags ?? [], model: model, generatedAt: now)
-        try PrescriptionValidator().validate(prescription, brief: brief)
-        return prescription
+        return DailyPrescription(readiness: readiness, workout: workout, week: week, note: note,
+                                 flags: w.flags ?? [], model: model, generatedAt: now)
     }
 
     static func defaultScore(_ level: Readiness.Level) -> Int {
@@ -441,7 +438,6 @@ public enum AICoachPrompt {
     public static let revision = "session-intent-v2"
     /// Who the model is and how it must decide. The data arrives as JSON in the user turn.
     public static func instructions(locale: String) -> String {
-        let rules = PrescriptionValidator()
         return """
         You are the head coach inside Cadencia, a cycling training app. You are an expert road-cycling coach with deep \
         knowledge of exercise physiology, periodization, power-based training (FTP, zones, TSS/CTL/ATL/TSB), HRV- and \
@@ -489,11 +485,11 @@ public enum AICoachPrompt {
         Warm-up and cool-down may be below Z2. Do not label an entirely Z1 session endurance. An opener needs \
         a confirmed event the following day. Build it from the rider's history, training exposure, time available, event demands \
         and personal recovery trends, not a fixed workout template or population HRV cutoff. Include brief activation \
-        near threshold (at least \(Int(rules.activationIntensity * 100))% FTP) or above, with most riding at or below \
-        \(Int(rules.easyRidingIntensity * 100))% FTP and at least as much easy recovery as each effort, at or below \
-        \(Int(rules.easyRecoveryIntensity * 100))% FTP. Each continuous activation must be at most \
-        \(Int(rules.maxContinuousActivation / 60)) minutes and all activation must occupy at most \
-        \(Int(rules.maxActivationFraction * 100))% of the session. These are validation bounds, not a target dose. Use less when the athlete's evidence warrants it. \
+        near threshold (at least 90% FTP) or above, with most riding at or below \
+        75% FTP and at least as much easy recovery as each effort, at or below \
+        60% FTP. Each continuous activation must be at most \
+        3 minutes and all activation must occupy at most \
+        20% of the session. These are validation bounds, not a target dose. Use less when the athlete's evidence warrants it. \
         A ride entirely below that range is an easy/endurance or recovery alternative, not an opener. If recovery, illness, \
         recent load or the athlete's preferences warrant that alternative, label it honestly and explain the downgrade. \
         Missing a single recovery measurement does not by itself require cancelling all activation. Do not invent an event or taper.

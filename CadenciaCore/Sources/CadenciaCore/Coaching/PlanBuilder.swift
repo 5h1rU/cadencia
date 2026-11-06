@@ -1,9 +1,13 @@
 import Foundation
 
-/// Builds a multi-week plan skeleton: phases plus one provisional session per available day.
-/// Future sessions are intentions with a provisional load; the concrete workout is generated on the day.
+/// Builds a multi-week plan skeleton for an event: phases plus one provisional session per available day.
+/// It is only a draft: the event flow records it on the backend, where Planning creates the plan, and the
+/// concrete workout is decided on the day.
 public struct PlanBuilder: Sendable {
     public init() {}
+
+    /// The author the backend records for a draft built here rather than by the AI.
+    public static let templateModel = "cadencia-event-template"
 
     public struct Request: Sendable {
         public var goal: GoalKind
@@ -227,81 +231,4 @@ public struct CoachIntent: Codable, Equatable, Sendable {
     }
 
     public var isEmpty: Bool { event == nil && constraints.isEmpty && feeling == nil && goal == nil && workoutRequest == nil }
-}
-
-/// Applies an understood intent to the current week of a plan: pins the event, shortens constrained
-/// days and moves intensity away from the days right before an A event. Returns the changed sessions.
-public struct WeekReviser: Sendable {
-    public init() {}
-
-    public struct Revision: Equatable, Sendable {
-        public var plan: TrainingPlan
-        public var changed: [PlannedSession]
-        public var notes: [String]
-    }
-
-    public func apply(_ intent: CoachIntent, to plan: TrainingPlan, today: Day) -> Revision {
-        var plan = plan
-        var changed: [PlannedSession] = []
-        var notes: [String] = []
-
-        if let event = intent.event {
-            if plan.event == nil || plan.event?.day == event.day {
-                plan.event = plan.event ?? event
-            }
-            if let idx = plan.sessions.firstIndex(where: { $0.day == event.day }) {
-                plan.sessions[idx].kind = event.sessionKind
-                plan.sessions[idx].title = event.name
-                plan.sessions[idx].isPriority = event.priority == .a
-                plan.sessions[idx].note = event.objective.isEmpty ? nil : event.objective
-                changed.append(plan.sessions[idx])
-            } else {
-                let s = PlannedSession(day: event.day, kind: event.sessionKind, title: event.name,
-                                       targetMinutes: Int(((event.distanceKm ?? 100) / 28 * 60).rounded()), isPriority: event.priority == .a)
-                plan.sessions.append(s)
-                changed.append(s)
-            }
-            notes.append("\(event.name) on \(event.day.iso) is the priority.")
-
-            // Soften the two days before an A event, but only sessions that are still provisional.
-            if event.priority == .a {
-                for back in 1...2 {
-                    let d = event.day.adding(days: -back)
-                    guard d >= today, let idx = plan.sessions.firstIndex(where: { $0.day == d && $0.status == .provisional }) else { continue }
-                    let target: SessionKind = back == 1 ? .openerActivation : .endurance
-                    if plan.sessions[idx].kind != target {
-                        plan.sessions[idx].kind = target
-                        plan.sessions[idx].title = target.defaultTitle
-                        plan.sessions[idx].targetMinutes = min(plan.sessions[idx].targetMinutes, back == 1 ? 30 : 60)
-                        changed.append(plan.sessions[idx])
-                    }
-                }
-                notes.append("The demanding session will not move automatically into the days before the event.")
-            }
-        }
-
-        for c in intent.constraints {
-            guard c.day >= today else { continue }
-            if let idx = plan.sessions.firstIndex(where: { $0.day == c.day }) {
-                if c.unavailable {
-                    plan.sessions[idx].status = .skipped
-                    plan.sessions[idx].note = "Unavailable"
-                } else if let max = c.maxMinutes, plan.sessions[idx].targetMinutes > max {
-                    plan.sessions[idx].targetMinutes = max
-                    if plan.sessions[idx].kind.isHard, max < 45 {
-                        plan.sessions[idx].kind = .endurance
-                        plan.sessions[idx].title = SessionKind.endurance.defaultTitle
-                    }
-                }
-                changed.append(plan.sessions[idx])
-            } else if !c.unavailable, let max = c.maxMinutes {
-                let s = PlannedSession(day: c.day, kind: .endurance, title: SessionKind.endurance.defaultTitle, targetMinutes: max)
-                plan.sessions.append(s)
-                changed.append(s)
-            }
-        }
-
-        plan.sessions.sort { $0.day < $1.day }
-        return Revision(plan: plan, changed: changed, notes: notes)
-    }
 }

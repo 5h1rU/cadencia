@@ -67,7 +67,7 @@ struct PlanView: View {
                     } actions: {
                         // Only the athlete's own answers make it a consultation to continue; an unanswered
                         // opening question is asked again.
-                        Button(model.state.planConsultation?.messages.contains(where: { $0.role == .athlete }) == true
+                        Button(model.planConsultation?.messages.contains(where: { $0.role == .athlete }) == true
                                ? "Continue consultation" : "Create a plan") { creating = true }
                             .buttonStyle(.borderedProminent)
                     }

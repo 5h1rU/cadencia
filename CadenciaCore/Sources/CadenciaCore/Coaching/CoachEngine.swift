@@ -188,23 +188,19 @@ public struct LLMCoach: Sendable {
     }
 
     /// The full daily decision: readiness, today's session, the week's shape. Throws on plan errors,
-    /// transport failures and on any answer that fails `DailyPrescription.parse`'s safety checks.
-    public func prescribe(brief: CoachBrief, now: Date = Date()) async throws -> DailyPrescription {
+    /// transport failures and on any answer that fails `DailyPrescription.parse`'s range checks.
+    ///
+    /// Whether the session fits the plan is Planning's to decide on the backend. When it refused the previous
+    /// answer, `refusal` carries its reason and the model is asked for a corrected decision.
+    public func prescribe(brief: CoachBrief, refusal: String? = nil, now: Date = Date()) async throws -> DailyPrescription {
         guard let today = Day(iso: brief.today) else { throw DailyPrescription.ValidationError.badDay(brief.today) }
         var userText = try AICoachPrompt.userMessage(brief)
-        // One bounded correction for a semantically inconsistent session. Nothing is applied until
-        // the complete answer passes the same checks again; numeric/transport errors still surface.
-        for attempt in 0...1 {
-            let content = try await complete(instructions: AICoachPrompt.instructions(locale: brief.locale), userText: userText)
-            do {
-                return try DailyPrescription.parse(Data(content.utf8), measured: brief.measured, today: today,
-                                                   availableMinutes: brief.availableMinutes, model: model, now: now, brief: brief)
-            } catch let error as DailyPrescription.ValidationError {
-                guard case .sessionIntent(let reason) = error, attempt == 0 else { throw error }
-                userText += "\nThe previous answer failed session validation: \(reason) Return a complete corrected JSON decision. Preserve the athlete's request where appropriate; explain any downgrade."
-            }
+        if let refusal {
+            userText += "\nThe training plan refused your previous decision for today: \(refusal). Return a complete corrected JSON decision that the plan can accept. Preserve the athlete's request where appropriate; explain any downgrade."
         }
-        throw CompletionError.unusableAnswer
+        let content = try await complete(instructions: AICoachPrompt.instructions(locale: brief.locale), userText: userText)
+        return try DailyPrescription.parse(Data(content.utf8), measured: brief.measured, today: today,
+                                           availableMinutes: brief.availableMinutes, model: model, now: now, brief: brief)
     }
 
     /// The outgoing request for either backend. No `temperature`: reasoning models (GPT-5.x / GPT-6)

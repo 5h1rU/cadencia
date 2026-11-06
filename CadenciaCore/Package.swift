@@ -9,7 +9,8 @@ let package = Package(
     ],
     targets: [
         .target(name: "CadenciaCore"),
-        .testTarget(name: "CadenciaCoreTests", dependencies: ["CadenciaCore"])
+        // Fixtures are read from the source tree; `web/packages/server/test/IosContract.test.ts` shares them.
+        .testTarget(name: "CadenciaCoreTests", dependencies: ["CadenciaCore"], exclude: ["Fixtures"])
     ],
     swiftLanguageModes: [.v5]
 )

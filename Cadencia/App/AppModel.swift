@@ -32,6 +32,13 @@ final class AppModel {
     private(set) var consultationBusy = false
     private(set) var consultationError: String?
     private var consultationRequestID: UUID?
+    /// The coach's latest consultation reply beyond the question the backend records: the review, suggested
+    /// answers, a proposed profile edit and the draft's details. Kept for this launch only.
+    private(set) var consultationReply: (id: String, reply: PlanConsultation.Reply)?
+    /// The Cadencia sign-in (Keychain). The plan and the coach's memory live on the backend.
+    private(set) var backendSession: BackendSession?
+    /// Why the last call to Cadencia's backend failed, for Settings and the plan screens.
+    private(set) var backendError: String?
     @ObservationIgnored private var flushingOutbox = false
     @ObservationIgnored private var flushRequested = false
     private(set) var isUploading = false
@@ -76,6 +83,8 @@ final class AppModel {
     private let keychain: KeychainStore
     private let transport: any HTTPTransport
     private let coachOverride: LLMCoach?
+    /// Previews and tests use their own backend; the app signs in to `AppConfig.backendURL`.
+    private let backendOverride: CoachBackend?
     /// Observed on purpose: debrief, note and route updates reach the screens through this cache.
     /// Never evicted per entry; `releaseCachedRides()` and account changes clear it (except unsaved rides).
     private var rideCache: [UUID: RideRecording] = [:]
@@ -93,8 +102,6 @@ final class AppModel {
     @ObservationIgnored private var olderNotesRetry: Task<Void, Never>?
     private var isMirroring = false
     private var calendarWaiters: [CheckedContinuation<Void, Never>] = []
-    /// A mirror pass still waiting for the calendar lock. It reads the state when it starts, so later callers join it.
-    @ObservationIgnored private var queuedWeekPush: Task<Void, Never>?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var syncTaskAccount: String?
     /// The credential the running sync was started with; a sign-in with a new one does not join it.
@@ -117,10 +124,11 @@ final class AppModel {
     private static let chatGPTAccount = "chatgpt.credential"
     private static let chatGPTClientIDAccount = "chatgpt.clientID"
     private static let chatGPTHostIDAccount = "chatgpt.hostID"
+    private static let backendSessionAccount = "cadencia.session"
 
     init(state: AppState, credential: IntervalsCredential?, store: JSONStore, keychain: KeychainStore,
          transport: any HTTPTransport, bluetooth: BluetoothManager = BluetoothManager(), health: HealthKitService = HealthKitService(),
-         coachOverride: LLMCoach? = nil) {
+         coachOverride: LLMCoach? = nil, backendOverride: CoachBackend? = nil) {
         self.state = state
         self.credential = credential
         self.store = store
@@ -128,10 +136,12 @@ final class AppModel {
         self.keychain = keychain
         self.transport = transport
         self.coachOverride = coachOverride
+        self.backendOverride = backendOverride
         self.bluetooth = bluetooth
         self.health = health
         self.chatGPT = keychain.readCodable(ChatGPTCredential.self, account: Self.chatGPTAccount)
         self.hasLLMKey = keychain.readString(Self.llmKeyAccount)?.isEmpty == false
+        self.backendSession = keychain.readCodable(BackendSession.self, account: Self.backendSessionAccount)
         // Never DispatchQueue.main.sync here: flush() runs on the main thread and would deadlock.
         persistence.onError = { [weak self] message in
             Task { @MainActor [weak self] in self?.syncError = message }
@@ -223,8 +233,31 @@ final class AppModel {
 
     /// The coach's note at the top of Today, in the AI coach's own words. Nil until it has decided the day.
     var coachNote: CoachNote? {
-        guard let t = state.today, t.day == today, let ai = t.ai, !ai.note.isEmpty else { return nil }
-        return ai.note
+        guard let t = state.today, t.day == today, let note = t.note, !note.isEmpty else { return nil }
+        return note
+    }
+
+    /// The coming seven days of the plan, today first, as Home lists them. Days the plan leaves free are rest.
+    var weekOutlook: [DailyPrescription.DayOutlook] {
+        guard let plan = state.plan, plan.isActive else { return [] }
+        return (0..<7).compactMap { offset -> DailyPrescription.DayOutlook? in
+            let day = today.adding(days: offset)
+            guard day >= plan.startDay, day <= plan.endDay else { return nil }
+            if offset == 0, let workout = todayWorkout {
+                return .init(day: day, kind: workout.kind, minutes: Int((workout.totalDuration / 60).rounded()), title: workout.name,
+                             note: coachNote?.session)
+            }
+            guard let session = plan.sessions.first(where: { $0.day == day && $0.status != .skipped }) else {
+                return .init(day: day, kind: .rest, minutes: 0, title: SessionKind.rest.defaultTitle)
+            }
+            return .init(day: day, kind: session.kind, minutes: session.targetMinutes, title: session.title, note: session.note)
+        }
+    }
+
+    /// The plan's answer to today's decision, when the backend has one.
+    var todayDecision: CadenciaAPI.TodayDecisionState? {
+        guard let decision = state.todayDecision?.value, decision.day == today.iso else { return nil }
+        return decision
     }
 
     var pendingUploads: [UploadEntry] { state.ledger.pending(for: athleteID) }
@@ -239,6 +272,18 @@ final class AppModel {
     var client: IntervalsClient? {
         credential.map { IntervalsClient(transport: transport, credential: $0, athleteID: athleteID) }
     }
+
+    /// Cadencia's backend for the signed-in athlete: nil until this build has a server, the athlete signed in
+    /// to it, and that sign-in is the same Intervals.icu athlete as the app's.
+    var backend: CoachBackend? {
+        if let backendOverride { return backendOverride }
+        guard let url = AppConfig.backendURL, let session = backendSession, isSignedIn, session.athleteID == state.athlete?.id else { return nil }
+        return CoachBackend(api: CadenciaAPI(baseURL: url, transport: transport, sessionToken: session.token), athleteId: session.athleteID)
+    }
+
+    /// Whether the plan and the coach can be used: they need the Cadencia sign-in.
+    var isBackendConnected: Bool { backend != nil }
+    var backendConfigured: Bool { AppConfig.backendURL != nil }
 
     /// Which AI answers: the athlete's ChatGPT plan, or their own API key. There is no on-device
     /// fallback; without one of these the coach, and so Today, cannot work.
@@ -319,7 +364,10 @@ final class AppModel {
             try route.upgradingClimbAnalysis()
         }).value, !Task.isCancelled, state.plan?.event?.course?.route?.id == route.id,
               state.plan?.event?.course?.route?.climbAnalysisVersion != ClimbAnalyzer.version || state.plan?.event?.course?.route?.profileSegments == nil else { return }
-        mutate { $0.plan?.event?.course?.route = upgraded }
+        mutate {
+            $0.plan?.event?.course?.route = upgraded
+            if $0.planContext?.event?.course?.route?.id == route.id { $0.planContext?.event?.course?.route = upgraded }
+        }
     }
 
     /// Hands the writer an O(1) copy-on-write snapshot; nothing is encoded on the main actor. Snapshots
@@ -408,6 +456,7 @@ final class AppModel {
     /// and resume when the same athlete signs back in.
     func signOut() async {
         if let client, case .oauth = client.credential { try? await client.disconnectApp() }
+        signOutOfBackend()
         credential = nil
         cyclistProfileError = nil
         keychain.delete(Self.credentialAccount)
@@ -425,6 +474,111 @@ final class AppModel {
             $0.lastSyncAt = nil
         }
         flushPersistence()
+    }
+
+    // MARK: Cadencia backend
+
+    enum BackendSignInError: LocalizedError {
+        case otherAthlete
+        var errorDescription: String? {
+            String(localized: "Sign in to Cadencia with the same Intervals.icu account the app uses.")
+        }
+    }
+
+    /// Signs in to Cadencia's backend through Intervals.icu, then reads the plan and the coach's memory.
+    func signInToBackend() async throws {
+        let session = try await BackendSignIn().signIn(transport: transport)
+        guard isSignedIn, session.athleteID == state.athlete?.id else { throw BackendSignInError.otherAthlete }
+        backendSession = session
+        keychain.writeCodable(session, account: Self.backendSessionAccount)
+        backendError = nil
+        await refreshBackend()
+        await askCoachForToday()
+    }
+
+    /// Forgets the Cadencia session and the views cached from it. The backend keeps everything.
+    func signOutOfBackend() {
+        backendSession = nil
+        keychain.delete(Self.backendSessionAccount)
+        consultationReply = nil
+        mutate {
+            $0.plan = nil
+            $0.planContext = nil
+            $0.coachThread = nil
+            $0.todayDecision = nil
+            $0.riderProfile = nil
+            $0.consultation = nil
+        }
+    }
+
+    /// Turns a backend failure into something the athlete can act on. An expired session signs out.
+    private func backendFailure(_ error: Error) -> String {
+        let message: String
+        switch error as? CadenciaAPIError {
+        case .signedOut?:
+            backendSession = nil
+            keychain.delete(Self.backendSessionAccount)
+            message = String(localized: "Your Cadencia sign-in expired. Sign in again in Settings.")
+        case .transport?:
+            message = String(localized: "Cadencia couldn't be reached. Check your connection and try again.")
+        case .rejected(let tag, _, _)?:
+            message = String(localized: "Cadencia refused the change (\(tag)).")
+        default:
+            message = String(localized: "Cadencia is unavailable right now. Try again later.")
+        }
+        backendError = message
+        return message
+    }
+
+    /// Reads the backend's views into the caches: the plan, today's decision, this month's conversation, the
+    /// rider profile and an open consultation. Each read is independent; the first failure is reported.
+    func refreshBackend() async {
+        guard let backend else { return }
+        let account = athleteID, day = today
+        func current() -> Bool { backend.athleteId == athleteID && athleteID == account && isSignedIn }
+        do {
+            let plan = try await backend.plan()
+            guard current() else { return }
+            mutate { $0.adoptBackendPlan(plan) }
+            let decision = try await backend.decision(on: day)
+            guard current() else { return }
+            adoptDecision(decision, day: day)
+            let thread = try await backend.thread(on: day)
+            guard current() else { return }
+            mutate { $0.coachThread = .init(thread) }
+            let profile = try await backend.profile()
+            guard current() else { return }
+            mutate { $0.riderProfile = .init(profile) }
+            if let open = state.consultation {
+                let view = try await backend.consultation(open.id)
+                guard current() else { return }
+                mutate { $0.consultation?.view = .init(view) }
+            }
+            backendError = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            if current() { _ = backendFailure(error) }
+        }
+    }
+
+    /// Takes the plan's answer to `day`'s decision: an accepted workout becomes the one to ride, unless it is
+    /// already today's (same evidence) or the ride is done.
+    private func adoptDecision(_ decision: CadenciaAPI.TodayDecisionState?, day: Day) {
+        mutate { $0.todayDecision = .init(decision) }
+        guard let decision, decision.status == .accepted, decision.day == day.iso, let wire = decision.workout,
+              let fingerprint = decision.evidence?.fingerprint, state.today?.day != day || state.today?.aiFingerprint != fingerprint else { return }
+        let measured = measuredToday()
+        let readiness = decision.evidence.map {
+            Readiness(level: Readiness.Level(rawValue: $0.readiness.level.rawValue) ?? measured.level, score: $0.readiness.score,
+                      signals: measured.signals, missingData: measured.missingData, summary: $0.readiness.summary)
+        } ?? measured
+        let workout = Workout(wire, identity: "\(BackendID.decision(athlete: athleteID, day: day))#\(decision.attempt)")
+        mutate {
+            $0.takeDecision(workout: workout, readiness: readiness, note: decision.note.map(CoachNote.init), model: decision.model,
+                            day: day, ftp: workingFTP)
+            $0.today?.aiFingerprint = fingerprint
+        }
     }
 
     // MARK: ChatGPT
@@ -562,6 +716,7 @@ final class AppModel {
         defer { isSyncing = false }
         // Before the first read: reading back replaces the caches, so local-only data must be queued first.
         migrateToIntervalsIfNeeded()
+        dropLocalPlan()
 
         // Each fetch is independent: a failing request (for example a malformed power-curve query)
         // must not discard the athlete, wellness, and activities that did arrive. The first failure
@@ -656,12 +811,12 @@ final class AppModel {
         guard current() else { return }
         await retireCalendarEvents()
         guard current() else { return }
-        let mirrored = await askCoachForToday()
+        // The plan's sessions reach the Intervals calendar from the backend (`CalendarPublishing`).
+        await refreshBackend()
+        guard current() else { return }
+        await askCoachForToday()
         guard current() else { return }
         await runUploads()
-        guard current() else { return }
-        // A coach decision already mirrored the week; nothing in between changes what is mirrored.
-        if !mirrored { await pushWeekToIntervals() }
         guard current() else { return }
         await mirrorCalendarEntries()
         guard current() else { return }
@@ -716,11 +871,10 @@ final class AppModel {
     }
 
     /// Everything the AI coach is shown. Built fresh each time so the fingerprint tracks the real inputs.
-    private func coachBrief(applying intent: CoachIntent? = nil) -> CoachBrief {
-        var state = self.state
-        if let intent { state.applyCoachIntent(intent, on: today) }
+    private func coachBrief() -> CoachBrief {
+        let state = self.state
         let available = state.plan?.availability.minutesByWeekday[today.weekday()]
-        let requestedLimit = state.workoutRequests?[today.iso]?.maxMinutes ?? intent?.constraints.first { $0.day == today }?.maxMinutes
+        let requestedLimit = state.workoutRequest(on: today)?.maxMinutes
         let feedback = Dictionary(uniqueKeysWithValues: state.feedbackByDay.values.map { ($0.day, $0) })
         let event = state.plan?.event.flatMap { $0.day >= today ? $0 : nil } ?? upcomingEvent
         var brief = CoachBrief(today: today, locale: coachLocale,
@@ -731,7 +885,7 @@ final class AppModel {
                           plan: state.plan, upcomingEvent: event,
                           availableMinutes: [available, requestedLimit].compactMap { $0 }.min(), recentCoachNotes: state.appliedCoachNotes(on: today),
                           measured: measuredToday(in: state))
-        brief.workoutRequest = state.workoutRequests?[today.iso]
+        brief.workoutRequest = state.workoutRequest(on: today)
         brief.ftpReviewWatts = ftpProposal
         brief.plannedRoutes = calendarSessions.filter { $0.route != nil && $0.day >= today && $0.day <= today.adding(days: 7) }.map(CoachBrief.PlannedRow.init)
         return brief
@@ -742,12 +896,6 @@ final class AppModel {
     }
 
     private var coachLocale: String { Locale.current.language.languageCode?.identifier ?? "es" }
-
-    func isWorkoutProposalCurrent(_ proposal: AppState.WorkoutProposal) -> Bool {
-        // Reads `state` even when the cached fingerprint answers, so a calling view keeps observing it.
-        _ = state.lastSyncAt
-        return proposal.basisFingerprint == currentBriefFingerprint
-    }
 
     /// `coachBrief().fingerprint`, built at most once per state change and day. Every brief input derives
     /// from `state` and `today`, and `mutate`/`load` clear the cache whenever `state` changes.
@@ -768,9 +916,10 @@ final class AppModel {
     }
 
     /// Asks the language model for today's decision when the inputs changed since the last answer
-    /// (or always, with `force`). Keeps the rule-based baseline on any failure; plan problems become `coachIssue`.
-    /// Returns true only when a new decision was accepted and the week mirrored to Intervals, so callers
-    /// push the week themselves only on false.
+    /// (or always, with `force`). With an active plan the decision is recorded on the backend and the plan
+    /// decides: an accepted workout is today's; a refused one goes back to the model with the plan's reason,
+    /// at most twice. On a day without a plan there is nothing to decide against, and the coach's workout is
+    /// today's as it is. Plan problems become `coachIssue`. Returns true when today has a new workout.
     ///
     /// A call while the coach is busy (a decision or a chat reply) is queued and replayed once it ends, as is
     /// a call whose answer was discarded because the inputs changed meanwhile. A sign-out or an account
@@ -795,6 +944,18 @@ final class AppModel {
             coachNotice = nil
             return false
         }
+        // The plan already refused this very evidence twice; asking again only spends the athlete's plan.
+        if !force, let decision = todayDecision, decision.status == .refused, decision.evidence?.fingerprint == basis {
+            return false
+        }
+        let planned = state.plan.flatMap { plan -> (id: String, session: Bool)? in
+            guard plan.isActive, let id = plan.backendID, day >= plan.startDay, day <= plan.endDay else { return nil }
+            return (id, plan.sessions.contains { $0.day == day && $0.status != .skipped })
+        }
+        if planned != nil, backend == nil {
+            coachNotice = String(localized: "Sign in to Cadencia in Settings so your plan can confirm today's session.")
+            return false
+        }
 
         // Claim the request before token refresh can suspend and let another caller enter.
         coachThinking = true
@@ -807,36 +968,74 @@ final class AppModel {
             coachNotice = coachSource == nil ? nil : String(localized: "ChatGPT no longer accepts this sign-in. Sign in again in Settings → Coach.")
             return false
         }
+        func stillCurrent() -> Bool { today == day && !isTodayWorkoutCompleted && athleteID == account && isSignedIn == signedIn }
+        /// The inputs changed while the coach was writing (an FTP accepted, Health merged, a plan saved): the
+        /// answer describes an older brief, so ask once more when this call ends.
+        func briefChanged() -> Bool {
+            guard currentBriefFingerprint != basis else { return false }
+            if athleteID == account, isSignedIn == signedIn {
+                coachAskPending = true
+                coachAskForced = coachAskForced || force
+            }
+            return true
+        }
         do {
             let prescriptionFTP = workingFTP
-            let prescription = try await engine.prescribe(brief: brief)
+            var prescription = try await engine.prescribe(brief: brief)
             try Task.checkCancellation()
-            guard today == day, !isTodayWorkoutCompleted else { return false }
-            // The inputs changed while the coach was writing (an FTP accepted, Health merged, a plan saved):
-            // this answer describes an older brief, so ask once more when this call ends. Not after a
-            // sign-out or account switch, which also changes the brief: the next account's sync asks itself.
-            guard currentBriefFingerprint == basis else {
-                if athleteID == account, isSignedIn == signedIn {
-                    coachAskPending = true
-                    coachAskForced = coachAskForced || force
+            guard stillCurrent(), !briefChanged() else { return false }
+            // A rest on a day the plan leaves free needs no verdict.
+            guard let planned, let backend, planned.session || prescription.workout.kind != .rest else {
+                mutate { s in
+                    s.takeDecision(workout: prescription.workout, readiness: prescription.readiness, note: prescription.note,
+                                   model: prescription.model, day: day, ftp: prescriptionFTP)
+                    s.today?.aiFingerprint = basis
                 }
-                return false
+                return true
             }
-            mutate { s in
-                s.acceptPrescription(prescription, day: day, ftp: prescriptionFTP)
+            let evidence = CoachEvidence.snapshot(fingerprint: basis, readiness: prescription.readiness,
+                                                  availability: state.athlete?.trainingAvailability,
+                                                  events: state.calendarEvents ?? [], from: day)
+            for attempt in 1...3 {
+                let verdict: CadenciaAPI.TodayDecisionState
+                do {
+                    verdict = try await backend.recordDecision(on: day, planId: planned.id, workout: prescription.workout,
+                                                               note: prescription.note, evidence: evidence, model: prescription.model)
+                } catch CadenciaAPIError.rejected(tag: "DecisionAlreadyAccepted", _, _) {
+                    // This evidence already has an accepted workout (another ask got there first): take it.
+                    verdict = try await backend.decision(on: day) ?? CadenciaAPI.TodayDecisionState(attempt: 0, status: .none)
+                }
+                guard stillCurrent(), backend.athleteId == athleteID else { return false }
+                switch verdict.status {
+                case .accepted:
+                    adoptDecision(verdict, day: day)
+                    if state.today?.aiFingerprint != basis {
+                        // The view had no workout (an older backend): the coach's own is the accepted one.
+                        mutate { s in
+                            s.takeDecision(workout: prescription.workout, readiness: prescription.readiness, note: prescription.note,
+                                           model: prescription.model, day: day, ftp: prescriptionFTP)
+                            s.today?.aiFingerprint = basis
+                        }
+                    }
+                    if let plan = try? await backend.plan(), backend.athleteId == athleteID { mutate { $0.adoptBackendPlan(plan) } }
+                    coachNotice = nil
+                    return true
+                case .refused where attempt < 3:
+                    mutate { $0.todayDecision = .init(verdict) }
+                    prescription = try await engine.prescribe(brief: brief, refusal: verdict.refusal ?? "The plan refused the session.")
+                    try Task.checkCancellation()
+                    guard stillCurrent(), !briefChanged() else { return false }
+                case .refused:
+                    mutate { $0.todayDecision = .init(verdict) }
+                    coachNotice = String(localized: "Your plan didn't accept the coach's session for today. Ask again later or tell the coach what changed.")
+                    return false
+                case .pending, .none:
+                    mutate { $0.todayDecision = .init(verdict) }
+                    coachNotice = String(localized: "Your plan hasn't confirmed today's session yet. Pull to refresh in a moment.")
+                    return false
+                }
             }
-            let dropped = mergeWeekOutlook(prescription.week)
-            // The merged week is itself an input to the brief; the fingerprint must describe the merged state
-            // or the next refresh would ask again and loop.
-            let fingerprint = currentBriefFingerprint
-            mutate { $0.today?.aiFingerprint = fingerprint }
-            coachNotice = nil
-            // Sessions the AI turned into rest days still exist in Intervals until deleted; the rest is re-mirrored.
-            if let client {
-                for id in dropped { try? await client.deleteEvent(id: id) }
-            }
-            await pushWeekToIntervals()
-            return true
+            return false
         } catch is CancellationError {
             return false
         } catch let error as LLMCoachError {
@@ -847,6 +1046,8 @@ final class AppModel {
             }
         } catch let error as DailyPrescription.ValidationError {
             coachNotice = String(localized: "The coach's answer failed a safety check (\(String(describing: error))). Ask again.")
+        } catch let error as CadenciaAPIError {
+            coachNotice = backendFailure(error)
         } catch let error as LLMCoach.CompletionError {
             coachNotice = coachFailureNotice(error)
         } catch {
@@ -888,44 +1089,6 @@ final class AppModel {
         return message + " " + String(localized: "Your saved session is still available.")
     }
 
-    /// Folds the AI's week into the plan: today and the next seven days take the coach's kind, title and
-    /// duration; completed or skipped sessions, ids and Intervals event ids are kept so the calendar updates in place.
-    /// Returns the Intervals event ids of sessions that became rest days, for the caller to delete.
-    @discardableResult
-    private func mergeWeekOutlook(_ week: [DailyPrescription.DayOutlook]) -> [Int] {
-        guard !week.isEmpty, var plan = state.plan else { return [] }
-        var dropped: [Int] = []
-        for outlook in week {
-            if let i = plan.sessions.firstIndex(where: { $0.day == outlook.day }) {
-                var session = plan.sessions[i]
-                // The event itself and anything already ridden are not the coach's to move.
-                guard !session.isPriority, session.status == .provisional || session.status == .generated else { continue }
-                if outlook.kind == .rest {
-                    if let eventID = session.intervalsEventID { dropped.append(eventID) }
-                    plan.sessions.remove(at: i)
-                    continue
-                }
-                if session.day != today, session.kind != outlook.kind || session.targetMinutes != outlook.minutes {
-                    session.workout = nil
-                    session.status = .provisional
-                }
-                session.kind = outlook.kind
-                session.title = outlook.title
-                session.targetMinutes = outlook.minutes
-                session.targetLoad = session.workout?.estimatedLoad ?? PlanBuilder.provisionalLoad(kind: outlook.kind, minutes: outlook.minutes)
-                session.note = outlook.note
-                plan.sessions[i] = session
-            } else if outlook.kind != .rest, outlook.minutes > 0 {
-                plan.sessions.append(PlannedSession(day: outlook.day, kind: outlook.kind, title: outlook.title,
-                                                    targetMinutes: outlook.minutes,
-                                                    targetLoad: PlanBuilder.provisionalLoad(kind: outlook.kind, minutes: outlook.minutes), note: outlook.note))
-            }
-        }
-        plan.sessions.sort { $0.day < $1.day }
-        mutate { $0.plan = plan }
-        return dropped
-    }
-
     func recordFeeling(_ legs: SubjectiveFeedback.Legs?, motivation: Int? = nil) {
         var fb = state.feedback(for: today) ?? SubjectiveFeedback(day: today)
         fb.legs = legs
@@ -964,15 +1127,37 @@ final class AppModel {
 
     // MARK: Plan
 
+    /// The open consultation as the screens show it: the turns the backend recorded, and the coach's latest
+    /// reply from this launch (its review, suggested answers and draft details).
+    var planConsultation: PlanConsultation.Session? {
+        guard let open = state.consultation else { return nil }
+        var session = PlanConsultation.Session(startedOn: open.startedOn)
+        session.id = StableID.uuid(open.id)
+        session.messages = (open.view.value?.turns ?? []).enumerated().map { index, turn in
+            var message = PlanConsultation.Message(role: turn.role == .coach ? .coach : .athlete, text: turn.text)
+            message.id = StableID.uuid("\(open.id)#\(index)")
+            return message
+        }
+        if let reply = consultationReply, reply.id == open.id {
+            session.reply = reply.reply
+            // A draft the athlete has answered since is not one to accept.
+            if session.messages.last?.role == .athlete { session.reply?.draft = nil }
+        }
+        return session
+    }
+
     func beginPlanConsultation() async {
         // Today's consultation, or one the athlete has answered, continues. An opening question nobody answered
         // was written for the day (and plan) it was asked on, so another day starts fresh. Not reset on every
         // call: the consultation screen calls this after every pop.
-        let keep = state.planConsultation.map { session in
+        let keep = planConsultation.map { session in
             session.startedOn >= today || session.messages.contains { $0.role == .athlete }
         } ?? false
-        if !keep { mutate { $0.planConsultation = .init(startedOn: today) } }
-        guard state.planConsultation?.reply == nil || state.planConsultation?.messages.last?.role == .athlete else { return }
+        if !keep {
+            guard await startConsultation() else { return }
+        }
+        let session = planConsultation
+        guard session?.reply == nil || session?.messages.last?.role == .athlete else { return }
         await requestPlanConsultation()
     }
 
@@ -980,8 +1165,25 @@ final class AppModel {
         consultationRequestID = nil
         consultationBusy = false
         consultationError = nil
-        mutate { $0.planConsultation = .init(startedOn: today) }
+        guard await startConsultation() else { return }
         await requestPlanConsultation()
+    }
+
+    /// Opens a new consultation on the backend.
+    private func startConsultation() async -> Bool {
+        guard let backend else {
+            consultationError = String(localized: "Sign in to Cadencia in Settings to create a plan.")
+            return false
+        }
+        do {
+            let id = try await backend.startConsultation()
+            consultationReply = nil
+            mutate { $0.consultation = .init(id: id, startedOn: today, view: .init(nil)) }
+            return true
+        } catch {
+            consultationError = backendFailure(error)
+            return false
+        }
     }
 
     func cancelPlanConsultationRequest() {
@@ -991,17 +1193,28 @@ final class AppModel {
 
     func sendPlanConsultationAnswer(_ text: String) async {
         let answer = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !answer.isEmpty, answer.count <= 6000, !consultationBusy, state.planConsultation != nil else { return }
-        mutate {
-            $0.planConsultation?.messages.append(.init(role: .athlete, text: answer))
-            // A previous draft cannot be accepted while a requested revision is outstanding or failed.
-            $0.planConsultation?.reply?.draft = nil
+        guard !answer.isEmpty, answer.count <= 6000, !consultationBusy, let open = state.consultation, let backend else { return }
+        consultationBusy = true
+        defer { consultationBusy = false }
+        do {
+            let view = try await backend.answer(answer, in: open.id)
+            guard state.consultation?.id == open.id else { return }
+            mutate { $0.consultation?.view = .init(view) }
+        } catch {
+            consultationError = backendFailure(error)
+            return
         }
+        consultationBusy = false
         await requestPlanConsultation()
     }
 
+    /// Asks the coach for its next consultation turn and records it: the question, and the draft when there is one.
     func requestPlanConsultation() async {
-        guard !consultationBusy, let session = state.planConsultation else { return }
+        guard !consultationBusy, let open = state.consultation, let session = planConsultation else { return }
+        guard let backend else {
+            consultationError = String(localized: "Sign in to Cadencia in Settings to create a plan.")
+            return
+        }
         let requestID = UUID(), account = athleteID, day = today
         consultationRequestID = requestID
         consultationBusy = true
@@ -1013,7 +1226,7 @@ final class AppModel {
             wellness: state.wellness, powerCurve: state.powerCurve, existingPlan: state.plan, session: session)
         func isCurrent() -> Bool {
             !Task.isCancelled && isSignedIn && athleteID == account && today == day &&
-            consultationRequestID == requestID && state.planConsultation?.id == session.id
+            consultationRequestID == requestID && state.consultation?.id == open.id
         }
         guard let engine = await coachEngine() else {
             // Without a coach the screen already asks to connect one, and connecting it starts the consultation
@@ -1027,10 +1240,14 @@ final class AppModel {
         do {
             let reply = try await engine.consult(context)
             guard isCurrent() else { return }
-            mutate {
-                $0.planConsultation?.reply = reply
-                $0.planConsultation?.messages.append(.init(role: .coach, text: reply.question))
+            var view = try await backend.recordQuestion(reply.question, model: engine.model, in: open.id)
+            if let draft = reply.draft {
+                view = try await backend.recordDraft(try CadenciaAPI.PlanDraft(draft, athleteId: backend.athleteId, today: day),
+                                                     model: engine.model, in: open.id)
             }
+            guard isCurrent() else { return }
+            consultationReply = (open.id, reply)
+            mutate { $0.consultation?.view = .init(view) }
         } catch is CancellationError { return }
         catch let error as LLMCoachError {
             guard isCurrent() else { return }
@@ -1042,6 +1259,8 @@ final class AppModel {
             consultationError = String(localized: "The coach needs attention. Your consultation is saved; try again after reconnecting.")
         } catch is PlanConsultation.ValidationError {
             if isCurrent() { consultationError = String(localized: "The coach couldn't prepare a valid consultation reply. Your answers are saved. Try again.") }
+        } catch let error as CadenciaAPIError {
+            if isCurrent() { consultationError = backendFailure(error) }
         } catch {
             if isCurrent() { consultationError = coachFailureNotice(error, preservingSession: false) }
         }
@@ -1058,8 +1277,8 @@ final class AppModel {
             if let kg = update.weightKg { $0.enqueue(WellnessUpdate(day: today, weightKg: kg)) }
             if let cm = update.heightCm { $0.updateOutbox { $0.heightCm = cm } }
             if let ftp = update.ftp { $0.acceptedFTP = ftp; $0.dismissedFTPProposal = nil }
-            $0.planConsultation?.reply?.profileUpdate = nil
         }
+        consultationReply?.reply.profileUpdate = nil
         // Saved locally above. The Intervals writes do not hold up Save; a failure stays queued in the
         // outbox and the next sync retries it.
         Task { await flushIntervalsOutbox() }
@@ -1104,6 +1323,21 @@ final class AppModel {
         }
     }
 
+    /// The plan now lives on the backend. A plan this phone built on its own is not carried over (the athlete
+    /// creates it again with the consultation); its upcoming planned rides leave the Intervals calendar.
+    private func dropLocalPlan() {
+        // A day decided before the backend kept no note or model: ask the coach again.
+        if state.today?.model == nil, state.today?.aiFingerprint != nil { mutate { $0.today?.aiFingerprint = nil } }
+        guard let plan = state.plan, plan.backendID == nil else { return }
+        let deletions = plan.sessions.filter { $0.day >= today && $0.status != .completed }
+            .map { CalendarSync.Deletion(externalID: PlanMirror.externalID(for: $0.day), eventID: $0.intervalsEventID) }
+        mutate {
+            $0.retiredCalendarEvents = ($0.retiredCalendarEvents ?? []) + deletions
+            $0.plan = nil
+            $0.planContext = nil
+        }
+    }
+
     /// Scopes the Intervals token lacks for Cadencia's writes. Non-empty: Settings asks to reconnect;
     /// the affected changes wait in the outbox meanwhile.
     var missingIntervalsScopes: [IntervalsScope] { credential?.missingScopes ?? [] }
@@ -1139,42 +1373,74 @@ final class AppModel {
         if let failure = result.failure { syncError = failure }
     }
 
-    /// Explicit acceptance is the only place a consultation can replace an active plan.
-    func activateConsultationPlan(_ draft: PlanConsultation.Draft, sessionID: UUID) async throws {
-        await acquireCalendar()
-        do {
-            defer { releaseCalendar() }
-            guard isSignedIn, !consultationBusy, !Task.isCancelled, state.planConsultation?.id == sessionID,
-                  state.planConsultation?.reply?.draft == draft else { throw PlanConsultation.ValidationError.invalidDraft }
-            var plan = try draft.makePlan(today: today)
-            let previous = state.plan?.sessions ?? []
-            let completedToday = isTodayWorkoutCompleted
-            var reused = Set<Int>()
-            for i in plan.sessions.indices {
-                if let old = previous.first(where: { $0.day == plan.sessions[i].day }), let id = old.intervalsEventID {
-                    plan.sessions[i].intervalsEventID = id
-                    reused.insert(id)
-                }
-            }
-            plan.isActive = true
-            CalendarSync.pinIdentifiers(in: &plan)
-            let newDays = Set(plan.sessions.map(\.day))
-            mutate {
-                let retired = previous.filter { $0.day >= today && $0.status != .completed && !newDays.contains($0.day) }
-                    .map { CalendarSync.Deletion(externalID: PlanMirror.externalID(for: $0.day), eventID: $0.intervalsEventID.flatMap { reused.contains($0) ? nil : $0 }) }
-                $0.retiredCalendarEvents = ($0.retiredCalendarEvents ?? []) + retired
-                $0.plan = plan
-                if !completedToday { $0.today = nil }
-                $0.planConsultation = nil
-                if let availability = $0.planAvailability { $0.updateOutbox { $0.availability = availability } }
+    enum PlanCreationError: LocalizedError {
+        case refused(String), notConfirmed
+        var errorDescription: String? {
+            switch self {
+            case .refused: return String(localized: "Your plan couldn't be created from this draft. Go back and ask the coach to revise it.")
+            case .notConfirmed: return String(localized: "Cadencia hasn't confirmed the new plan yet. Check the Plan tab in a moment.")
             }
         }
-        // The plan is active; the calendar and the coach follow in a model-owned task, so the review
-        // screen can close now and nothing is lost if the caller goes away.
+    }
+
+    #if DEBUG
+    /// A coach reply for a preview's open consultation.
+    func previewConsultationReply(_ reply: PlanConsultation.Reply) {
+        if let id = state.consultation?.id { consultationReply = (id, reply) }
+    }
+    #endif
+
+    /// Explicit acceptance is the only place a consultation can replace an active plan. The backend creates the
+    /// plan from the recorded draft and publishes its sessions; this phone writes what Intervals holds natively
+    /// (availability, time away, other training, the goal event) and retires the previous plan.
+    func activateConsultationPlan(_ draft: PlanConsultation.Draft, sessionID: UUID) async throws {
+        guard isSignedIn, !consultationBusy, !Task.isCancelled, let open = state.consultation, StableID.uuid(open.id) == sessionID,
+              planConsultation?.reply?.draft == draft else { throw PlanConsultation.ValidationError.invalidDraft }
+        let preview = try draft.makePlan(today: today)
+        try await acceptDraft(in: open.id, context: { planId in
+            PlanContext(planId: planId, availability: preview.availability, details: draft.details, event: preview.event)
+        })
+    }
+
+    /// Accepts the consultation's draft as a new plan and adopts it once Planning created it.
+    private func acceptDraft(in consultation: String, context: (String) -> PlanContext) async throws {
+        guard let backend else { throw CadenciaAPIError.signedOut }
+        let previous = state.plan.flatMap { $0.isActive ? $0.backendID : nil }
+        let planId = BackendID.new(athlete: backend.athleteId, prefix: "p")
+        let completedToday = isTodayWorkoutCompleted
+        let answer: CadenciaAPI.ConsultationViewState?
+        do { answer = try await backend.acceptDraft(planId: planId, in: consultation) } catch {
+            _ = backendFailure(error)
+            throw error
+        }
+        switch answer?.stage {
+        case .created?: break
+        case .open?, .refused?: throw PlanCreationError.refused(answer?.refusal ?? "")
+        default: throw PlanCreationError.notConfirmed
+        }
+        var newContext = context(planId)
+        if var event = newContext.event, event.externalID == nil { event.externalID = CalendarEntry.race(event).externalID; newContext.event = event }
+        if var details = newContext.details {
+            for i in details.timeAway.indices where details.timeAway[i].externalID == nil {
+                details.timeAway[i].externalID = CalendarEntry.timeAway(details.timeAway[i])?.externalID
+            }
+            newContext.details = details
+        }
+        let plan = try? await backend.plan(showing: planId)
+        mutate {
+            $0.planContext = newContext
+            $0.adoptBackendPlan(plan)
+            if !completedToday { $0.today = nil; $0.todayDecision = nil }
+            $0.consultation = nil
+            if let availability = $0.planAvailability { $0.updateOutbox { $0.availability = availability } }
+        }
+        consultationReply = nil
+        // The plan is active; the old plan's retirement, the calendar and the coach follow in a model-owned
+        // task, so the review screen can close now and nothing is lost if the caller goes away.
         Task {
-            await retireCalendarEvents()
+            if let previous, previous != planId { _ = try? await backend.retirePlan(previous) }
             await flushIntervalsOutbox()
-            if !(await askCoachForToday()) { await pushWeekToIntervals() }
+            await askCoachForToday()
             await mirrorCalendarEntries()
         }
     }
@@ -1228,144 +1494,114 @@ final class AppModel {
         }
     }
 
-    /// Saves the plan and returns; the coach and the calendar mirror follow in a model-owned task.
-    /// A consultation the athlete never answered (opened, then left for the event flow) ends with it,
-    /// so a later Create a plan starts fresh instead of reopening that old question.
-    func createPlan(_ request: PlanBuilder.Request) async {
-        var plan = PlanBuilder().build(request)
-        plan.isActive = true
-        CalendarSync.pinIdentifiers(in: &plan)
-        mutate { s in
-            s.plan = plan
-            if s.planConsultation?.messages.contains(where: { $0.role == .athlete }) != true { s.planConsultation = nil }
-            if let availability = s.planAvailability { s.updateOutbox { $0.availability = availability } }
+    /// A plan for an event from the event flow: Cadencia's own template, not the AI's, recorded as the draft of
+    /// a consultation (with `PlanBuilder.templateModel` as its author) so Planning creates it like any other.
+    func createPlan(_ request: PlanBuilder.Request) async throws {
+        guard let backend else { throw CadenciaAPIError.signedOut }
+        let template = PlanBuilder().build(request)
+        let consultation: String
+        do {
+            consultation = try await backend.startConsultation()
+            _ = try await backend.recordDraft(CadenciaAPI.PlanDraft(template, athleteId: backend.athleteId,
+                                                                    objective: request.event?.objective ?? template.title,
+                                                                    rationale: template.phases.map(\.summary).joined(separator: " ")),
+                                              model: PlanBuilder.templateModel, in: consultation)
+        } catch {
+            _ = backendFailure(error)
+            throw error
         }
-        Task {
-            await flushIntervalsOutbox()
-            if !(await askCoachForToday()) { await pushWeekToIntervals() }
-            await mirrorCalendarEntries()
+        // A consultation the athlete never answered (opened, then left for the event flow) ends with it,
+        // so a later Create a plan starts fresh instead of reopening that old question.
+        if planConsultation?.messages.contains(where: { $0.role == .athlete }) != true {
+            mutate { $0.consultation = nil }
+        }
+        try await acceptDraft(in: consultation) { planId in
+            PlanContext(planId: planId, availability: request.availability, event: request.event)
         }
     }
 
-    /// Removes the plan at once. Its upcoming planned rides are queued in `retiredCalendarEvents` in the
-    /// same change, then deleted under the calendar lock (and retried by every sync until they are gone);
-    /// its other calendar entries follow from the empty plan. The athlete's weekly availability stays in
+    /// Retires the plan on the backend, which withdraws its upcoming sessions from the Intervals calendar.
+    /// Its other calendar entries follow from the empty plan; the athlete's weekly availability stays in
     /// Intervals. The coach is asked again without the caller waiting for it.
     func discardPlan() async {
-        guard let plan = state.plan else { return }
-        let horizon = today.adding(days: 14)
-        let deletions = plan.sessions.filter { $0.day >= today && $0.status != .completed && ($0.intervalsEventID != nil || $0.day <= horizon) }
-            .map { CalendarSync.Deletion(externalID: PlanMirror.externalID(for: $0.day), eventID: $0.intervalsEventID) }
-        mutate { s in
-            s.retiredCalendarEvents = (s.retiredCalendarEvents ?? []) + deletions
-            s.plan = nil
-            // An unanswered consultation's opening was written about this plan; the next Create a plan starts fresh.
-            if s.planConsultation?.messages.contains(where: { $0.role == .athlete }) != true { s.planConsultation = nil }
+        guard let planId = state.plan?.backendID, let backend else { return }
+        do {
+            let view = try await backend.retirePlan(planId)
+            mutate { $0.adoptBackendPlan(view) }
+        } catch CadenciaAPIError.rejected(tag: "PlanNotActive", _, _) {
+            mutate { $0.adoptBackendPlan(nil) }
+        } catch {
+            _ = backendFailure(error)
+            return
         }
-        await retireCalendarEvents()
+        mutate {
+            // An unanswered consultation's opening was written about this plan; the next Create a plan starts fresh.
+            if $0.consultation?.view.value?.turns.contains(where: { $0.role == .athlete }) != true { $0.consultation = nil }
+        }
         await mirrorCalendarEntries()
         reaskCoach()
     }
 
-    func applyIntent(_ intent: CoachIntent, messageID: UUID?) async {
-        guard intent.needsClarification.isEmpty, !coachBusy, !coachThinking,
-              let messageID, let message = state.coachMessages.first(where: { $0.id == messageID }),
-              message.intent == intent, !message.applied else { return }
-        var updated = state
-        if let request = intent.workoutRequest {
-            guard request.day >= today, !state.isWorkoutCompleted(on: request.day) else { return }
-            if request.day == today {
-                guard !isTodayWorkoutCompleted, let proposal = message.workoutProposal,
-                      proposal.basisFingerprint == currentBriefFingerprint else {
-                    coachNotice = String(localized: "Your training context changed. Ask the coach for an updated workout preview.")
-                    return
-                }
-                updated.applyCoachIntent(intent, on: today)
-                updated.acceptPrescription(proposal.prescription, day: today, ftp: proposal.ftp)
-            } else {
-                updated.applyCoachIntent(intent, on: today)
-                // A future request changes the day's intent, not a previously generated concrete workout.
-                if let i = updated.plan?.sessions.firstIndex(where: { $0.day == request.day && $0.status != .completed && $0.status != .skipped }) {
-                    updated.plan?.sessions[i].workout = nil
-                    updated.plan?.sessions[i].status = .provisional
-                }
-            }
-        } else {
-            updated.applyCoachIntent(intent, on: today)
-        }
-        if let i = updated.coachMessages.firstIndex(where: { $0.id == messageID }) { updated.coachMessages[i].applied = true }
-        mutate { $0 = updated }
-        var mirrored = false
-        if intent.workoutRequest?.day == today {
-            let fingerprint = currentBriefFingerprint
-            mutate { $0.today?.aiFingerprint = fingerprint }
-            coachNotice = nil
-        } else { mirrored = await askCoachForToday() }
-        if !mirrored { await pushWeekToIntervals() }
-    }
-
-    /// Mirrors the next seven days to the Intervals calendar so other tools (and the athlete's watch) see them.
-    /// Mirrors the next week of the plan to the Intervals calendar, exactly one event per session.
-    /// Leftover Cadencia events (from a reinstall or an earlier plan) are deleted first, because Intervals
-    /// counts every planned workout dated today in today's fitness and fatigue.
-    ///
-    /// At most one pass runs and one waits. A caller that finds a pass still waiting for the calendar lock
-    /// joins it: that pass reads the state only once it holds the lock, so it already covers the caller.
-    func pushWeekToIntervals() async {
-        if let queued = queuedWeekPush {
-            await queued.value
-            return
-        }
-        let pass = Task {
-            await acquireCalendar()
-            // From here on this pass may already have read the state; later callers queue a new one.
-            queuedWeekPush = nil
-            defer { releaseCalendar() }
-            await mirrorWeek()
-        }
-        queuedWeekPush = pass
-        await pass.value
-    }
-
-    /// One mirror pass. The caller holds the calendar lock.
-    private func mirrorWeek() async {
-        guard !Task.isCancelled, let client, let ftp = workingFTP else { return }
-        let account = athleteID
-        let allSessions = calendarSessions
-        guard !allSessions.isEmpty else { return }
-        let horizon = today.adding(days: 7)
-        let plan = state.plan
-        // Race day is the goal event's calendar entry (`mirrorCalendarEntries`), not a second planned ride,
-        // unless the athlete explicitly sent that day's workout to their device.
-        let retained = allSessions.filter { $0.day >= today && $0.kind != .rest && $0.status != .skipped
-            && (!CalendarEntry.raceDaySession($0, in: plan) || $0.deliveredWorkout != nil) }
-        let sessions = retained.filter { $0.day <= horizon && $0.status != .completed }
+    /// Moves one of the plan's sessions to another day. Planning decides whether the day can take it.
+    func moveSession(_ session: PlannedSession, to day: Day) async throws {
+        guard let backend, let planId = state.plan?.backendID,
+              let sessionId = state.plan?.sessions.first(where: { $0.id == session.id })?.backendID else { return }
         do {
-            // A failed read aborts the write pass. Never blindly create when reconciliation failed.
-            let events = try await client.events(oldest: today, newest: today.adding(days: 14))
-            guard athleteID == account, isSignedIn else { return }
-            for stale in PlanMirror.staleEvents(events, sessions: retained) {
-                try await client.deleteEvent(id: stale.id)
-            }
-            for session in sessions {
-                guard athleteID == account, isSignedIn, !Task.isCancelled else { return }
-                let existing = PlanMirror.existingEvent(for: session, in: events)
-                let (prepared, targetFTP) = calendarSession(session, fallbackFTP: ftp)
-                var reconciled = prepared
-                // A stored id may have been removed externally; the fresh calendar read wins.
-                reconciled.intervalsEventID = existing?.id
-                let event = try await client.upsertPlannedWorkout(reconciled, ftp: targetFTP, existingEventID: existing?.id)
-                guard athleteID == account, isSignedIn else { return }
-                saveCalendarEvent(event.id, session: prepared, ftp: targetFTP)
-            }
-            // Mirroring changes today's projected load. Refresh it before displaying the result.
-            let days = try await client.wellness(oldest: today, newest: today)
-            let day = today
-            if athleteID == account, isSignedIn { mutate { $0.adoptIntervalsWellness(days, range: day...day) } }
+            let view = try await backend.moveSession(sessionId, to: day, plan: planId)
+            mutate { $0.adoptBackendPlan(view) }
         } catch {
-            syncError = "Intervals calendar: \(error.localizedDescription)"
+            _ = backendFailure(error)
+            throw error
+        }
+        if session.day == today || day == today { reaskCoach() }
+    }
+
+    /// Accepts the change a coach reply proposes. Planning applies it to the week (or refuses it); what the
+    /// athlete asked of each day becomes that day's requirement, in their own words.
+    func acceptCoachProposal(messageID: String) async {
+        guard let backend, !coachBusy, let thread = state.coachThread?.value,
+              let index = thread.messages.firstIndex(where: { $0.messageId == messageID }),
+              let intent = thread.messages[index].intent, thread.messages[index].intentStatus == .proposed else { return }
+        let conversation = BackendID.conversation(athlete: backend.athleteId, day: dayOfThread(thread) ?? today)
+        coachBusy = true
+        defer {
+            coachBusy = false
+            replayCoachAskIfNeeded()
+        }
+        do {
+            let answered = try await backend.acceptIntent(messageId: messageID, in: conversation)
+            mutate { $0.coachThread = .init(answered) }
+            let source = thread.messages[..<index].last { $0.role == .athlete }?.text ?? intent.summary
+            if answered?.messages.first(where: { $0.messageId == messageID })?.intentStatus == .applied {
+                for limit in intent.limits where !limit.unavailable {
+                    guard let day = Day(iso: limit.day), day >= today else { continue }
+                    _ = try await backend.recordDayRequirement(source, maxMinutes: limit.maxMinutes, on: day, plan: intent.planId)
+                }
+            }
+            if let plan = try await backend.plan() { mutate { $0.adoptBackendPlan(plan) } }
+            coachNotice = nil
+        } catch {
+            coachNotice = backendFailure(error)
             return
         }
+        coachBusy = false
+        if intent.limits.contains(where: { $0.day == today.iso }) { await askCoachForToday(force: true) }
+    }
+
+    func dismissCoachProposal(messageID: String) async {
+        guard let backend, let thread = state.coachThread?.value else { return }
+        let conversation = BackendID.conversation(athlete: backend.athleteId, day: dayOfThread(thread) ?? today)
+        do {
+            let answered = try await backend.dismissIntent(messageId: messageID, in: conversation)
+            mutate { $0.coachThread = .init(answered) }
+        } catch {
+            coachNotice = backendFailure(error)
+        }
+    }
+
+    /// The month a cached thread belongs to, from its first message.
+    private func dayOfThread(_ thread: CadenciaAPI.ConversationThreadState) -> Day? {
+        thread.messages.first.flatMap { BackendDate.parse($0.at) }.map { Day($0) }
     }
 
     /// All calendar writes share this lock, including explicit outdoor sends. A queued send must
@@ -1421,22 +1657,6 @@ final class AppModel {
                 s.standaloneSessions?.append(session)
             }
         }
-        Task { await pushWeekToIntervals() }
-    }
-
-    private func calendarSession(_ raw: PlannedSession, fallbackFTP: Int) -> (PlannedSession, Int) {
-        var session = raw
-        if raw.day == today, let workout = todayWorkout {
-            session.workout = workout
-            session.title = workout.name
-            session.location = todayRideLocation
-            session.prescriptionFTP = state.today?.prescriptionFTP ?? raw.prescriptionFTP ?? fallbackFTP
-        }
-        guard session.location == .outdoor, let workout = session.workout else { return (session, fallbackFTP) }
-        let ftp = outdoorFTP ?? fallbackFTP
-        let prepared = OutdoorWorkout(workout: workout, prescriptionFTP: session.prescriptionFTP ?? fallbackFTP, outdoorFTP: ftp)
-        session.workout = prepared.workout
-        return (session, ftp)
     }
 
     private func saveCalendarEvent(_ id: Int, session: PlannedSession, ftp: Int) {
@@ -1521,7 +1741,7 @@ final class AppModel {
         guard !cyclistProfileBusy,
               CyclistProfile.shouldGenerateAutomatically(hasReport: state.cyclistProfile != nil,
                                                          attemptedAt: state.cyclistProfileAutomaticAttemptedAt),
-              client != nil, aiCoachAvailable else { return }
+              client != nil, aiCoachAvailable, isBackendConnected else { return }
         Task { await generateCyclistProfile(automatically: true) }
     }
 
@@ -1539,6 +1759,10 @@ final class AppModel {
             cyclistProfileError = String(localized: "Connect Intervals.icu in Settings to build your cyclist profile.")
             return
         }
+        guard let backend else {
+            cyclistProfileError = String(localized: "Sign in to Cadencia in Settings to build your cyclist profile.")
+            return
+        }
         guard aiCoachAvailable else {
             cyclistProfileError = String(localized: "Connect ChatGPT (or an API key) in Settings → Coach first.")
             return
@@ -1549,6 +1773,8 @@ final class AppModel {
         defer { cyclistProfileBusy = false }
         func sameAccount() -> Bool { athleteID == account && credential == connection }
         do {
+            // Recorded before the AI runs, so an automatic attempt is spent even if this one fails.
+            guard try await backend.recordProfileAttempt(automatic: automatically) else { return }
             let brief = try await client.cyclistProfileBrief(newest: today, locale: coachLocale)
             try Task.checkCancellation()
             guard sameAccount() else { return }
@@ -1560,7 +1786,9 @@ final class AppModel {
             let report = try await engine.cyclistProfile(brief)
             try Task.checkCancellation()
             guard sameAccount() else { return }
-            mutate { $0.cyclistProfile = report }
+            let card = try await backend.recordProfile(report)
+            guard sameAccount() else { return }
+            mutate { $0.riderProfile = .init(card) }
         } catch is CancellationError {
             return
         } catch let error as LLMCoachError {
@@ -1571,6 +1799,9 @@ final class AppModel {
             case .unauthorized: coachIssue = .signInAgain
             }
             cyclistProfileError = String(localized: "The coach connection needs attention. Your saved profile is still available if you have one.")
+        } catch let error as CadenciaAPIError {
+            guard !Task.isCancelled, sameAccount() else { return }
+            cyclistProfileError = backendFailure(error)
         } catch let error as HTTPError {
             // Intervals reports a cancelled request as a transport error; cancellation is not a failure.
             guard !Task.isCancelled, sameAccount() else { return }
@@ -1583,69 +1814,94 @@ final class AppModel {
         }
     }
 
+    /// Sends the athlete's message to the coach. The message and the coach's reply (with the plan change it
+    /// understood, which takes effect only once the athlete accepts it) are recorded on the backend; the
+    /// conversation shown is the backend's.
     func sendToCoach(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !coachBusy else { return }
+        guard let backend else {
+            coachNotice = String(localized: "Sign in to Cadencia in Settings to talk to the coach.")
+            return
+        }
         coachBusy = true
         coachNotice = nil
         defer {
             coachBusy = false
             replayCoachAskIfNeeded()
         }
-        let source = AppState.CoachMessage(role: .athlete, text: trimmed)
-        let account = athleteID
-        let day = today
-        let context = CoachContext(today: today, locale: Locale.current.language.languageCode?.identifier ?? "es",
-                                   readiness: readiness, plan: state.plan, recentActivities: Array(state.activities.suffix(10)), ftp: workingFTP,
-                                   workout: todayWorkout, recentConversation: state.coachMessages.suffix(8).map { "\($0.role.rawValue): \($0.text)" })
-        mutate { $0.coachMessages.append(source) }
+        let account = athleteID, day = today, messageID = UUID().uuidString.lowercased()
+        func current() -> Bool { athleteID == account && today == day && backend.athleteId == athleteID }
+        let recent = state.coachMessages.suffix(8).map { "\($0.role.rawValue): \($0.text)" }
+        do {
+            let receipt = try await backend.sendMessage(trimmed, messageId: messageID, on: day)
+            let sent = try await backend.thread(on: day, after: receipt)
+            guard current() else { return }
+            mutate { $0.coachThread = .init(sent) }
+        } catch {
+            coachNotice = backendFailure(error)
+            return
+        }
         // When the ChatGPT refresh token is dead `freshChatGPTCredential` sets `coachIssue = .signInAgain`;
         // the Coach screen shows that as a banner with a sign-in action.
         guard let engine = await coachEngine() else {
-            mutate { $0.coachMessages.append(.init(role: .coach, text: String(localized: "Connect ChatGPT (or an API key) in Settings → Coach first."))) }
+            coachNotice = String(localized: "Connect ChatGPT (or an API key) in Settings → Coach first.")
             return
         }
+        let context = CoachContext(today: day, locale: coachLocale, readiness: readiness, plan: state.plan,
+                                   recentActivities: Array(state.activities.suffix(10)), ftp: workingFTP,
+                                   workout: todayWorkout, recentConversation: recent)
         do {
             let intent = try await engine.interpret(trimmed, context: context)
-            var proposal: AppState.WorkoutProposal?
-            if let request = intent.workoutRequest, request.day == day, !isTodayWorkoutCompleted, workingFTP != nil {
-                let basis = currentBriefFingerprint
-                let brief = coachBrief(applying: intent)
-                let prescription = try await engine.prescribe(brief: brief)
-                proposal = .init(prescription: prescription, basisFingerprint: basis, ftp: brief.athlete.ftp)
+            guard current() else { return }
+            let proposal = state.plan.flatMap { plan -> CadenciaAPI.Intent? in
+                guard plan.isActive, let id = plan.backendID else { return nil }
+                return CadenciaAPI.Intent(intent, planId: id, today: day)
             }
-            guard athleteID == account, today == day else { return }
-            mutate { $0.coachMessages.append(.init(role: .coach, text: proposal?.prescription.note.session ?? intent.reply, intent: intent,
-                                                  sourceMessageID: source.id, workoutProposal: proposal)) }
+            let thread = try await backend.recordReply(intent.reply, messageId: UUID().uuidString.lowercased(), inReplyTo: messageID,
+                                                       intent: proposal, model: engine.model, on: day)
+            guard current() else { return }
+            mutate { $0.coachThread = .init(thread) }
+            if let request = intent.workoutRequest, proposal == nil, state.plan?.isActive != true {
+                coachNotice = request.day == day
+                    ? String(localized: "Without a plan the coach takes your request into today's session when it decides the day.")
+                    : String(localized: "Create a plan so the coach can keep requests for other days.")
+            }
         } catch let error as LLMCoachError {
-            guard athleteID == account, today == day else { return }
-            let text: String
+            guard current() else { return }
             switch error {
             case .usageLimitReached:
                 coachIssue = .usageLimit
-                text = String(localized: "You've reached the usage limit of your ChatGPT plan for now. Check it under Manage usage, or wait for it to reset.")
+                coachNotice = String(localized: "You've reached the usage limit of your ChatGPT plan for now. Check it under Manage usage, or wait for it to reset.")
             case .notEligible:
                 coachIssue = .notEligible
-                text = String(localized: "Your ChatGPT account can't share its plan with apps. You can use an API key instead in Settings → Coach.")
+                coachNotice = String(localized: "Your ChatGPT account can't share its plan with apps. You can use an API key instead in Settings → Coach.")
             case .unauthorized:
                 coachIssue = .signInAgain
-                text = String(localized: "ChatGPT no longer accepts this sign-in. Sign in again in Settings → Coach.")
+                coachNotice = String(localized: "ChatGPT no longer accepts this sign-in. Sign in again in Settings → Coach.")
             }
-            mutate { $0.coachMessages.append(.init(role: .coach, text: text)) }
-        } catch is DailyPrescription.ValidationError {
-            guard athleteID == account, today == day else { return }
-            let notice = String(localized: "The coach couldn't produce a valid workout for this request. Your current workout is unchanged. Try rephrasing the request.")
-            mutate { $0.coachMessages.append(.init(role: .coach, text: notice)) }
         } catch is CancellationError {
             return
+        } catch let error as CadenciaAPIError {
+            guard current() else { return }
+            coachNotice = backendFailure(error)
         } catch {
-            guard athleteID == account, today == day else { return }
-            let notice = coachFailureNotice(error, preservingSession: false)
-            mutate { $0.coachMessages.append(.init(role: .coach, text: notice)) }
+            guard current() else { return }
+            coachNotice = coachFailureNotice(error, preservingSession: false)
         }
     }
 
-    func clearCoachHistory() { mutate { $0.coachMessages = [] } }
+    /// Reads this month's conversation again (the Coach screen calls it when it appears).
+    func refreshConversation() async {
+        guard let backend else { return }
+        let day = today
+        do {
+            let thread = try await backend.thread(on: day)
+            if backend.athleteId == athleteID { mutate { $0.coachThread = .init(thread) } }
+        } catch {
+            coachNotice = backendFailure(error)
+        }
+    }
 
     // MARK: Rides
 
@@ -1687,9 +1943,7 @@ final class AppModel {
             if day == today { state.today?.rideLocation = .outdoor }
         }
         if let replaced, replaced != route.id { removeRouteSourceIfUnused(replaced) }
-        Task {
-            if !(await askCoachForToday()) { await pushWeekToIntervals() }
-        }
+        Task { await askCoachForToday() }
     }
 
     func removeRideRoute(on day: Day) {

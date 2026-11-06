@@ -23,6 +23,7 @@ struct EventPlanFlow: View {
     @State private var geocoder = CLGeocoder()
     @State private var locationRequest = UUID()
     @State private var saving = false
+    @State private var createError: String?
 
     private var importing: Bool { importID != nil }
 
@@ -112,6 +113,9 @@ struct EventPlanFlow: View {
         .alert("Couldn’t import route", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
             Button("OK", role: .cancel) { importError = nil }
         } message: { Text(importError ?? "") }
+        .alert("Couldn’t create the plan", isPresented: Binding(get: { createError != nil }, set: { if !$0 { createError = nil } })) {
+            Button("OK", role: .cancel) { createError = nil }
+        } message: { Text(createError ?? "") }
         .onAppear {
             guard !initialized else { return }
             initialized = true
@@ -412,8 +416,13 @@ struct EventPlanFlow: View {
         saving = true
         let request = PlanBuilder.Request(goal: .event, startDay: model.today, endDay: draft.event.day,
                                           event: draft.event, availability: draft.availability, currentCTL: model.latestLoad?.ctl)
-        await model.createPlan(request)
-        finished()
+        do {
+            try await model.createPlan(request)
+            finished()
+        } catch {
+            saving = false
+            createError = error.localizedDescription
+        }
     }
 }
 

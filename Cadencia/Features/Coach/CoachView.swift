@@ -3,7 +3,8 @@ import SwiftUI
 import CadenciaCore
 
 /// Talk to the coach. A voice note or a line of text becomes a structured intent the athlete can
-/// read back ("what I understood") and apply to the week with one tap.
+/// read back ("what I understood") and apply to the week with one tap. The conversation is the backend's:
+/// this month's thread, with each proposal and what the plan did with it.
 struct CoachView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
@@ -11,7 +12,6 @@ struct CoachView: View {
     /// value would be rebuilt every time this view re-renders.
     @State private var speech = SpeechRecognizer()
     @State private var didScrollInitially = false
-    @State private var confirmClear = false
 
     var body: some View {
         NavigationStack {
@@ -28,11 +28,11 @@ struct CoachView: View {
                             }
                             .listRowBackground(Color.clear)
                         }
-                        ForEach(model.state.coachMessages) { message in
-                            MessageRow(message: message, busy: model.coachBusy || model.coachThinking) { intent in
-                                Task { await model.applyIntent(intent, messageID: message.id) }
-                            }
-                            .id(message.id)
+                        ForEach(model.state.coachMessages, id: \.messageId) { message in
+                            MessageRow(message: message, busy: model.coachBusy || model.coachThinking,
+                                       accept: { Task { await model.acceptCoachProposal(messageID: message.messageId) } },
+                                       dismiss: { Task { await model.dismissCoachProposal(messageID: message.messageId) } })
+                            .id(message.messageId)
                             .listRowSeparator(.hidden)
                         }
                         if model.coachBusy {
@@ -52,6 +52,7 @@ struct CoachView: View {
                     // Opens at the latest message the first time the tab is shown; later visits keep the
                     // reader's position.
                     .task {
+                        await model.refreshConversation()
                         guard !didScrollInitially else { return }
                         didScrollInitially = true
                         scrollToLatest(proxy)
@@ -63,8 +64,6 @@ struct CoachView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button("Clear conversation", systemImage: "trash", role: .destructive) { confirmClear = true }
-                            .disabled(model.state.coachMessages.isEmpty)
                         switch model.coachSource {
                         case .chatGPTPlan:
                             Label("Using ChatGPT plan · \(model.state.settings.llmModel)", systemImage: "sparkles")
@@ -78,11 +77,6 @@ struct CoachView: View {
                         Label("Coach options", systemImage: "ellipsis.circle").labelStyle(.iconOnly)
                     }
                 }
-            }
-            .confirmationDialog("Clear this conversation?", isPresented: $confirmClear, titleVisibility: .visible) {
-                Button("Clear conversation", role: .destructive) { model.clearCoachHistory() }
-            } message: {
-                Text("Suggestions you haven't applied are removed. Changes you already applied stay.")
             }
             .onChange(of: scenePhase) { _, phase in if phase == .background { speech.stop() } }
             .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { note in
@@ -99,7 +93,7 @@ struct CoachView: View {
         if model.coachBusy {
             proxy.scrollTo("busy", anchor: .bottom)
         } else if let last = model.state.coachMessages.last {
-            proxy.scrollTo(last.id, anchor: .bottom)
+            proxy.scrollTo(last.messageId, anchor: .bottom)
         }
     }
 }
@@ -300,24 +294,21 @@ struct CoachIssueBanner: View {
     }
 }
 
-/// One line of the conversation. Coach replies carry the structured reading and an apply button.
+/// One line of the conversation. Coach replies carry the change they propose and what became of it.
 struct MessageRow: View {
-    let message: AppState.CoachMessage
+    let message: CadenciaAPI.ThreadMessage
     var busy = false
-    let apply: (CoachIntent) -> Void
+    let accept: () -> Void
+    let dismiss: () -> Void
 
     var body: some View {
         HStack(alignment: .top) {
             if message.role == .athlete { Spacer(minLength: 48) }
             VStack(alignment: .leading, spacing: 8) {
-                Text(message.text)
-                if let intent = message.intent, !intent.isEmpty {
-                    UnderstoodCard(intent: intent, applied: message.applied, proposal: message.workoutProposal, busy: busy) { apply(intent) }
-                }
-                if let intent = message.intent, !intent.needsClarification.isEmpty {
-                    ForEach(intent.needsClarification, id: \.self) { q in
-                        Label(q, systemImage: "questionmark.circle").font(.footnote).foregroundStyle(.secondary)
-                    }
+                Text(verbatim: message.text)
+                if let intent = message.intent {
+                    UnderstoodCard(intent: intent, status: message.intentStatus ?? .proposed, refusal: message.refusal,
+                                   busy: busy, accept: accept, dismiss: dismiss)
                 }
             }
             .padding(12)
@@ -328,98 +319,53 @@ struct MessageRow: View {
     }
 }
 
-/// "What I understood": the structured intent, line by line, with a single confirm.
+/// "What I understood": the days the coach would change, line by line, with a single confirm. The plan
+/// applies it (or refuses it, with its reason) only once the athlete accepts.
 struct UnderstoodCard: View {
     @Environment(AppModel.self) private var model
-    let intent: CoachIntent
-    let applied: Bool
-    var proposal: AppState.WorkoutProposal?
+    let intent: CadenciaAPI.Intent
+    let status: CadenciaAPI.ThreadMessage.IntentStatus
+    let refusal: String?
     var busy = false
-    let apply: () -> Void
+    let accept: () -> Void
+    let dismiss: () -> Void
 
     var body: some View {
-        // Read once per render: for today's proposal it checks the coach brief's fingerprint.
-        let unavailable = requestUnavailable
         VStack(alignment: .leading, spacing: 6) {
             Text("What I understood").font(.caption).foregroundStyle(.secondary).textCase(.uppercase)
-            if let e = intent.event {
-                Label {
-                    Text("\(e.name), \(Format.day(e.day))\(e.distanceKm.map { String(format: ", %.0f km", $0) } ?? "") · priority \(e.priority.rawValue.uppercased())")
-                } icon: { Image(systemName: e.isRace ? "flag.checkered" : "person.3") }
+            ForEach(intent.limits, id: \.day) { limit in
+                if let day = Day(iso: limit.day) {
+                    Label {
+                        if limit.unavailable { Text("\(Format.day(day)): no training") }
+                        else if let m = limit.maxMinutes { Text("\(Format.day(day)): up to \(m) min") }
+                        else { Text("\(Format.day(day)): your request for the session") }
+                    } icon: { Image(systemName: limit.maxMinutes == nil && !limit.unavailable ? "bicycle" : "clock") }
+                }
             }
-            ForEach(intent.constraints) { c in
-                Label {
-                    if c.unavailable { Text("\(Format.day(c.day)): no training") }
-                    else if let m = c.maxMinutes { Text("\(Format.day(c.day)): up to \(m) min") }
-                } icon: { Image(systemName: "clock") }
-            }
-            if let legs = intent.feeling {
-                Label(legsText(legs), systemImage: "figure.walk")
-            }
-            if let goal = intent.goal {
-                Label { Text("Goal: \(Text(goal.title))") } icon: { Image(systemName: goal.symbol) }
-            }
-            if let request = intent.workoutRequest {
-                Label(Format.day(request.day), systemImage: "bicycle")
-                if let proposal {
-                    NavigationLink {
-                        WorkoutDetailView(workout: proposal.prescription.workout, ftp: proposal.ftp)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Review proposed workout").fontWeight(.semibold)
-                            Text(proposal.prescription.workout.name)
-                            Text("\(Format.minutes(proposal.prescription.workout.totalDuration)) · \(proposal.prescription.workout.estimatedLoad) TSS")
-                                .foregroundStyle(.secondary)
-                        }
-                        .contentShape(.rect)
+            switch status {
+            case .proposed:
+                HStack {
+                    Button(action: accept) {
+                        Label("Update my week", systemImage: "calendar.badge.checkmark").frame(maxWidth: .infinity)
                     }
-                    // Only the link navigates; a default-styled link would take over the whole chat row.
-                    .buttonStyle(.borderless)
-                } else if request.day > model.today {
-                    Text(request.instructions)
-                    Text("The coach will build this workout from your recovery on that day.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    .buttonStyle(.borderedProminent)
+                    Button("Not now", action: dismiss).buttonStyle(.bordered)
                 }
-                if unavailable, !applied {
-                    Text("Your training context changed. Ask the coach for an updated workout preview.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                }
+                .disabled(busy || !model.isBackendConnected)
+                .padding(.top, 4)
+            case .accepted:
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Your plan is updating…") }
+                    .foregroundStyle(.secondary)
+            case .applied:
+                Label("Week updated", systemImage: "checkmark").foregroundStyle(.secondary)
+            case .dismissed:
+                Label("Not applied", systemImage: "xmark").foregroundStyle(.secondary)
+            case .refused:
+                Label("Your plan couldn't take this change.", systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
+                if let refusal { Text(verbatim: refusal).font(.footnote).foregroundStyle(.secondary) }
             }
-            Button(action: apply) {
-                Label(buttonTitle, systemImage: applied ? "checkmark" : "calendar.badge.checkmark")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(applied || busy || unavailable || !intent.needsClarification.isEmpty)
-            .padding(.top, 4)
         }
         .font(.subheadline)
-    }
-
-    private var buttonTitle: LocalizedStringKey {
-        if intent.workoutRequest != nil {
-            if proposal != nil { return applied ? "Workout updated" : "Use this workout" }
-            return applied ? "Workout request saved" : "Save workout request"
-        }
-        return applied ? "Week updated" : "Update my week"
-    }
-
-    private var requestUnavailable: Bool {
-        guard let request = intent.workoutRequest else { return false }
-        if request.day < model.today || model.state.isWorkoutCompleted(on: request.day) { return true }
-        if request.day == model.today {
-            guard let proposal else { return true }
-            return !model.isWorkoutProposalCurrent(proposal)
-        }
-        return false
-    }
-
-    private func legsText(_ legs: SubjectiveFeedback.Legs) -> LocalizedStringKey {
-        switch legs {
-        case .fresh: return "Legs feel fresh"
-        case .ok: return "Legs feel normal"
-        case .heavy: return "Legs feel heavy"
-        }
     }
 }
 

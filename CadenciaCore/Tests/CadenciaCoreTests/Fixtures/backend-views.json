@@ -1,0 +1,1211 @@
+{
+  "consultation": {
+    "stage": "created",
+    "turns": [
+      {
+        "role": "coach",
+        "text": "What should your riding feel like?"
+      },
+      {
+        "role": "athlete",
+        "text": "Six weeks of base, three rides a week."
+      }
+    ],
+    "draft": {
+      "athleteId": "i100",
+      "title": "Base block",
+      "goal": "endurance",
+      "objective": "Build an aerobic base",
+      "rationale": "Six weeks of easy volume.",
+      "startDay": "2026-11-09",
+      "endDay": "2026-12-20",
+      "phases": [
+        {
+          "focus": "base",
+          "startWeek": 1,
+          "endWeek": 4,
+          "summary": "Aerobic base"
+        },
+        {
+          "focus": "build",
+          "startWeek": 5,
+          "endWeek": 5,
+          "summary": "Longer tempo"
+        },
+        {
+          "focus": "recover",
+          "startWeek": 6,
+          "endWeek": 6,
+          "summary": "Absorb"
+        }
+      ],
+      "longRideWeekday": 1,
+      "event": null,
+      "sessions": [
+        {
+          "day": "2026-11-10",
+          "kind": "endurance",
+          "title": "Easy endurance",
+          "targetMinutes": 60,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-11-12",
+          "kind": "tempo",
+          "title": "Sweet spot",
+          "targetMinutes": 60,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-11-15",
+          "kind": "longRide",
+          "title": "Long ride",
+          "targetMinutes": 120,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-11-17",
+          "kind": "endurance",
+          "title": "Easy endurance",
+          "targetMinutes": 60,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-11-19",
+          "kind": "tempo",
+          "title": "Sweet spot",
+          "targetMinutes": 60,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-11-22",
+          "kind": "longRide",
+          "title": "Long ride",
+          "targetMinutes": 120,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-11-24",
+          "kind": "endurance",
+          "title": "Easy endurance",
+          "targetMinutes": 60,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-11-26",
+          "kind": "tempo",
+          "title": "Sweet spot",
+          "targetMinutes": 60,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-11-29",
+          "kind": "longRide",
+          "title": "Long ride",
+          "targetMinutes": 120,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-12-01",
+          "kind": "endurance",
+          "title": "Easy endurance",
+          "targetMinutes": 60,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-12-03",
+          "kind": "tempo",
+          "title": "Sweet spot",
+          "targetMinutes": 60,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-12-06",
+          "kind": "longRide",
+          "title": "Long ride",
+          "targetMinutes": 120,
+          "purpose": "Aerobic base"
+        },
+        {
+          "day": "2026-12-08",
+          "kind": "endurance",
+          "title": "Easy endurance",
+          "targetMinutes": 60,
+          "purpose": "Longer tempo"
+        },
+        {
+          "day": "2026-12-10",
+          "kind": "tempo",
+          "title": "Sweet spot",
+          "targetMinutes": 60,
+          "purpose": "Longer tempo"
+        },
+        {
+          "day": "2026-12-13",
+          "kind": "longRide",
+          "title": "Long ride",
+          "targetMinutes": 120,
+          "purpose": "Longer tempo"
+        },
+        {
+          "day": "2026-12-15",
+          "kind": "recovery",
+          "title": "Recovery spin",
+          "targetMinutes": 40,
+          "purpose": "Absorb"
+        },
+        {
+          "day": "2026-12-17",
+          "kind": "recovery",
+          "title": "Recovery spin",
+          "targetMinutes": 40,
+          "purpose": "Absorb"
+        },
+        {
+          "day": "2026-12-20",
+          "kind": "recovery",
+          "title": "Recovery spin",
+          "targetMinutes": 80,
+          "purpose": "Absorb"
+        }
+      ]
+    },
+    "planId": "i100:p1",
+    "refusal": null
+  },
+  "decisionRefused": {
+    "athleteId": "i100",
+    "day": "2026-11-10",
+    "attempt": 1,
+    "status": "refused",
+    "workout": {
+      "name": "Threshold",
+      "kind": "threshold",
+      "steps": [
+        {
+          "name": "60%",
+          "durationSeconds": 900,
+          "startIntensity": 0.6,
+          "endIntensity": 0.6
+        },
+        {
+          "name": "98%",
+          "durationSeconds": 1800,
+          "startIntensity": 0.98,
+          "endIntensity": 0.98
+        },
+        {
+          "name": "55%",
+          "durationSeconds": 900,
+          "startIntensity": 0.55,
+          "endIntensity": 0.55
+        }
+      ],
+      "intensityCeiling": 1,
+      "rationale": ""
+    },
+    "note": {
+      "headline": "Easy endurance",
+      "body": "Ready.",
+      "session": "One hour in Z2.",
+      "watch": null
+    },
+    "evidence": {
+      "fingerprint": "fp-1",
+      "readiness": {
+        "level": "normal",
+        "score": 62,
+        "summary": "Typical HRV and sleep."
+      },
+      "days": [
+        {
+          "day": "2026-11-10",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-11",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-12",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-13",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-14",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-15",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-16",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-17",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        }
+      ],
+      "eventDays": []
+    },
+    "model": "gpt-5.5",
+    "interpretedOn": "ios",
+    "refusal": "HardensPlannedSession: day=\"2026-11-10\", planned=\"endurance\", proposed=\"threshold\", peakIntensity=0.98"
+  },
+  "decisionAccepted": {
+    "athleteId": "i100",
+    "day": "2026-11-10",
+    "attempt": 2,
+    "status": "accepted",
+    "workout": {
+      "name": "Easy endurance",
+      "kind": "endurance",
+      "steps": [
+        {
+          "name": "65%",
+          "durationSeconds": 3600,
+          "startIntensity": 0.65,
+          "endIntensity": 0.65
+        }
+      ],
+      "rationale": "Typical HRV."
+    },
+    "note": {
+      "headline": "Easy endurance",
+      "body": "Ready.",
+      "session": "One hour in Z2.",
+      "watch": null
+    },
+    "evidence": {
+      "fingerprint": "fp-1",
+      "readiness": {
+        "level": "normal",
+        "score": 62,
+        "summary": "Typical HRV and sleep."
+      },
+      "days": [
+        {
+          "day": "2026-11-10",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-11",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-12",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-13",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-14",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-15",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-16",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        },
+        {
+          "day": "2026-11-17",
+          "maxMinutes": null,
+          "unavailable": false,
+          "hardOtherTraining": false
+        }
+      ],
+      "eventDays": []
+    },
+    "model": "gpt-5.5",
+    "interpretedOn": "ios",
+    "refusal": null
+  },
+  "thread": {
+    "messages": [
+      {
+        "messageId": "m1",
+        "role": "athlete",
+        "text": "Thursday I only have 40 minutes.",
+        "at": "2026-11-10T07:00:00.000Z",
+        "intent": null,
+        "intentStatus": null,
+        "refusal": null,
+        "model": null
+      },
+      {
+        "messageId": "m2",
+        "role": "coach",
+        "text": "I'll shorten Thursday to 40 minutes.",
+        "at": "2026-11-10T07:00:00.000Z",
+        "intent": {
+          "planId": "i100:p1",
+          "summary": "I'll shorten Thursday to 40 minutes.",
+          "limits": [
+            {
+              "day": "2026-11-12",
+              "maxMinutes": 40,
+              "unavailable": false
+            }
+          ]
+        },
+        "intentStatus": "applied",
+        "refusal": null,
+        "model": "gpt-5.5"
+      },
+      {
+        "messageId": "m3",
+        "role": "athlete",
+        "text": "Thanks!",
+        "at": "2026-11-10T07:00:00.000Z",
+        "intent": null,
+        "intentStatus": null,
+        "refusal": null,
+        "model": null
+      },
+      {
+        "messageId": "m4",
+        "role": "coach",
+        "text": "You're welcome.",
+        "at": "2026-11-10T07:00:00.000Z",
+        "intent": null,
+        "intentStatus": null,
+        "refusal": null,
+        "model": "gpt-5.5"
+      },
+      {
+        "messageId": "m5",
+        "role": "athlete",
+        "text": "Saturday I'm away.",
+        "at": "2026-11-10T07:00:00.000Z",
+        "intent": null,
+        "intentStatus": null,
+        "refusal": null,
+        "model": null
+      },
+      {
+        "messageId": "m6",
+        "role": "coach",
+        "text": "Saturday off, then.",
+        "at": "2026-11-10T07:00:00.000Z",
+        "intent": {
+          "planId": "i100:p1",
+          "summary": "Saturday off, then.",
+          "limits": [
+            {
+              "day": "2026-11-14",
+              "maxMinutes": null,
+              "unavailable": true
+            }
+          ]
+        },
+        "intentStatus": "dismissed",
+        "refusal": null,
+        "model": "gpt-5.5"
+      }
+    ]
+  },
+  "plan": {
+    "planId": "i100:p1",
+    "status": "active",
+    "title": "Base block",
+    "goal": "endurance",
+    "startDay": "2026-11-09",
+    "endDay": "2026-12-20",
+    "phases": [
+      {
+        "focus": "base",
+        "startWeek": 1,
+        "endWeek": 4,
+        "summary": "Aerobic base"
+      },
+      {
+        "focus": "build",
+        "startWeek": 5,
+        "endWeek": 5,
+        "summary": "Longer tempo"
+      },
+      {
+        "focus": "recover",
+        "startWeek": 6,
+        "endWeek": 6,
+        "summary": "Absorb"
+      }
+    ],
+    "longRideWeekday": 1,
+    "event": null,
+    "sessions": [
+      {
+        "sessionId": "2026-11-10",
+        "day": "2026-11-10",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": {
+          "name": "Easy endurance",
+          "kind": "endurance",
+          "steps": [
+            {
+              "name": "65%",
+              "durationSeconds": 3600,
+              "startIntensity": 0.65,
+              "endIntensity": 0.65
+            }
+          ],
+          "rationale": "Typical HRV."
+        },
+        "externalId": "cadencia-i100-p1-2026-11-10"
+      },
+      {
+        "sessionId": "2026-11-12",
+        "day": "2026-11-12",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 40,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-12"
+      },
+      {
+        "sessionId": "2026-11-15",
+        "day": "2026-11-15",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-15"
+      },
+      {
+        "sessionId": "2026-11-17",
+        "day": "2026-11-17",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-17"
+      },
+      {
+        "sessionId": "2026-11-19",
+        "day": "2026-11-19",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-19"
+      },
+      {
+        "sessionId": "2026-11-22",
+        "day": "2026-11-22",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-22"
+      },
+      {
+        "sessionId": "2026-11-24",
+        "day": "2026-11-24",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-24"
+      },
+      {
+        "sessionId": "2026-11-26",
+        "day": "2026-11-26",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-26"
+      },
+      {
+        "sessionId": "2026-11-29",
+        "day": "2026-11-29",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-29"
+      },
+      {
+        "sessionId": "2026-12-01",
+        "day": "2026-12-01",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-01"
+      },
+      {
+        "sessionId": "2026-12-03",
+        "day": "2026-12-03",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-03"
+      },
+      {
+        "sessionId": "2026-12-06",
+        "day": "2026-12-06",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-06"
+      },
+      {
+        "sessionId": "2026-12-08",
+        "day": "2026-12-08",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Longer tempo",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-08"
+      },
+      {
+        "sessionId": "2026-12-10",
+        "day": "2026-12-10",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Longer tempo",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-10"
+      },
+      {
+        "sessionId": "2026-12-13",
+        "day": "2026-12-13",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Longer tempo",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-13"
+      },
+      {
+        "sessionId": "2026-12-15",
+        "day": "2026-12-15",
+        "kind": "recovery",
+        "title": "Recovery spin",
+        "targetMinutes": 40,
+        "purpose": "Absorb",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-15"
+      },
+      {
+        "sessionId": "2026-12-17",
+        "day": "2026-12-17",
+        "kind": "recovery",
+        "title": "Recovery spin",
+        "targetMinutes": 40,
+        "purpose": "Absorb",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-17"
+      },
+      {
+        "sessionId": "2026-12-20",
+        "day": "2026-12-20",
+        "kind": "recovery",
+        "title": "Recovery spin",
+        "targetMinutes": 80,
+        "purpose": "Absorb",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-20"
+      }
+    ],
+    "requirements": []
+  },
+  "profile": {
+    "report": {
+      "riderType": "endurance",
+      "confidence": "moderate",
+      "headline": "A steady endurance rider",
+      "summary": "Long, even rides.",
+      "strengths": [
+        "Pacing"
+      ],
+      "development": [
+        "Short power"
+      ],
+      "evidence": [
+        "20 rides"
+      ],
+      "caveats": [],
+      "oldest": "2026-08-01",
+      "newest": "2026-11-08",
+      "rideCount": 20
+    },
+    "model": "gpt-5.5",
+    "dismissedFtp": null
+  },
+  "planChanged": {
+    "planId": "i100:p1",
+    "status": "active",
+    "title": "Base block",
+    "goal": "endurance",
+    "startDay": "2026-11-09",
+    "endDay": "2026-12-20",
+    "phases": [
+      {
+        "focus": "base",
+        "startWeek": 1,
+        "endWeek": 4,
+        "summary": "Aerobic base"
+      },
+      {
+        "focus": "build",
+        "startWeek": 5,
+        "endWeek": 5,
+        "summary": "Longer tempo"
+      },
+      {
+        "focus": "recover",
+        "startWeek": 6,
+        "endWeek": 6,
+        "summary": "Absorb"
+      }
+    ],
+    "longRideWeekday": 1,
+    "event": null,
+    "sessions": [
+      {
+        "sessionId": "2026-11-10",
+        "day": "2026-11-10",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": {
+          "name": "Easy endurance",
+          "kind": "endurance",
+          "steps": [
+            {
+              "name": "65%",
+              "durationSeconds": 3600,
+              "startIntensity": 0.65,
+              "endIntensity": 0.65
+            }
+          ],
+          "rationale": "Typical HRV."
+        },
+        "externalId": "cadencia-i100-p1-2026-11-10"
+      },
+      {
+        "sessionId": "2026-11-12",
+        "day": "2026-11-13",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 40,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-12"
+      },
+      {
+        "sessionId": "2026-11-15",
+        "day": "2026-11-15",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-15"
+      },
+      {
+        "sessionId": "2026-11-17",
+        "day": "2026-11-17",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-17"
+      },
+      {
+        "sessionId": "2026-11-19",
+        "day": "2026-11-19",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-19"
+      },
+      {
+        "sessionId": "2026-11-22",
+        "day": "2026-11-22",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-22"
+      },
+      {
+        "sessionId": "2026-11-24",
+        "day": "2026-11-24",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-24"
+      },
+      {
+        "sessionId": "2026-11-26",
+        "day": "2026-11-26",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-26"
+      },
+      {
+        "sessionId": "2026-11-29",
+        "day": "2026-11-29",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-29"
+      },
+      {
+        "sessionId": "2026-12-01",
+        "day": "2026-12-01",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-01"
+      },
+      {
+        "sessionId": "2026-12-03",
+        "day": "2026-12-03",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-03"
+      },
+      {
+        "sessionId": "2026-12-06",
+        "day": "2026-12-06",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-06"
+      },
+      {
+        "sessionId": "2026-12-08",
+        "day": "2026-12-08",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Longer tempo",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-08"
+      },
+      {
+        "sessionId": "2026-12-10",
+        "day": "2026-12-10",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Longer tempo",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-10"
+      },
+      {
+        "sessionId": "2026-12-13",
+        "day": "2026-12-13",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Longer tempo",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-13"
+      },
+      {
+        "sessionId": "2026-12-15",
+        "day": "2026-12-15",
+        "kind": "recovery",
+        "title": "Recovery spin",
+        "targetMinutes": 40,
+        "purpose": "Absorb",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-15"
+      },
+      {
+        "sessionId": "2026-12-17",
+        "day": "2026-12-17",
+        "kind": "recovery",
+        "title": "Recovery spin",
+        "targetMinutes": 40,
+        "purpose": "Absorb",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-17"
+      },
+      {
+        "sessionId": "2026-12-20",
+        "day": "2026-12-20",
+        "kind": "recovery",
+        "title": "Recovery spin",
+        "targetMinutes": 80,
+        "purpose": "Absorb",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-20"
+      }
+    ],
+    "requirements": [
+      {
+        "day": "2026-11-12",
+        "instructions": "Thursday I only have 40 minutes.",
+        "maxMinutes": null
+      }
+    ]
+  },
+  "planRetired": {
+    "planId": "i100:p1",
+    "status": "retired",
+    "title": "Base block",
+    "goal": "endurance",
+    "startDay": "2026-11-09",
+    "endDay": "2026-12-20",
+    "phases": [
+      {
+        "focus": "base",
+        "startWeek": 1,
+        "endWeek": 4,
+        "summary": "Aerobic base"
+      },
+      {
+        "focus": "build",
+        "startWeek": 5,
+        "endWeek": 5,
+        "summary": "Longer tempo"
+      },
+      {
+        "focus": "recover",
+        "startWeek": 6,
+        "endWeek": 6,
+        "summary": "Absorb"
+      }
+    ],
+    "longRideWeekday": 1,
+    "event": null,
+    "sessions": [
+      {
+        "sessionId": "2026-11-10",
+        "day": "2026-11-10",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": {
+          "name": "Easy endurance",
+          "kind": "endurance",
+          "steps": [
+            {
+              "name": "65%",
+              "durationSeconds": 3600,
+              "startIntensity": 0.65,
+              "endIntensity": 0.65
+            }
+          ],
+          "rationale": "Typical HRV."
+        },
+        "externalId": "cadencia-i100-p1-2026-11-10"
+      },
+      {
+        "sessionId": "2026-11-12",
+        "day": "2026-11-13",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 40,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-12"
+      },
+      {
+        "sessionId": "2026-11-15",
+        "day": "2026-11-15",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-15"
+      },
+      {
+        "sessionId": "2026-11-17",
+        "day": "2026-11-17",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-17"
+      },
+      {
+        "sessionId": "2026-11-19",
+        "day": "2026-11-19",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-19"
+      },
+      {
+        "sessionId": "2026-11-22",
+        "day": "2026-11-22",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-22"
+      },
+      {
+        "sessionId": "2026-11-24",
+        "day": "2026-11-24",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-24"
+      },
+      {
+        "sessionId": "2026-11-26",
+        "day": "2026-11-26",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-26"
+      },
+      {
+        "sessionId": "2026-11-29",
+        "day": "2026-11-29",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-11-29"
+      },
+      {
+        "sessionId": "2026-12-01",
+        "day": "2026-12-01",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-01"
+      },
+      {
+        "sessionId": "2026-12-03",
+        "day": "2026-12-03",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-03"
+      },
+      {
+        "sessionId": "2026-12-06",
+        "day": "2026-12-06",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Aerobic base",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-06"
+      },
+      {
+        "sessionId": "2026-12-08",
+        "day": "2026-12-08",
+        "kind": "endurance",
+        "title": "Easy endurance",
+        "targetMinutes": 60,
+        "purpose": "Longer tempo",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-08"
+      },
+      {
+        "sessionId": "2026-12-10",
+        "day": "2026-12-10",
+        "kind": "tempo",
+        "title": "Sweet spot",
+        "targetMinutes": 60,
+        "purpose": "Longer tempo",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-10"
+      },
+      {
+        "sessionId": "2026-12-13",
+        "day": "2026-12-13",
+        "kind": "longRide",
+        "title": "Long ride",
+        "targetMinutes": 120,
+        "purpose": "Longer tempo",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-13"
+      },
+      {
+        "sessionId": "2026-12-15",
+        "day": "2026-12-15",
+        "kind": "recovery",
+        "title": "Recovery spin",
+        "targetMinutes": 40,
+        "purpose": "Absorb",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-15"
+      },
+      {
+        "sessionId": "2026-12-17",
+        "day": "2026-12-17",
+        "kind": "recovery",
+        "title": "Recovery spin",
+        "targetMinutes": 40,
+        "purpose": "Absorb",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-17"
+      },
+      {
+        "sessionId": "2026-12-20",
+        "day": "2026-12-20",
+        "kind": "recovery",
+        "title": "Recovery spin",
+        "targetMinutes": 80,
+        "purpose": "Absorb",
+        "status": "published",
+        "workout": null,
+        "externalId": "cadencia-i100-p1-2026-12-20"
+      }
+    ],
+    "requirements": [
+      {
+        "day": "2026-11-12",
+        "instructions": "Thursday I only have 40 minutes.",
+        "maxMinutes": null
+      }
+    ]
+  }
+}

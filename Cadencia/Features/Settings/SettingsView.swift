@@ -19,6 +19,14 @@ struct SettingsView: View {
                             Label("Intervals.icu", systemImage: "person.crop.circle")
                         }
                     }
+                    NavigationLink { CadenciaAccountView() } label: {
+                        LabeledContent {
+                            if model.isBackendConnected { Text("Signed in") }
+                            else if model.backendConfigured, model.isSignedIn { Text("Sign in").foregroundStyle(.orange) }
+                        } label: {
+                            Label("Cadencia", systemImage: "icloud")
+                        }
+                    }
                     NavigationLink { SyncView() } label: {
                         LabeledContent {
                             if !model.pendingUploads.isEmpty { Text("\(model.pendingUploads.count) pending") }
@@ -47,7 +55,7 @@ struct SettingsView: View {
                 } header: {
                     Text("About")
                 } information: {
-                    Text("Cadencia keeps Intervals.icu as the system of record. Nothing is stored on other servers.")
+                    Text("Cadencia keeps Intervals.icu as the system of record. Your plan and the coach's notes are kept on Cadencia's server in the EU; the coach's AI runs on this phone.")
                 }
             }
             .listStyle(.insetGrouped)
@@ -142,6 +150,57 @@ struct AccountView: View {
         case .oauth: return String(localized: "OAuth")
         case nil: return "–"
         }
+    }
+}
+
+/// The Cadencia sign-in: the plan, the coach's conversation and its decisions live on Cadencia's server,
+/// which the athlete reaches with their Intervals.icu account.
+struct CadenciaAccountView: View {
+    @Environment(AppModel.self) private var model
+    @State private var working = false
+    @State private var error: String?
+
+    var body: some View {
+        List {
+            InfoSection {
+                if model.isBackendConnected {
+                    LabeledContent("Athlete id", value: model.backendSession?.athleteID ?? "")
+                    Button("Sign out of Cadencia", role: .destructive) { model.signOutOfBackend() }
+                } else {
+                    Button {
+                        guard !working else { return }
+                        working = true
+                        Task {
+                            defer { working = false }
+                            do { try await model.signInToBackend(); error = nil }
+                            catch BackendSignIn.Failure.cancelled {}
+                            catch { self.error = error.localizedDescription }
+                        }
+                    } label: {
+                        HStack {
+                            Text("Sign in with Intervals.icu")
+                            Spacer()
+                            if working { ProgressView() }
+                        }
+                    }
+                    .disabled(working || !model.isSignedIn || !model.backendConfigured)
+                }
+                if let message = error ?? model.backendError {
+                    Text(verbatim: message).font(.subheadline).foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Cadencia")
+            } information: {
+                if model.backendConfigured {
+                    Text("Your plan, your conversation with the coach and its decisions are kept on Cadencia's server in the EU. Sign in with the same Intervals.icu account this app uses. The coach's AI still runs on this phone with your own plan or key.")
+                } else {
+                    Text("This build has no Cadencia server configured.")
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle("Cadencia")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

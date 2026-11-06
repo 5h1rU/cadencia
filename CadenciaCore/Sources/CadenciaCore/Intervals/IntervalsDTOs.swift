@@ -278,7 +278,7 @@ public enum PlanMirror {
     public static let sessionPrefix = "cadencia-ride-"
 
     public static func externalID(for day: Day) -> String { sessionPrefix + day.iso }
-    public static func externalID(for session: PlannedSession) -> String { externalID(for: session.day) }
+    public static func externalID(for session: PlannedSession) -> String { session.externalID ?? externalID(for: session.day) }
     /// Same as the external id, so a create with `upsertOnUid` also lands on the day's existing event.
     public static func uid(for session: PlannedSession) -> String { externalID(for: session) }
     static func legacyID(for session: PlannedSession) -> String { uidPrefix + session.id.uuidString.lowercased() }

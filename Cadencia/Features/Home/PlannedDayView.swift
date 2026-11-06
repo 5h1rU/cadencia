@@ -84,7 +84,7 @@ struct PlannedDayView: View {
 
 #Preview {
     NavigationStack {
-        PlannedDayView(day: PreviewData.state.today!.ai!.week[1])
+        PlannedDayView(day: PreviewData.week[1])
     }
     .environment(PreviewData.model())
 }

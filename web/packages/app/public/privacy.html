@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cadencia · Privacy Policy</title>
+    <style>
+      :root { --bg: #f4f5f2; --ink: #161a1d; --muted: #59636b; --line: #d8ddd9; --accent: #1c6f80; color-scheme: light; }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #121517; --ink: #e8ebe7; --muted: #a2aba6; --line: #30373a; --accent: #5fb7c8; color-scheme: dark; }
+      }
+      body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+      main { max-width: 68ch; margin: 0 auto; padding: 32px max(16px, env(safe-area-inset-left, 0px)) 64px; }
+      h1 { font-size: 1.8rem; margin: 0 0 4px; }
+      h2 { font-size: 1.15rem; margin: 32px 0 8px; }
+      p, li { margin: 0 0 10px; }
+      .muted { color: var(--muted); }
+      a { color: var(--accent); }
+      hr { border: 0; border-top: 1px solid var(--line); margin: 40px 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Cadencia Privacy Policy</h1>
+      <p class="muted">Last updated: 6 November 2026 · <a href="#es">Versión en español</a></p>
+
+      <p>Cadencia is an open-source cycling coach for iOS and the web, published under the GNU AGPL v3 at
+        <a href="https://github.com/5h1rU/cadencia">github.com/5h1rU/cadencia</a>. This policy explains what data
+        Cadencia handles, where it lives and how you can remove it. Contact: <a href="mailto:yo@felipejaner.com">yo@felipejaner.com</a>.</p>
+
+      <h2>Intervals.icu is where your training data lives</h2>
+      <p>You sign in with your Intervals.icu account. With your permission, Cadencia reads your activities, wellness
+        (such as HRV, resting heart rate, sleep, weight and how you feel), settings and calendar, and writes to it:
+        planned workouts on your calendar and wellness entries you make in Cadencia. That data stays in Intervals.icu
+        under its own privacy policy. Cadencia does not keep a copy of it.</p>
+
+      <h2>What Cadencia stores</h2>
+      <ul>
+        <li><strong>Your Intervals.icu access token</strong>, encrypted, so Cadencia can act on your calendar when you are
+          not using the app.</li>
+        <li><strong>Your coaching history:</strong> the intent of your training plan (goal, phases, purpose of each
+          session), your conversation with the coach, plan consultations, each day's decision and your rider profile.
+          Each decision keeps the summary of evidence it was based on, which can include readiness derived from your
+          wellness data.</li>
+        <li><strong>A session cookie</strong> that keeps you signed in. Cadencia uses no advertising or analytics cookies.</li>
+      </ul>
+      <p>This data is stored on Cloudflare (Workers, Durable Objects and D1) in the European Union jurisdiction.</p>
+
+      <h2>Artificial intelligence</h2>
+      <p>The AI coach runs only in the Cadencia iPhone app, with your own ChatGPT account through Sign in with ChatGPT.
+        To answer you, the app sends the relevant training context from your device to OpenAI under your account and
+        OpenAI's terms. Cadencia's servers never send your data to an AI provider. The web app needs no AI.</p>
+
+      <h2>Sharing</h2>
+      <p>Cadencia does not sell your data or share it with anyone for advertising. It reaches only the services that
+        make it work: Intervals.icu, Cloudflare for hosting, and OpenAI from your iPhone when you use the AI coach.</p>
+
+      <h2>Your choices and deletion</h2>
+      <ul>
+        <li>You can revoke Cadencia's access at any time in Intervals.icu, under Settings → Connections.</li>
+        <li>To delete everything Cadencia stores about you, write to <a href="mailto:yo@felipejaner.com">yo@felipejaner.com</a>
+          from the email of your Intervals.icu account. Your token and coaching history will be deleted within 30 days.</li>
+        <li>You may ask for a copy of your coaching history in the same way.</li>
+      </ul>
+
+      <h2>Changes</h2>
+      <p>Changes to this policy are published on this page and in the project's public repository.</p>
+
+      <hr />
+
+      <h1 id="es">Política de privacidad de Cadencia</h1>
+      <p class="muted">Última actualización: 6 de noviembre de 2026</p>
+
+      <p>Cadencia es un entrenador de ciclismo de código abierto para iOS y la web, publicado bajo la licencia GNU AGPL v3
+        en <a href="https://github.com/5h1rU/cadencia">github.com/5h1rU/cadencia</a>. Esta política explica qué datos
+        maneja Cadencia, dónde se guardan y cómo puedes eliminarlos. Contacto:
+        <a href="mailto:yo@felipejaner.com">yo@felipejaner.com</a>.</p>
+
+      <h2>Tus datos de entrenamiento viven en Intervals.icu</h2>
+      <p>Inicias sesión con tu cuenta de Intervals.icu. Con tu permiso, Cadencia lee tus actividades, tu bienestar (como
+        la VFC, el pulso en reposo, el sueño, el peso y cómo te sientes), tus ajustes y tu calendario, y escribe en él:
+        las sesiones planificadas en tu calendario y los registros de bienestar que haces en Cadencia. Esos datos siguen
+        en Intervals.icu, bajo su propia política de privacidad. Cadencia no guarda una copia.</p>
+
+      <h2>Qué guarda Cadencia</h2>
+      <ul>
+        <li><strong>Tu token de acceso a Intervals.icu</strong>, cifrado, para poder actuar en tu calendario cuando no
+          estás usando la app.</li>
+        <li><strong>Tu historial con el coach:</strong> la intención de tu plan (objetivo, fases, propósito de cada
+          sesión), tu conversación con el coach, las consultas del plan, la decisión de cada día y tu perfil de ciclista.
+          Cada decisión conserva el resumen de la evidencia en la que se basó, que puede incluir la readiness calculada a
+          partir de tu bienestar.</li>
+        <li><strong>Una cookie de sesión</strong> para mantenerte conectado. Cadencia no usa cookies de publicidad ni de
+          analítica.</li>
+      </ul>
+      <p>Estos datos se guardan en Cloudflare (Workers, Durable Objects y D1), en la jurisdicción de la Unión Europea.</p>
+
+      <h2>Inteligencia artificial</h2>
+      <p>El coach con IA funciona solo en la app de Cadencia para iPhone, con tu propia cuenta de ChatGPT mediante Sign in
+        with ChatGPT. Para responderte, la app envía desde tu dispositivo el contexto de entrenamiento necesario a OpenAI,
+        con tu cuenta y bajo los términos de OpenAI. Los servidores de Cadencia nunca envían tus datos a un proveedor de
+        IA. La web no necesita IA.</p>
+
+      <h2>Con quién se comparten</h2>
+      <p>Cadencia no vende tus datos ni los comparte con nadie con fines publicitarios. Solo llegan a los servicios que la
+        hacen funcionar: Intervals.icu, Cloudflare como alojamiento y, desde tu iPhone, OpenAI cuando usas el coach con IA.</p>
+
+      <h2>Tus opciones y la eliminación</h2>
+      <ul>
+        <li>Puedes retirar el acceso de Cadencia en cualquier momento en Intervals.icu, en Settings → Connections.</li>
+        <li>Para eliminar todo lo que Cadencia guarda sobre ti, escribe a
+          <a href="mailto:yo@felipejaner.com">yo@felipejaner.com</a> desde el email de tu cuenta de Intervals.icu. Tu
+          token y tu historial con el coach se eliminarán en un plazo de 30 días.</li>
+        <li>Puedes pedir una copia de tu historial con el coach de la misma forma.</li>
+      </ul>
+
+      <h2>Cambios</h2>
+      <p>Los cambios a esta política se publican en esta página y en el repositorio público del proyecto.</p>
+    </main>
+  </body>
+</html>

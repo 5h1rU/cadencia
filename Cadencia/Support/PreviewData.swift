@@ -39,6 +39,7 @@ enum PreviewData {
         let event = TrainingEvent(name: "Gran Fondo Andes", day: today.adding(days: 47), distanceKm: 140, priority: .a, objective: "finish strong", isRace: false)
         var plan = PlanBuilder().build(.init(goal: .event, startDay: today.startOfWeek(), endDay: event.day, event: event, availability: .typical, currentCTL: 62))
         plan.isActive = true
+        plan.backendID = "i12345:preview"
         return plan
     }
 
@@ -62,7 +63,27 @@ enum PreviewData {
             WorkoutStep(name: "Sweet spot", duration: 720, intensity: 0.9, cadenceRPM: 90),
             WorkoutStep(name: "Vuelta a la calma", duration: 360, startIntensity: 0.6, endIntensity: 0.4),
         ], intensityCeiling: 0.95, rationale: "Tres bloques de 12 min al 90 % (216 W) para seguir construyendo umbral sin comprometer la salida larga del sábado.")
-        let week: [DailyPrescription.DayOutlook] = [
+        s.today = .init(day: today, workout: workout, readiness: readiness,
+                        note: CoachNote(headline: "Buen día para apretar un poco",
+                                        body: "Dormiste 7,2 horas y tu recuperación está en su rango habitual; la carga de la semana pasada ya está absorbida.",
+                                        session: "Una hora de sweet spot en tres bloques de 12 minutos a unos 210 W: suficiente para construir sin dejarte vacío para el sábado.",
+                                        watch: "Si las piernas van pesadas en el segundo bloque, corta el tercero."),
+                        model: "gpt-6-astra", decidedAt: Date(), aiFingerprint: "preview")
+        let at = ISO8601DateFormatter().string(from: Date())
+        s.coachThread = .init(CadenciaAPI.ConversationThreadState(messages: [
+            .init(messageId: "m1", role: .athlete, text: "El sábado tengo una salida larga de 120 km, y el jueves solo tengo 45 minutos.", at: at),
+            .init(messageId: "m2", role: .coach, text: "Entendido: salida larga el sábado y jueves corto.", at: at,
+                  intent: .init(planId: "i12345:preview", summary: "Jueves corto",
+                                limits: [.init(day: today.adding(days: 3).iso, maxMinutes: 45, unavailable: false)]),
+                  intentStatus: .proposed, model: "gpt-6-astra"),
+        ]))
+        s.lastSyncAt = Date().addingTimeInterval(-600)
+        return s
+    }
+
+    /// The coming week as the Home screen lists it.
+    static var week: [DailyPrescription.DayOutlook] {
+        [
             .init(day: today, kind: .tempo, minutes: 60, title: "Sweet spot 3×12"),
             .init(day: today.adding(days: 1), kind: .recovery, minutes: 45, title: "Rodaje suave"),
             .init(day: today.adding(days: 2), kind: .endurance, minutes: 90, title: "Z2"),
@@ -71,21 +92,6 @@ enum PreviewData {
             .init(day: today.adding(days: 5), kind: .longRide, minutes: 240, title: "Salida larga 120 km"),
             .init(day: today.adding(days: 6), kind: .recovery, minutes: 40, title: "Rodaje suave"),
         ]
-        let ai = DailyPrescription(readiness: readiness, workout: workout, week: week,
-                                   note: CoachNote(headline: "Buen día para apretar un poco",
-                                                   body: "Dormiste 7,2 horas y tu recuperación está en su rango habitual; la carga de la semana pasada ya está absorbida.",
-                                                   session: "Una hora de sweet spot en tres bloques de 12 minutos a unos 210 W: suficiente para construir sin dejarte vacío para el sábado.",
-                                                   watch: "Si las piernas van pesadas en el segundo bloque, corta el tercero."),
-                                   flags: [], model: "gpt-6-astra")
-        s.today = .init(day: today, workout: workout, readiness: readiness, ai: ai, aiFingerprint: "preview")
-        s.coachMessages = [
-            .init(role: .athlete, text: "El sábado tengo una salida larga de 120 km, y el jueves solo tengo 45 minutos."),
-            .init(role: .coach, text: "Entendido: salida larga el sábado y jueves corto.",
-                  intent: CoachIntent(event: TrainingEvent(name: "Salida larga", day: today.adding(days: 5), distanceKm: 120, priority: .b),
-                                      constraints: [.init(day: today.adding(days: 3), maxMinutes: 45)], reply: "Entendido")),
-        ]
-        s.lastSyncAt = Date().addingTimeInterval(-600)
-        return s
     }
 
     static var ride: RideRecording {
@@ -148,12 +154,10 @@ enum PreviewData {
         s.cyclistProfileAutomaticAttemptedAt = Date()
         s.plan?.event = TrainingEvent(name: "Weekend group ride", day: today.adding(days: 5),
                                      distanceKm: 120, priority: .b, objective: "Finish strong")
-        if let week = s.today?.ai?.week {
-            s.plan?.sessions = week.map {
-                PlannedSession(day: $0.day, kind: $0.kind, title: $0.title, targetMinutes: $0.minutes)
-            }
+        s.plan?.sessions = week.filter { $0.kind != .rest }.map {
+            PlannedSession(day: $0.day, kind: $0.kind, title: $0.title, targetMinutes: $0.minutes,
+                           note: $0.day == today.adding(days: 1) ? "Keep the effort easy and comfortable after today's sweet spot session." : nil)
         }
-        s.today?.ai?.week[1].note = "Keep the effort easy and comfortable after today's sweet spot session."
         let store = JSONStore.temporary()
         if ProcessInfo.processInfo.arguments.contains("--cadencia-preview-last-session") {
             var ride = debriefedRide
@@ -182,8 +186,9 @@ enum PreviewData {
         var r = debriefedRide
         r.startedAt = today.date().addingTimeInterval(10 * 3600)
         r.endedAt = r.startedAt.addingTimeInterval(3600)
-        s.today?.workout = r.workout
-        s.attachTodayWorkout(r.workout, day: today)
+        if let current = s.today {
+            s.takeDecision(workout: r.workout, readiness: current.readiness, note: current.note, model: current.model, day: today, ftp: 240)
+        }
         r.plannedSessionID = s.session(on: today)?.id
         r.debriefNote = IntervalsActivityNote(id: 42, content: r.debrief!.noteContent)
         s.completeSession(for: r)

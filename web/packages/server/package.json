@@ -7,7 +7,8 @@
   "exports": { "./*": "./src/*.ts" },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p .",
+    "ios-client": "node scripts/openapi.ts ../../../CadenciaCore/OpenAPI/openapi.json && node scripts/swift.ts ../../../CadenciaCore/OpenAPI/openapi.json ../../../CadenciaCore/Sources/CadenciaCore/Backend/CadenciaAPI.generated.swift"
   },
   "dependencies": {
     "@alchemy.run/cloudflare": "2.0.0-beta.85",

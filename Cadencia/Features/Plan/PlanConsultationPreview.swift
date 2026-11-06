@@ -32,16 +32,27 @@ struct PlanConsultationPreview: View {
             review: empty ? String(localized: "Let’s get to know your riding.") :
                 String(localized: "Your recent rides give us a starting point. We can fill in the missing details as we talk."),
             question: String(localized: "What other training would you like to include?"), topic: .otherTraining)
-        state.planConsultation = session
+        state.consultation = .init(id: "i12345:preview", startedOn: session.startedOn,
+                                   view: .init(.init(stage: .open, turns: [.init(role: .coach, text: session.reply!.question)])))
         let transport = ConsultationPreviewTransport()
         let coach = LLMCoach(transport: transport, endpoint: URL(string: "https://example.invalid/chat/completions")!, apiKey: "preview")
-        return AppModel(state: state, credential: .apiKey("preview"), store: .temporary(), keychain: KeychainStore(service: "preview.consultation"),
-                        transport: transport, coachOverride: coach)
+        let backend = CoachBackend(api: CadenciaAPI(baseURL: URL(string: "https://cadencia.invalid")!, transport: transport, sessionToken: "preview"),
+                                   athleteId: state.athlete?.id ?? "i12345", pause: { _ in })
+        let model = AppModel(state: state, credential: .apiKey("preview"), store: .temporary(), keychain: KeychainStore(service: "preview.consultation"),
+                             transport: transport, coachOverride: coach, backendOverride: backend)
+        model.previewConsultationReply(session.reply!)
+        return model
     }
 }
 
 private struct ConsultationPreviewTransport: HTTPTransport {
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        // Cadencia's backend: every command is recorded, and the consultation stays open.
+        if request.url.path.hasPrefix("/v1/") {
+            if request.method == .post { return HTTPResponse(status: 200, body: Data(#"{"reply":null,"stream":"preview","version":1}"#.utf8)) }
+            let open = #"{"stage":"open","turns":[],"draft":null,"planId":null,"refusal":null}"#
+            return HTTPResponse(status: 200, body: Data((request.url.path.hasPrefix("/v1/ConsultationView/") ? open : "null").utf8))
+        }
         guard request.url.path.hasSuffix("chat/completions") else { throw HTTPError.invalidResponse }
         let today = Day(Date())
         let reply = PlanConsultation.Reply(

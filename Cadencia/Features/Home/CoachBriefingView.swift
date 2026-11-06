@@ -8,7 +8,11 @@ struct CoachBriefingView: View {
     /// coach is connected, and a link leaving the screen would pop Settings (and the ChatGPT welcome sheet).
     @State private var showsCoachSettings = false
 
-    private var ai: DailyPrescription? { model.state.today?.day == model.today ? model.state.today?.ai : nil }
+    /// Today's decision, once the coach has made one (and the plan accepted it, when there is a plan).
+    private var decided: AppState.TodayState? {
+        guard let today = model.state.today, today.day == model.today, today.model != nil else { return nil }
+        return today
+    }
 
     /// A daily decision or a chat reply is running. A tap now would only be queued until it ends, so the
     /// ask buttons wait, as Coach's apply buttons do.
@@ -43,7 +47,7 @@ struct CoachBriefingView: View {
                 }
             }
         } else {
-            InfoSection(hasInformation: ai != nil) {
+            InfoSection(hasInformation: decided != nil) {
                 if !model.aiCoachAvailable {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Connect your coach", systemImage: "sparkles").font(.headline)
@@ -54,7 +58,7 @@ struct CoachBriefingView: View {
                     Button { showsCoachSettings = true } label: {
                         Label("Set up the coach", systemImage: "arrow.right.circle")
                     }
-                } else if let ai, let readiness = model.readiness {
+                } else if decided != nil, let readiness = model.readiness {
                     VStack(alignment: .leading, spacing: 20) {
                         VStack(alignment: .leading, spacing: 8) {
                             if let headline = model.coachNote?.headline, !headline.isEmpty {
@@ -80,9 +84,6 @@ struct CoachBriefingView: View {
                                 if let watch = note.watch {
                                     notePart("Keep in mind", text: watch)
                                 }
-                            }
-                            ForEach(ai.flags, id: \.self) { flag in
-                                Label(flagText(flag), systemImage: "flag").font(.footnote).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -118,8 +119,8 @@ struct CoachBriefingView: View {
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 8)
             } information: {
-                if let ai {
-                    Text("Decided \(ai.generatedAt.formatted(date: .omitted, time: .shortened)) from your recovery, load, power and plan. Every number was range-checked before it reached the trainer.")
+                if let at = decided?.decidedAt {
+                    Text("Decided \(at.formatted(date: .omitted, time: .shortened)) from your recovery, load, power and plan. Every number was range-checked before it reached the trainer.")
                 }
             }
         }
