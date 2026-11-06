@@ -84,3 +84,9 @@ After recording on the head unit, bring the activity into Intervals.icu. Garmin 
 Imported head-unit rides get stable local ids and are never enqueued for upload or written to Health again. Opening an outdoor ride automatically downloads its recorded GPX through the official Intervals activity export, analyzes climbs, and caches the result in that ride's JSON. Provider restrictions or missing GPS show retry and manual recorded-GPX import controls; a planned course never substitutes for actual GPS. Explicitly paired sessions enter the existing automatic coach-debrief flow; free rides can request a debrief on demand. The coach uses Intervals analysis and actual activity totals; missing phone samples do not become fabricated block-compliance measurements.
 
 Core tests cover target ceilings, FTP changes, revision invalidation, older JSON, explicit activity pairing, account-specific stable import ids, outdoor calendar writes, exact-event FIT selection, malformed exports and external-ride debrief inputs. Hardware delivery, provider account setup and Magene outdoor behavior remain unverified on physical devices.
+
+## License
+
+Copyright (C) 2026 Felipe Janer
+
+Cadencia is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but without any warranty; see the [LICENSE](LICENSE) file for details.
