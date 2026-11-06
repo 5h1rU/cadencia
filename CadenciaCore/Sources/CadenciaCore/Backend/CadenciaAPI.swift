@@ -24,6 +24,35 @@ public struct CadenciaAPI: Sendable {
         public init() {}
     }
 
+    // MARK: Brands
+
+    /// A value of one of the domain's brands (`PlanId`, `Day`, `Minutes`, `Title`, …), generated with the
+    /// same pattern, length or range the backend checks. `init?(rawValue:)` and decoding refuse anything
+    /// else, so a value of this type is one the domain accepts. On the wire it is its raw value.
+    public protocol Branded: RawRepresentable, Codable, Hashable, Sendable, CustomStringConvertible
+        where RawValue: Codable & Hashable & Sendable {
+        static func accepts(_ value: RawValue) -> Bool
+    }
+
+    /// A brand of text: trimmed, not blank, and at most `maxLength` UTF-16 code units (JavaScript's length).
+    public protocol BoundedText: Branded where RawValue == String {
+        static var maxLength: Int { get }
+    }
+
+    /// A value outside its brand: the domain would refuse it.
+    public struct InvalidValue: Error, Equatable, Sendable, CustomStringConvertible {
+        public let brand: String
+        public let value: String
+
+        public var description: String { "\(value.prefix(80)) is not a valid \(brand)" }
+    }
+
+    /// Whether all of `value` matches `pattern`, as JavaScript reads it: `\d` is an ASCII digit.
+    static func matches(_ value: String, _ pattern: String) -> Bool {
+        guard let regex = try? Regex(pattern).asciiOnlyDigits() else { return false }
+        return (try? regex.wholeMatch(in: value)) != nil
+    }
+
     // MARK: Sign-in
 
     /// The callback Cadencia iOS registers: the server redirects there with `?handoff=…`.
@@ -139,6 +168,47 @@ public struct CadenciaAPI: Sendable {
         }
         guard !response.isSuccess else { return response }
         throw CadenciaAPIError(status: response.status, body: response.body)
+    }
+}
+
+extension CadenciaAPI.Branded {
+    /// `value` as this brand, or `InvalidValue` when the domain would refuse it.
+    public init(_ value: RawValue) throws {
+        guard let branded = Self(rawValue: value) else {
+            throw CadenciaAPI.InvalidValue(brand: String(describing: Self.self), value: String(describing: value))
+        }
+        self = branded
+    }
+
+    public var description: String { String(describing: rawValue) }
+}
+
+extension CadenciaAPI.BoundedText {
+    /// What someone wrote, without the whitespace around it. Throws when it is blank or longer than the brand allows.
+    public init(text: String) throws {
+        try self.init(text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// Text the AI wrote, without the whitespace around it and shortened with "…" to the brand's length.
+    /// Throws only when it is blank.
+    public init(fitting text: String) throws {
+        var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.utf16.count > Self.maxLength {
+            var kept = "", length = 0
+            for character in value {
+                length += character.utf16.count
+                guard length < Self.maxLength else { break } // room for the "…"
+                kept.append(character)
+            }
+            value = kept.trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+        }
+        try self.init(value)
+    }
+
+    /// `init(fitting:)`, or nil when there is no text.
+    public static func fitting(_ text: String?) throws -> Self? {
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return try Self(fitting: text)
     }
 }
 

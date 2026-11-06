@@ -1,13 +1,22 @@
 import * as Schema from "effect/Schema";
 
-/** A calendar day in the athlete's own time zone, as `YYYY-MM-DD`. */
+const isCalendarDay = (text: string): boolean => {
+  const date = new Date(`${text}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === text;
+};
+
+/** A calendar day that exists, in the athlete's own time zone, as `YYYY-MM-DD`. */
 export const Day = Schema.String.pipe(
-  Schema.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/)),
+  Schema.check(
+    Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/),
+    Schema.makeFilter((text: string) => (isCalendarDay(text) ? undefined : "a calendar day that exists")),
+  ),
   Schema.brand("Day"),
 );
 export type Day = typeof Day.Type;
 
-const toUtc = (day: Day): Date => new Date(`${day}T00:00:00Z`);
+/** Midnight UTC of a day, for arithmetic. */
+export const toUtc = (day: Day): Date => new Date(`${day}T00:00:00Z`);
 const fromUtc = (date: Date): Day => Day.make(date.toISOString().slice(0, 10));
 
 /** The day `n` days after `day` (before it when `n` is negative). */
@@ -20,6 +29,3 @@ export const addDays = (day: Day, n: number): Day => {
 /** Whole days from `from` to `to`. */
 export const daysBetween = (from: Day, to: Day): number =>
   Math.round((toUtc(to).getTime() - toUtc(from).getTime()) / 86_400_000);
-
-/** The weekday, numbered as Intervals and Cadencia iOS number it: 1 = Sunday … 7 = Saturday. */
-export const weekdayOf = (day: Day): number => toUtc(day).getUTCDay() + 1;

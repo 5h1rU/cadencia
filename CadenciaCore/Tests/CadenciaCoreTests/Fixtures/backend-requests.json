@@ -3,16 +3,16 @@
     "acceptDraft" : {
       "body" : {
         "input" : {
-          "planId" : "i100:p1"
+          "planId" : "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f"
         },
-        "target" : "i100:c1"
+        "target" : "i100:c0ffee00-1234-4abc-9def-0123456789ab"
       },
       "command" : "AcceptDraft"
     },
     "acceptIntent" : {
       "body" : {
         "input" : {
-          "messageId" : "m2"
+          "messageId" : "00000000-0000-4000-8000-000000000002"
         },
         "target" : "i100:2026-11"
       },
@@ -23,14 +23,14 @@
         "input" : {
           "text" : "Six weeks of base, three rides a week."
         },
-        "target" : "i100:c1"
+        "target" : "i100:c0ffee00-1234-4abc-9def-0123456789ab"
       },
       "command" : "AnswerQuestion"
     },
     "dismissIntent" : {
       "body" : {
         "input" : {
-          "messageId" : "m6"
+          "messageId" : "00000000-0000-4000-8000-000000000006"
         },
         "target" : "i100:2026-11"
       },
@@ -42,7 +42,7 @@
           "sessionId" : "2026-11-12",
           "toDay" : "2026-11-13"
         },
-        "target" : "i100:p1"
+        "target" : "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f"
       },
       "command" : "MoveSession"
     },
@@ -53,14 +53,14 @@
           "model" : "gpt-5.5",
           "text" : "What should your riding feel like?"
         },
-        "target" : "i100:c1"
+        "target" : "i100:c0ffee00-1234-4abc-9def-0123456789ab"
       },
       "command" : "RecordCoachQuestion"
     },
     "recordCoachReplyAway" : {
       "body" : {
         "input" : {
-          "inReplyTo" : "m5",
+          "inReplyTo" : "00000000-0000-4000-8000-000000000005",
           "intent" : {
             "limits" : [
               {
@@ -69,11 +69,11 @@
                 "unavailable" : true
               }
             ],
-            "planId" : "i100:p1",
+            "planId" : "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
             "summary" : "Saturday off, then."
           },
           "interpretedOn" : "ios",
-          "messageId" : "m6",
+          "messageId" : "00000000-0000-4000-8000-000000000006",
           "model" : "gpt-5.5",
           "text" : "Saturday off, then."
         },
@@ -84,7 +84,7 @@
     "recordCoachReplyWithIntent" : {
       "body" : {
         "input" : {
-          "inReplyTo" : "m1",
+          "inReplyTo" : "00000000-0000-4000-8000-000000000001",
           "intent" : {
             "limits" : [
               {
@@ -93,11 +93,11 @@
                 "unavailable" : false
               }
             ],
-            "planId" : "i100:p1",
+            "planId" : "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
             "summary" : "I'll shorten Thursday to 40 minutes."
           },
           "interpretedOn" : "ios",
-          "messageId" : "m2",
+          "messageId" : "00000000-0000-4000-8000-000000000002",
           "model" : "gpt-5.5",
           "text" : "I'll shorten Thursday to 40 minutes."
         },
@@ -108,10 +108,10 @@
     "recordCoachReplyWithoutIntent" : {
       "body" : {
         "input" : {
-          "inReplyTo" : "m3",
+          "inReplyTo" : "00000000-0000-4000-8000-000000000003",
           "intent" : null,
           "interpretedOn" : "ios",
-          "messageId" : "m4",
+          "messageId" : "00000000-0000-4000-8000-000000000004",
           "model" : "gpt-5.5",
           "text" : "You're welcome."
         },
@@ -176,7 +176,7 @@
             "eventDays" : [
 
             ],
-            "fingerprint" : "fp-1",
+            "fingerprint" : "1111111111111111111111111111111111111111111111111111111111111111",
             "readiness" : {
               "level" : "normal",
               "score" : 62,
@@ -191,13 +191,15 @@
             "session" : "One hour in Z2.",
             "watch" : null
           },
-          "planId" : "i100:p1",
+          "planId" : "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
           "workout" : {
+            "intensityCeiling" : null,
             "kind" : "endurance",
             "name" : "Easy endurance",
             "rationale" : "Typical HRV.",
             "steps" : [
               {
+                "cadenceRpm" : null,
                 "durationSeconds" : 3600,
                 "endIntensity" : 0.65000000000000002,
                 "name" : "65%",
@@ -267,7 +269,7 @@
             "eventDays" : [
 
             ],
-            "fingerprint" : "fp-1",
+            "fingerprint" : "1111111111111111111111111111111111111111111111111111111111111111",
             "readiness" : {
               "level" : "normal",
               "score" : 62,
@@ -282,26 +284,29 @@
             "session" : "One hour in Z2.",
             "watch" : null
           },
-          "planId" : "i100:p1",
+          "planId" : "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
           "workout" : {
             "intensityCeiling" : 1,
             "kind" : "threshold",
             "name" : "Threshold",
-            "rationale" : "",
+            "rationale" : null,
             "steps" : [
               {
+                "cadenceRpm" : null,
                 "durationSeconds" : 900,
                 "endIntensity" : 0.59999999999999998,
                 "name" : "60%",
                 "startIntensity" : 0.59999999999999998
               },
               {
+                "cadenceRpm" : null,
                 "durationSeconds" : 1800,
                 "endIntensity" : 0.97999999999999998,
                 "name" : "98%",
                 "startIntensity" : 0.97999999999999998
               },
               {
+                "cadenceRpm" : null,
                 "durationSeconds" : 900,
                 "endIntensity" : 0.55000000000000004,
                 "name" : "55%",
@@ -321,7 +326,7 @@
           "instructions" : "Thursday I only have 40 minutes.",
           "maxMinutes" : null
         },
-        "target" : "i100:p1"
+        "target" : "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f"
       },
       "command" : "RecordDayRequirement"
     },
@@ -490,7 +495,7 @@
           "interpretedOn" : "ios",
           "model" : "gpt-5.5"
         },
-        "target" : "i100:c1"
+        "target" : "i100:c0ffee00-1234-4abc-9def-0123456789ab"
       },
       "command" : "RecordDraft"
     },
@@ -539,14 +544,14 @@
         "input" : {
 
         },
-        "target" : "i100:p1"
+        "target" : "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f"
       },
       "command" : "RetirePlan"
     },
     "sendMessage" : {
       "body" : {
         "input" : {
-          "messageId" : "m1",
+          "messageId" : "00000000-0000-4000-8000-000000000001",
           "text" : "Thursday I only have 40 minutes."
         },
         "target" : "i100:2026-11"
@@ -556,7 +561,7 @@
     "sendMessageAway" : {
       "body" : {
         "input" : {
-          "messageId" : "m5",
+          "messageId" : "00000000-0000-4000-8000-000000000005",
           "text" : "Saturday I'm away."
         },
         "target" : "i100:2026-11"
@@ -566,7 +571,7 @@
     "sendMessageThanks" : {
       "body" : {
         "input" : {
-          "messageId" : "m3",
+          "messageId" : "00000000-0000-4000-8000-000000000003",
           "text" : "Thanks!"
         },
         "target" : "i100:2026-11"
@@ -578,7 +583,7 @@
         "input" : {
 
         },
-        "target" : "i100:c1"
+        "target" : "i100:c0ffee00-1234-4abc-9def-0123456789ab"
       },
       "command" : "StartConsultation"
     }

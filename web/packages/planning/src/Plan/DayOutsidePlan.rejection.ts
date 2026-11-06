@@ -1,4 +1,4 @@
-import { Day } from "@cadencia/kernel/Day";
+import { Day } from "@cadencia/kernel/Calendar/Day";
 import * as Domain from "@alchemy.run/domain";
 
 /** The day is outside the plan's dates. */

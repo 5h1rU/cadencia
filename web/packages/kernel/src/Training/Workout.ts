@@ -1,27 +1,27 @@
 import * as Schema from "effect/Schema";
 import { SessionKind } from "./SessionKind.ts";
-
-/** Fraction of FTP: 0.65 is 65 %. */
-export const Intensity = Schema.Number.pipe(Schema.check(Schema.isBetween({ minimum: 0, maximum: 3 })));
+import { Paragraph, Title } from "../Text.ts";
+import { CadenceRpm, FtpFraction, Seconds } from "./Units.ts";
 
 /** One block of a structured workout. A ramp has different start and end intensities. */
 export const WorkoutStep = Schema.Struct({
-  name: Schema.String,
-  durationSeconds: Schema.Number.pipe(Schema.check(Schema.isGreaterThan(0))),
-  startIntensity: Intensity,
-  endIntensity: Intensity,
-  cadenceRpm: Schema.optional(Schema.Int),
+  name: Title,
+  durationSeconds: Seconds.pipe(Schema.check(Schema.isGreaterThan(0))),
+  startIntensity: FtpFraction,
+  endIntensity: FtpFraction,
+  cadenceRpm: Schema.NullOr(CadenceRpm),
 });
 export type WorkoutStep = typeof WorkoutStep.Type;
 
 /** A trainer-ready session: its purpose and its blocks. */
 export const Workout = Schema.Struct({
-  name: Schema.String,
+  name: Title,
   kind: SessionKind,
   steps: Schema.Array(WorkoutStep),
-  /** Hard ceiling for the whole session as a fraction of FTP. */
-  intensityCeiling: Schema.optional(Intensity),
-  rationale: Schema.String,
+  /** Hard ceiling for the whole session; the trainer never targets above it. */
+  intensityCeiling: Schema.NullOr(FtpFraction),
+  /** Why this workout, when the coach said why. */
+  rationale: Schema.NullOr(Paragraph),
 });
 export type Workout = typeof Workout.Type;
 
@@ -31,5 +31,5 @@ export const totalSeconds = (workout: Workout): number =>
 export const totalMinutes = (workout: Workout): number => totalSeconds(workout) / 60;
 
 /** The highest intensity any block reaches. */
-export const peakIntensity = (workout: Workout): number =>
-  workout.steps.reduce((peak, step) => Math.max(peak, step.startIntensity, step.endIntensity), 0);
+export const peakIntensity = (workout: Workout): FtpFraction =>
+  FtpFraction.make(workout.steps.reduce((peak, step) => Math.max(peak, step.startIntensity, step.endIntensity), 0));

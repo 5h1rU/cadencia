@@ -1,25 +1,33 @@
+import { EvidenceSnapshot } from "@cadencia/athlete/Evidence";
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
 import { CoachDeviceApi } from "@cadencia/coach/CoachDeviceApi.api";
-import type { PlanDraft } from "@cadencia/coach/Consultation/PlanDraft";
-import { DailyDecisionId } from "@cadencia/coach/DailyDecision/DailyDecision.id";
-import { ConsultationId } from "@cadencia/coach/Consultation/Consultation.id";
-import { athlete } from "@cadencia/kernel/Actor";
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { Day } from "@cadencia/kernel/Day";
-import { type EvidenceSnapshot, Fingerprint } from "@cadencia/kernel/Evidence";
-import type { Workout } from "@cadencia/kernel/Workout";
+import { CoachNote } from "@cadencia/coach/CoachShape";
+import { ModelName } from "@cadencia/coach/CoachText";
+import { consultationIdFor } from "@cadencia/coach/Consultation/Consultation.id";
+import { PlanDraft } from "@cadencia/coach/Consultation/PlanDraft";
+import { dailyDecisionIdFor } from "@cadencia/coach/DailyDecision/DailyDecision.id";
+import { Planner, requestFor } from "@cadencia/coach/Planner.external";
+import { athlete } from "@cadencia/identity/Actor";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { Day } from "@cadencia/kernel/Calendar/Day";
+import { EntityKey } from "@cadencia/kernel/EntityKey";
+import { planIdFor } from "@cadencia/kernel/Plan.id";
+import { Workout, WorkoutStep } from "@cadencia/kernel/Training/Workout";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
 import { Calendar } from "@cadencia/planning/Plan/Calendar.external";
+import { PlannedSession } from "@cadencia/planning/Plan/PlanShape";
+import { IntervalsEventId } from "@cadencia/planning/Plan/Session.id";
 import * as Domain from "@alchemy.run/domain";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
+import { CoachHosted, overCoach, overPlanning, PlanningHosted } from "../src/Hosting.ts";
 import { changeOf } from "../src/Intervals/ChangeSync.ts";
 import { calendarEntry } from "../src/Intervals/IntervalsCalendar.ts";
 import { workoutText } from "../src/Intervals/WorkoutText.ts";
-import { CoachHosted, overCoach, overPlanning, PlanningHosted } from "../src/Hosting.ts";
 import { PlanningPlanner } from "../src/Planner.ts";
 import { SessionLive } from "../src/Session.ts";
 import { SessionKeyTest, signedInAs } from "./session.ts";
@@ -31,7 +39,7 @@ const FakeCalendar = Calendar.toLayer(
     publishSession: ({ session }) =>
       Effect.sync(() => {
         published.push(`${session.day} ${session.kind} ${session.status}`);
-        return { eventId: published.length };
+        return { eventId: IntervalsEventId.make(published.length) };
       }),
     withdrawSession: () => Effect.succeed({ withdrawn: true }),
   }),
@@ -56,35 +64,43 @@ const device = (who = ana) => overCoach(CoachDeviceApi.clientInProcess).pipe(Eff
 const coach = (who = ana) => overCoach(AthleteCoachApi.clientInProcess).pipe(Effect.provide(signedInAs(who)));
 const planning = (who = ana) => overPlanning(AthletePlanningApi.clientInProcess).pipe(Effect.provide(signedInAs(who)));
 
-const monday = Day.make("2026-11-09");
-const draft: PlanDraft = {
-  athleteId: anaId,
+const monday = Schema.decodeUnknownSync(Day)("2026-11-09");
+const planId = planIdFor(anaId, EntityKey.make("0b6f5a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b"));
+const consultation = consultationIdFor(anaId, EntityKey.make("7c9e6679-7425-40de-944b-e07fc1f90ae7"));
+const decision = dailyDecisionIdFor(anaId, monday);
+const model = ModelName.make("gpt-5.5");
+
+const draft = Schema.decodeUnknownSync(PlanDraft)({
+  athleteId: "i100",
   title: "Base block",
   goal: "endurance",
   objective: "Build an aerobic base",
   rationale: "Six weeks of easy volume.",
-  startDay: monday,
-  endDay: Day.make("2026-12-20"),
+  startDay: "2026-11-09",
+  endDay: "2026-12-20",
   phases: [{ focus: "base", startWeek: 1, endWeek: 6, summary: "Aerobic base" }],
   longRideWeekday: 7,
   event: null,
-  sessions: [{ day: monday, kind: "endurance", title: "Easy endurance", targetMinutes: 60, purpose: "Aerobic base" }],
-};
-const evidence: EvidenceSnapshot = {
-  fingerprint: Fingerprint.make("fp-1"),
+  sessions: [{ day: "2026-11-09", kind: "endurance", title: "Easy endurance", targetMinutes: 60, purpose: "Aerobic base" }],
+});
+const evidence = Schema.decodeUnknownSync(EvidenceSnapshot)({
+  fingerprint: "b".repeat(64),
   readiness: { level: "normal", score: 62, summary: "Typical HRV and sleep." },
   days: [],
   eventDays: [],
-};
-const steady = (minutes: number, intensity: number) => ({
-  name: `${Math.round(intensity * 100)}%`,
-  durationSeconds: minutes * 60,
-  startIntensity: intensity,
-  endIntensity: intensity,
 });
-const intervals: Workout = { name: "Threshold", kind: "threshold", steps: [steady(15, 0.6), steady(30, 0.98), steady(15, 0.55)], rationale: "" };
-const easy: Workout = { name: "Easy endurance", kind: "endurance", steps: [steady(60, 0.65)], rationale: "Typical HRV." };
-const note = { headline: "Easy endurance", body: "Ready.", session: "One hour in Z2.", watch: null };
+const steady = (minutes: number, intensity: number, endIntensity = intensity) =>
+  Schema.decodeUnknownSync(WorkoutStep)({
+    name: `${Math.round(intensity * 100)}%`,
+    durationSeconds: minutes * 60,
+    startIntensity: intensity,
+    endIntensity,
+    cadenceRpm: null,
+  });
+const workout = Schema.decodeUnknownSync(Workout);
+const intervals = workout({ name: "Threshold", kind: "threshold", steps: [steady(15, 0.6), steady(30, 0.98), steady(15, 0.55)], intensityCeiling: null, rationale: null });
+const easy = workout({ name: "Easy endurance", kind: "endurance", steps: [steady(60, 0.65)], intensityCeiling: null, rationale: "Typical HRV." });
+const note = Schema.decodeUnknownSync(CoachNote)({ headline: "Easy endurance", body: "Ready.", session: "One hour in Z2.", watch: null });
 
 const until = <A>(stream: Stream.Stream<{ readonly state: A | null }, unknown>, done: (a: A) => boolean) =>
   stream.pipe(
@@ -94,14 +110,42 @@ const until = <A>(stream: Stream.Stream<{ readonly state: A | null }, unknown>, 
   );
 
 describe("Cadencia: iOS runs the AI, the backend records it and the plan decides", () => {
+  it.live("a policy that runs again gets the same answer, and the plan changes once", () =>
+    inCadencia(
+      Effect.gen(function* () {
+        const planner = yield* Planner;
+        const accepted = { _tag: "Accepted" };
+
+        // The consultation's policy runs twice for the same DraftAccepted.
+        const creation = requestFor({ stream: `Consultation/${consultation}`, seq: 4 });
+        expect((yield* planner.createPlan({ requestId: creation, planId, draft })).answer).toEqual(accepted);
+        expect((yield* planner.createPlan({ requestId: creation, planId, draft })).answer).toEqual(accepted);
+        // A different request for the same plan is a second plan, which Planning refuses.
+        const another = requestFor({ stream: `Consultation/${consultation}`, seq: 9 });
+        expect((yield* planner.createPlan({ requestId: another, planId, draft })).answer).toMatchObject({
+          _tag: "Refused",
+          refusal: { reason: "planAlreadyExists" },
+        });
+
+        // The decision's policy runs twice for the same attempt: one concretized session.
+        const concretize = requestFor({ stream: `DailyDecision/${decision}`, seq: 1 });
+        const ask = { requestId: concretize, planId, day: monday, workout: easy, evidence };
+        expect((yield* planner.concretizeSession(ask)).answer).toEqual(accepted);
+        expect((yield* planner.concretizeSession(ask)).answer).toEqual(accepted);
+        const web = yield* planning();
+        const plan = yield* until(web.CurrentPlan.watch(anaId), (p) => p.sessions.some((s) => s.workout !== null));
+        expect(plan._tag === "Some" && plan.value.sessions.filter((s) => s.day === monday)).toHaveLength(1);
+      }),
+    ),
+  );
+
   it.live("a consultation creates the plan, which is published to the calendar", () =>
     inCadencia(
       Effect.gen(function* () {
         const ios = yield* device();
-        const consultation = ConsultationId.make("i100:c1");
         yield* ios.StartConsultation(consultation, {});
-        yield* ios.RecordDraft(consultation, { draft, model: "gpt-5.5", interpretedOn: "ios" });
-        yield* ios.AcceptDraft(consultation, { planId: "i100:p1" });
+        yield* ios.RecordDraft(consultation, { draft, model, interpretedOn: "ios" });
+        yield* ios.AcceptDraft(consultation, { planId });
 
         const web = yield* planning();
         const plan = yield* until(web.CurrentPlan.watch(anaId), (p) => p.sessions.every((s) => s.status === "published"));
@@ -115,19 +159,21 @@ describe("Cadencia: iOS runs the AI, the backend records it and the plan decides
     inCadencia(
       Effect.gen(function* () {
         const ios = yield* device();
-        yield* ios.StartConsultation(ConsultationId.make("i100:c1"), {});
-        yield* ios.RecordDraft(ConsultationId.make("i100:c1"), { draft, model: "gpt-5.5", interpretedOn: "ios" });
-        yield* ios.AcceptDraft(ConsultationId.make("i100:c1"), { planId: "i100:p1" });
+        yield* ios.StartConsultation(consultation, {});
+        yield* ios.RecordDraft(consultation, { draft, model, interpretedOn: "ios" });
+        yield* ios.AcceptDraft(consultation, { planId });
         const web = yield* planning();
         yield* until(web.CurrentPlan.watch(anaId), (p) => p.status === "active");
 
-        const day = DailyDecisionId.make("i100:2026-11-09");
-        const proposal = { planId: "i100:p1", note, evidence, model: "gpt-5.5", interpretedOn: "ios" as const };
+        const day = decision;
+        const proposal = { planId, note, evidence, model, interpretedOn: "ios" as const };
         yield* ios.RecordDailyDecision(day, { ...proposal, workout: intervals });
         const reader = yield* coach();
         const refused = yield* until(reader.TodayDecision.watch(day), (d) => d.status === "refused");
         expect(refused).toMatchObject({ _tag: "Some" });
-        expect(refused._tag === "Some" && refused.value.refusal).toContain("HardensPlannedSession");
+        // Planning's rejection reaches the coach translated, with its evidence.
+        expect(refused._tag === "Some" && refused.value.refusal?.reason).toBe("hardensPlan");
+        expect(refused._tag === "Some" && refused.value.refusal?.detail).toContain("peakIntensity=0.98");
 
         yield* ios.RecordDailyDecision(day, { ...proposal, workout: easy });
         const accepted = yield* until(reader.TodayDecision.watch(day), (d) => d.status === "accepted" && d.attempt === 2);
@@ -142,20 +188,13 @@ describe("Cadencia: iOS runs the AI, the backend records it and the plan decides
     inCadencia(
       Effect.gen(function* () {
         const ios = yield* device();
-        yield* ios.StartConsultation(ConsultationId.make("i100:c1"), {});
+        yield* ios.StartConsultation(consultation, {});
         const stranger = yield* planning(bob);
         const read = yield* stranger.CurrentPlan.get(anaId).pipe(Effect.flip);
         expect(read._tag).toBe("NotYours");
         const strangerDevice = yield* device(bob);
         const write = yield* strangerDevice
-          .RecordDailyDecision(DailyDecisionId.make("i100:2026-11-09"), {
-            planId: "i100:p1",
-            workout: easy,
-            note,
-            evidence,
-            model: "gpt-5.5",
-            interpretedOn: "ios",
-          })
+          .RecordDailyDecision(decision, { planId, workout: easy, note, evidence, model, interpretedOn: "ios" })
           .pipe(Effect.flip);
         expect(write._tag).toBe("NotYours");
       }),
@@ -164,27 +203,27 @@ describe("Cadencia: iOS runs the AI, the backend records it and the plan decides
 });
 
 describe("Intervals adapter", () => {
-  const session = {
+  const session = Schema.decodeUnknownSync(PlannedSession)({
     sessionId: "2026-11-09",
-    day: monday,
-    kind: "endurance" as const,
+    day: "2026-11-09",
+    kind: "endurance",
     title: "Easy endurance",
     targetMinutes: 60,
     purpose: "Aerobic base",
-    status: "published" as const,
-    workout: easy,
-    externalId: "cadencia-i100-p1-2026-11-09",
-  };
+    status: "published",
+    workout: Schema.encodeSync(Workout)(easy),
+    externalId: "cadencia-i100-0b6f5a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b-2026-11-09",
+  });
 
   it("writes workouts in Intervals' workout-builder text", () => {
-    expect(workoutText({ ...easy, steps: [steady(10, 0.5), { ...steady(5, 0.6), endIntensity: 0.8 }] })).toBe(
+    expect(workoutText({ ...easy, steps: [steady(10, 0.5), steady(5, 0.6, 0.8)] })).toBe(
       "Typical HRV.\n\n50%\n- 10m 50%\n\n60%\n- 5m ramp 60-80%",
     );
   });
 
   it("notices when the athlete moved, edited or deleted a session in Intervals", () => {
     const entry = calendarEntry(session);
-    const event = { id: 1, external_id: entry.external_id, start_date_local: entry.start_date_local, name: entry.name, moving_time: entry.moving_time };
+    const event = { id: IntervalsEventId.make(1), external_id: entry.external_id, start_date_local: entry.start_date_local, name: entry.name, moving_time: entry.moving_time };
     expect(changeOf(session, event)).toBeNull();
     expect(changeOf(session, { ...event, start_date_local: "2026-11-10T00:00:00" })).toBe("changed");
     expect(changeOf(session, { ...event, moving_time: 1800 })).toBe("changed");

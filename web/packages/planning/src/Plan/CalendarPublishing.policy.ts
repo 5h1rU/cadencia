@@ -1,5 +1,6 @@
-import { system } from "@cadencia/kernel/Actor";
-import { CurrentActor } from "@cadencia/kernel/CurrentActor.context";
+import { system } from "@cadencia/identity/Actor";
+import { ownerOf } from "@cadencia/identity/Athlete.id";
+import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import { Calendar } from "./Calendar.external.ts";
@@ -7,7 +8,6 @@ import { SessionConcretized } from "./ConcretizeSession.command.ts";
 import { PlanCreated } from "./CreatePlan.command.ts";
 import { SessionMoved } from "./MoveSession.command.ts";
 import { Plan } from "./Plan.aggregate.ts";
-import { athleteOfPlan } from "./Plan.id.ts";
 import type { PlannedSession } from "./PlanShape.ts";
 import { RecordCalendarPublication } from "./RecordCalendarPublication.command.ts";
 import { PlanRetired } from "./RetirePlan.command.ts";
@@ -28,7 +28,7 @@ export const CalendarPublishingLive = CalendarPublishing.toLayer(
     const calendar = yield* Calendar;
     const plans = yield* Plan;
     return Effect.fn(function* ({ source, event }) {
-      const athleteId = athleteOfPlan(source.id);
+      const athleteId = ownerOf(source.id);
       const publish = Effect.fn(function* (session: PlannedSession) {
         if (session.status === "skipped") {
           yield* calendar.withdrawSession({ athleteId, externalId: session.externalId });

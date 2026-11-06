@@ -246,7 +246,8 @@ public struct CoachBrief: Codable, Equatable, Sendable {
     }
 
     /// A stable fingerprint of the inputs that should trigger a new decision. Same key → same answer is fine.
-    public var fingerprint: String {
+    /// Always the SHA-256 of the brief: a value JSON cannot hold (NaN, infinity) is written as text.
+    public var fingerprint: CadenciaAPI.Fingerprint {
         var inputs = self
         // Mirroring the coach's own workout changes today's projection. It is display context,
         // not new evidence of fatigue; including it would repeatedly regenerate the prescription.
@@ -255,8 +256,9 @@ public struct CoachBrief: Codable, Equatable, Sendable {
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(inputs) else { return "invalid-brief" }
-        return SHA256.hash(Array(AICoachPrompt.revision.utf8) + Array(data)).map { String(format: "%02x", $0) }.joined()
+        encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "Infinity", negativeInfinity: "-Infinity", nan: "NaN")
+        let data = (try? encoder.encode(inputs)) ?? Data(String(reflecting: inputs).utf8)
+        return CadenciaAPI.Fingerprint(sha256: SHA256.hash(Array(AICoachPrompt.revision.utf8) + Array(data)))
     }
 }
 

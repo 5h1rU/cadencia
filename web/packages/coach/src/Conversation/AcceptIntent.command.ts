@@ -1,13 +1,13 @@
-import { NotYours } from "@cadencia/kernel/NotYours.rejection";
-import { Session } from "@cadencia/kernel/Session.middleware";
+import { NotYours } from "@cadencia/identity/NotYours.rejection";
+import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
-import * as Schema from "effect/Schema";
 import { ConversationId } from "./Conversation.id.ts";
 import { Intent } from "./Intent.ts";
+import { MessageId } from "./Message.id.ts";
 import { NoOpenIntent } from "./NoOpenIntent.rejection.ts";
 
 export class IntentAccepted extends Domain.Event("IntentAccepted", {
-  messageId: Schema.String,
+  messageId: MessageId,
   intent: Intent,
 }) {}
 
@@ -15,7 +15,7 @@ export class IntentAccepted extends Domain.Event("IntentAccepted", {
 export class AcceptIntent extends Domain.Command("AcceptIntent", {
   target: ConversationId,
   middleware: [Session],
-  input: { messageId: Schema.String },
+  input: { messageId: MessageId },
   events: [IntentAccepted],
   rejects: [NoOpenIntent, NotYours],
 }) {}

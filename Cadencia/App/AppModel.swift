@@ -34,7 +34,7 @@ final class AppModel {
     private var consultationRequestID: UUID?
     /// The coach's latest consultation reply beyond the question the backend records: the review, suggested
     /// answers, a proposed profile edit and the draft's details. Kept for this launch only.
-    private(set) var consultationReply: (id: String, reply: PlanConsultation.Reply)?
+    private(set) var consultationReply: (id: CadenciaAPI.ConsultationId, reply: PlanConsultation.Reply)?
     /// The Cadencia sign-in (Keychain). The plan and the coach's memory live on the backend.
     private(set) var backendSession: BackendSession?
     /// Why the last call to Cadencia's backend failed, for Settings and the plan screens.
@@ -116,7 +116,7 @@ final class AppModel {
     @ObservationIgnored private var coachAskForced = false
     /// `coachBrief().fingerprint` for the current state and day. Cleared on every state change; filled on
     /// first use, which can be inside a view body, hence ignored by observation.
-    @ObservationIgnored private var briefFingerprintCache: (day: Day, value: String)?
+    @ObservationIgnored private var briefFingerprintCache: (day: Day, value: CadenciaAPI.Fingerprint)?
 
     private static let stateFile = "state.json"
     private static let credentialAccount = "intervals.credential"
@@ -256,7 +256,7 @@ final class AppModel {
 
     /// The plan's answer to today's decision, when the backend has one.
     var todayDecision: CadenciaAPI.TodayDecisionState? {
-        guard let decision = state.todayDecision?.value, decision.day == today.iso else { return nil }
+        guard let decision = state.todayDecision?.value, decision.day == CadenciaAPI.Day(today) else { return nil }
         return decision
     }
 
@@ -277,8 +277,9 @@ final class AppModel {
     /// to it, and that sign-in is the same Intervals.icu athlete as the app's.
     var backend: CoachBackend? {
         if let backendOverride { return backendOverride }
-        guard let url = AppConfig.backendURL, let session = backendSession, isSignedIn, session.athleteID == state.athlete?.id else { return nil }
-        return CoachBackend(api: CadenciaAPI(baseURL: url, transport: transport, sessionToken: session.token), athleteId: session.athleteID)
+        guard let url = AppConfig.backendURL, let session = backendSession, isSignedIn, session.athleteID == state.athlete?.id,
+              let athlete = CadenciaAPI.AthleteId(rawValue: session.athleteID) else { return nil }
+        return CoachBackend(api: CadenciaAPI(baseURL: url, transport: transport, sessionToken: session.token), athleteId: athlete)
     }
 
     /// Whether the plan and the coach can be used: they need the Cadencia sign-in.
@@ -523,6 +524,9 @@ final class AppModel {
             message = String(localized: "Cadencia couldn't be reached. Check your connection and try again.")
         case .rejected(let tag, _, _)?:
             message = String(localized: "Cadencia refused the change (\(tag)).")
+        case nil where error is CadenciaAPI.InvalidValue:
+            // Checked before sending: what the coach wrote, or what was typed, is outside what Cadencia keeps.
+            message = String(localized: "Cadencia can't keep this as written (\(String(describing: error))). Try again.")
         default:
             message = String(localized: "Cadencia is unavailable right now. Try again later.")
         }
@@ -535,7 +539,7 @@ final class AppModel {
     func refreshBackend() async {
         guard let backend else { return }
         let account = athleteID, day = today
-        func current() -> Bool { backend.athleteId == athleteID && athleteID == account && isSignedIn }
+        func current() -> Bool { backend.athleteId.rawValue == athleteID && athleteID == account && isSignedIn }
         do {
             let plan = try await backend.plan()
             guard current() else { return }
@@ -566,16 +570,17 @@ final class AppModel {
     /// already today's (same evidence) or the ride is done.
     private func adoptDecision(_ decision: CadenciaAPI.TodayDecisionState?, day: Day) {
         mutate { $0.todayDecision = .init(decision) }
-        guard let decision, decision.status == .accepted, decision.day == day.iso, let wire = decision.workout,
-              let fingerprint = decision.evidence?.fingerprint, state.today?.day != day || state.today?.aiFingerprint != fingerprint else { return }
+        guard let decision, decision.status == .accepted, decision.day == CadenciaAPI.Day(day), let wire = decision.workout,
+              let fingerprint = decision.evidence?.fingerprint.rawValue,
+              state.today?.day != day || state.today?.aiFingerprint != fingerprint else { return }
         let measured = measuredToday()
         let readiness = decision.evidence.map {
-            Readiness(level: Readiness.Level(rawValue: $0.readiness.level.rawValue) ?? measured.level, score: $0.readiness.score,
-                      signals: measured.signals, missingData: measured.missingData, summary: $0.readiness.summary)
+            Readiness(level: Readiness.Level(rawValue: $0.readiness.level.rawValue) ?? measured.level, score: $0.readiness.score.rawValue,
+                      signals: measured.signals, missingData: measured.missingData, summary: $0.readiness.summary.rawValue)
         } ?? measured
-        let workout = Workout(wire, identity: "\(BackendID.decision(athlete: athleteID, day: day))#\(decision.attempt)")
+        let workout = Workout(wire, identity: "\(athleteID):\(day.iso)#\(decision.attempt?.rawValue ?? 0)")
         mutate {
-            $0.takeDecision(workout: workout, readiness: readiness, note: decision.note.map(CoachNote.init), model: decision.model,
+            $0.takeDecision(workout: workout, readiness: readiness, note: decision.note.map(CoachNote.init), model: decision.model?.rawValue,
                             day: day, ftp: workingFTP)
             $0.today?.aiFingerprint = fingerprint
         }
@@ -899,7 +904,7 @@ final class AppModel {
 
     /// `coachBrief().fingerprint`, built at most once per state change and day. Every brief input derives
     /// from `state` and `today`, and `mutate`/`load` clear the cache whenever `state` changes.
-    private var currentBriefFingerprint: String {
+    private var currentBriefFingerprint: CadenciaAPI.Fingerprint {
         let day = today
         if let cached = briefFingerprintCache, cached.day == day { return cached.value }
         let value = coachBrief().fingerprint
@@ -940,7 +945,7 @@ final class AppModel {
         let day = today, account = athleteID, signedIn = isSignedIn
         let brief = coachBrief()
         let basis = brief.fingerprint
-        if !force, let current = state.today, current.day == day, current.aiFingerprint == basis {
+        if !force, let current = state.today, current.day == day, current.aiFingerprint == basis.rawValue {
             coachNotice = nil
             return false
         }
@@ -948,7 +953,7 @@ final class AppModel {
         if !force, let decision = todayDecision, decision.status == .refused, decision.evidence?.fingerprint == basis {
             return false
         }
-        let planned = state.plan.flatMap { plan -> (id: String, session: Bool)? in
+        let planned = state.plan.flatMap { plan -> (id: CadenciaAPI.PlanId, session: Bool)? in
             guard plan.isActive, let id = plan.backendID, day >= plan.startDay, day <= plan.endDay else { return nil }
             return (id, plan.sessions.contains { $0.day == day && $0.status != .skipped })
         }
@@ -989,11 +994,11 @@ final class AppModel {
                 mutate { s in
                     s.takeDecision(workout: prescription.workout, readiness: prescription.readiness, note: prescription.note,
                                    model: prescription.model, day: day, ftp: prescriptionFTP)
-                    s.today?.aiFingerprint = basis
+                    s.today?.aiFingerprint = basis.rawValue
                 }
                 return true
             }
-            let evidence = CoachEvidence.snapshot(fingerprint: basis, readiness: prescription.readiness,
+            let evidence = try CoachEvidence.snapshot(fingerprint: basis, readiness: prescription.readiness,
                                                   availability: state.athlete?.trainingAvailability,
                                                   events: state.calendarEvents ?? [], from: day)
             for attempt in 1...3 {
@@ -1003,26 +1008,26 @@ final class AppModel {
                                                                note: prescription.note, evidence: evidence, model: prescription.model)
                 } catch CadenciaAPIError.rejected(tag: "DecisionAlreadyAccepted", _, _) {
                     // This evidence already has an accepted workout (another ask got there first): take it.
-                    verdict = try await backend.decision(on: day) ?? CadenciaAPI.TodayDecisionState(attempt: 0, status: .none)
+                    verdict = try await backend.decision(on: day) ?? CadenciaAPI.TodayDecisionState(status: .none)
                 }
-                guard stillCurrent(), backend.athleteId == athleteID else { return false }
+                guard stillCurrent(), backend.athleteId.rawValue == athleteID else { return false }
                 switch verdict.status {
                 case .accepted:
                     adoptDecision(verdict, day: day)
-                    if state.today?.aiFingerprint != basis {
+                    if state.today?.aiFingerprint != basis.rawValue {
                         // The view had no workout (an older backend): the coach's own is the accepted one.
                         mutate { s in
                             s.takeDecision(workout: prescription.workout, readiness: prescription.readiness, note: prescription.note,
                                            model: prescription.model, day: day, ftp: prescriptionFTP)
-                            s.today?.aiFingerprint = basis
+                            s.today?.aiFingerprint = basis.rawValue
                         }
                     }
-                    if let plan = try? await backend.plan(), backend.athleteId == athleteID { mutate { $0.adoptBackendPlan(plan) } }
+                    if let plan = try? await backend.plan(), backend.athleteId.rawValue == athleteID { mutate { $0.adoptBackendPlan(plan) } }
                     coachNotice = nil
                     return true
                 case .refused where attempt < 3:
                     mutate { $0.todayDecision = .init(verdict) }
-                    prescription = try await engine.prescribe(brief: brief, refusal: verdict.refusal ?? "The plan refused the session.")
+                    prescription = try await engine.prescribe(brief: brief, refusal: verdict.refusal?.explanation ?? "The plan refused the session.")
                     try Task.checkCancellation()
                     guard stillCurrent(), !briefChanged() else { return false }
                 case .refused:
@@ -1047,6 +1052,8 @@ final class AppModel {
         } catch let error as DailyPrescription.ValidationError {
             coachNotice = String(localized: "The coach's answer failed a safety check (\(String(describing: error))). Ask again.")
         } catch let error as CadenciaAPIError {
+            coachNotice = backendFailure(error)
+        } catch let error as CadenciaAPI.InvalidValue {
             coachNotice = backendFailure(error)
         } catch let error as LLMCoach.CompletionError {
             coachNotice = coachFailureNotice(error)
@@ -1132,9 +1139,9 @@ final class AppModel {
     var planConsultation: PlanConsultation.Session? {
         guard let open = state.consultation else { return nil }
         var session = PlanConsultation.Session(startedOn: open.startedOn)
-        session.id = StableID.uuid(open.id)
+        session.id = StableID.uuid(open.id.rawValue)
         session.messages = (open.view.value?.turns ?? []).enumerated().map { index, turn in
-            var message = PlanConsultation.Message(role: turn.role == .coach ? .coach : .athlete, text: turn.text)
+            var message = PlanConsultation.Message(role: turn.role == .coach ? .coach : .athlete, text: turn.text.rawValue)
             message.id = StableID.uuid("\(open.id)#\(index)")
             return message
         }
@@ -1394,7 +1401,7 @@ final class AppModel {
     /// plan from the recorded draft and publishes its sessions; this phone writes what Intervals holds natively
     /// (availability, time away, other training, the goal event) and retires the previous plan.
     func activateConsultationPlan(_ draft: PlanConsultation.Draft, sessionID: UUID) async throws {
-        guard isSignedIn, !consultationBusy, !Task.isCancelled, let open = state.consultation, StableID.uuid(open.id) == sessionID,
+        guard isSignedIn, !consultationBusy, !Task.isCancelled, let open = state.consultation, StableID.uuid(open.id.rawValue) == sessionID,
               planConsultation?.reply?.draft == draft else { throw PlanConsultation.ValidationError.invalidDraft }
         let preview = try draft.makePlan(today: today)
         try await acceptDraft(in: open.id, context: { planId in
@@ -1403,10 +1410,10 @@ final class AppModel {
     }
 
     /// Accepts the consultation's draft as a new plan and adopts it once Planning created it.
-    private func acceptDraft(in consultation: String, context: (String) -> PlanContext) async throws {
+    private func acceptDraft(in consultation: CadenciaAPI.ConsultationId, context: (CadenciaAPI.PlanId) -> PlanContext) async throws {
         guard let backend else { throw CadenciaAPIError.signedOut }
         let previous = state.plan.flatMap { $0.isActive ? $0.backendID : nil }
-        let planId = BackendID.new(athlete: backend.athleteId, prefix: "p")
+        let planId = BackendID.newPlan(athlete: backend.athleteId)
         let completedToday = isTodayWorkoutCompleted
         let answer: CadenciaAPI.ConsultationViewState?
         do { answer = try await backend.acceptDraft(planId: planId, in: consultation) } catch {
@@ -1415,7 +1422,7 @@ final class AppModel {
         }
         switch answer?.stage {
         case .created?: break
-        case .open?, .refused?: throw PlanCreationError.refused(answer?.refusal ?? "")
+        case .open?: throw PlanCreationError.refused(answer?.refusal?.explanation ?? "")
         default: throw PlanCreationError.notConfirmed
         }
         var newContext = context(planId)
@@ -1499,13 +1506,15 @@ final class AppModel {
     func createPlan(_ request: PlanBuilder.Request) async throws {
         guard let backend else { throw CadenciaAPIError.signedOut }
         let template = PlanBuilder().build(request)
-        let consultation: String
+        let consultation: CadenciaAPI.ConsultationId
         do {
+            let objective = request.event?.objective.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let rationale = template.phases.map(\.summary).joined(separator: " ")
+            let draft = try CadenciaAPI.PlanDraft(template, athleteId: backend.athleteId,
+                                                  objective: objective.isEmpty ? template.title : objective,
+                                                  rationale: rationale.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? template.title : rationale)
             consultation = try await backend.startConsultation()
-            _ = try await backend.recordDraft(CadenciaAPI.PlanDraft(template, athleteId: backend.athleteId,
-                                                                    objective: request.event?.objective ?? template.title,
-                                                                    rationale: template.phases.map(\.summary).joined(separator: " ")),
-                                              model: PlanBuilder.templateModel, in: consultation)
+            _ = try await backend.recordDraft(draft, model: PlanBuilder.templateModel, in: consultation)
         } catch {
             _ = backendFailure(error)
             throw error
@@ -1558,7 +1567,7 @@ final class AppModel {
 
     /// Accepts the change a coach reply proposes. Planning applies it to the week (or refuses it); what the
     /// athlete asked of each day becomes that day's requirement, in their own words.
-    func acceptCoachProposal(messageID: String) async {
+    func acceptCoachProposal(messageID: CadenciaAPI.MessageId) async {
         guard let backend, !coachBusy, let thread = state.coachThread?.value,
               let index = thread.messages.firstIndex(where: { $0.messageId == messageID }),
               let intent = thread.messages[index].intent, thread.messages[index].intentStatus == .proposed else { return }
@@ -1571,11 +1580,11 @@ final class AppModel {
         do {
             let answered = try await backend.acceptIntent(messageId: messageID, in: conversation)
             mutate { $0.coachThread = .init(answered) }
-            let source = thread.messages[..<index].last { $0.role == .athlete }?.text ?? intent.summary
+            let source = thread.messages[..<index].last { $0.role == .athlete }?.text.rawValue ?? intent.summary.rawValue
             if answered?.messages.first(where: { $0.messageId == messageID })?.intentStatus == .applied {
                 for limit in intent.limits where !limit.unavailable {
-                    guard let day = Day(iso: limit.day), day >= today else { continue }
-                    _ = try await backend.recordDayRequirement(source, maxMinutes: limit.maxMinutes, on: day, plan: intent.planId)
+                    guard let day = Day(limit.day), day >= today else { continue }
+                    _ = try await backend.recordDayRequirement(source, maxMinutes: limit.maxMinutes?.rawValue, on: day, plan: intent.planId)
                 }
             }
             if let plan = try await backend.plan() { mutate { $0.adoptBackendPlan(plan) } }
@@ -1585,10 +1594,10 @@ final class AppModel {
             return
         }
         coachBusy = false
-        if intent.limits.contains(where: { $0.day == today.iso }) { await askCoachForToday(force: true) }
+        if intent.limits.contains(where: { $0.day == CadenciaAPI.Day(today) }) { await askCoachForToday(force: true) }
     }
 
-    func dismissCoachProposal(messageID: String) async {
+    func dismissCoachProposal(messageID: CadenciaAPI.MessageId) async {
         guard let backend, let thread = state.coachThread?.value else { return }
         let conversation = BackendID.conversation(athlete: backend.athleteId, day: dayOfThread(thread) ?? today)
         do {
@@ -1830,9 +1839,9 @@ final class AppModel {
             coachBusy = false
             replayCoachAskIfNeeded()
         }
-        let account = athleteID, day = today, messageID = UUID().uuidString.lowercased()
-        func current() -> Bool { athleteID == account && today == day && backend.athleteId == athleteID }
-        let recent = state.coachMessages.suffix(8).map { "\($0.role.rawValue): \($0.text)" }
+        let account = athleteID, day = today, messageID = BackendID.newMessage()
+        func current() -> Bool { athleteID == account && today == day && backend.athleteId.rawValue == athleteID }
+        let recent = state.coachMessages.suffix(8).map { "\($0.role.rawValue): \($0.text.rawValue)" }
         do {
             let receipt = try await backend.sendMessage(trimmed, messageId: messageID, on: day)
             let sent = try await backend.thread(on: day, after: receipt)
@@ -1854,11 +1863,11 @@ final class AppModel {
         do {
             let intent = try await engine.interpret(trimmed, context: context)
             guard current() else { return }
-            let proposal = state.plan.flatMap { plan -> CadenciaAPI.Intent? in
+            let proposal = try state.plan.flatMap { plan -> CadenciaAPI.Intent? in
                 guard plan.isActive, let id = plan.backendID else { return nil }
-                return CadenciaAPI.Intent(intent, planId: id, today: day)
+                return try CadenciaAPI.Intent(intent, planId: id, today: day)
             }
-            let thread = try await backend.recordReply(intent.reply, messageId: UUID().uuidString.lowercased(), inReplyTo: messageID,
+            let thread = try await backend.recordReply(intent.reply, messageId: BackendID.newMessage(), inReplyTo: messageID,
                                                        intent: proposal, model: engine.model, on: day)
             guard current() else { return }
             mutate { $0.coachThread = .init(thread) }
@@ -1897,7 +1906,7 @@ final class AppModel {
         let day = today
         do {
             let thread = try await backend.thread(on: day)
-            if backend.athleteId == athleteID { mutate { $0.coachThread = .init(thread) } }
+            if backend.athleteId.rawValue == athleteID { mutate { $0.coachThread = .init(thread) } }
         } catch {
             coachNotice = backendFailure(error)
         }

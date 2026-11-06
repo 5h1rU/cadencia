@@ -1,11 +1,16 @@
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { Day } from "@cadencia/kernel/Day";
-import { inputOf, mustOwn } from "@cadencia/kernel/owns";
-import { totalMinutes } from "@cadencia/kernel/Workout";
+import { AthleteId, ownerOf } from "@cadencia/identity/Athlete.id";
+import { mustOwn } from "@cadencia/identity/owns";
+import { Day } from "@cadencia/kernel/Calendar/Day";
+import { Weekday } from "@cadencia/kernel/Calendar/Week";
+import { PlanId } from "@cadencia/kernel/Plan.id";
+import { Title } from "@cadencia/kernel/Text";
+import { Minutes } from "@cadencia/kernel/Training/Units";
+import { totalMinutes } from "@cadencia/kernel/Training/Workout";
 import * as Domain from "@alchemy.run/domain";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import { inputOf } from "../inputOf.ts";
 import { AvailabilityExceeded } from "./AvailabilityExceeded.rejection.ts";
 import {
   ConcretizeSession,
@@ -18,11 +23,9 @@ import { CreatePlan, InvalidPlan, PlanAlreadyExists, PlanCreated } from "./Creat
 import { DayOutsidePlan } from "./DayOutsidePlan.rejection.ts";
 import { HardensPlannedSession } from "./HardensPlannedSession.rejection.ts";
 import { DayTaken, MoveSession, SessionMoved } from "./MoveSession.command.ts";
-import { athleteOfPlan, PlanId } from "./Plan.id.ts";
 import { PlanNotActive } from "./PlanNotActive.rejection.ts";
 import {
   DayRequirement,
-  externalIdFor,
   GoalEvent,
   GoalKind,
   Phase,
@@ -39,16 +42,20 @@ import {
 } from "./RecordExternalChange.command.ts";
 import { PlanRetired, RetirePlan } from "./RetirePlan.command.ts";
 import { ReviseWeek, WeekRevised } from "./ReviseWeek.command.ts";
+import { externalIdFor, type SessionId, SessionId as SessionIdSchema } from "./Session.id.ts";
 import { SessionNotFound } from "./SessionNotFound.rejection.ts";
+
+/** A plan has at most one session per day, so the day names the session. */
+const SessionIdOf = (day: Day) => SessionIdSchema.make(day);
 
 const Active = Schema.TaggedStruct("Active", {
   athleteId: AthleteId,
-  title: Schema.String,
+  title: Title,
   goal: GoalKind,
   startDay: Day,
   endDay: Day,
   phases: Schema.Array(Phase),
-  longRideWeekday: Schema.Int,
+  longRideWeekday: Weekday,
   event: Schema.NullOr(GoalEvent),
   sessions: Schema.Array(PlannedSessionSchema),
   requirements: Schema.Array(DayRequirement),
@@ -78,7 +85,7 @@ const replaceSessions = (plan: PlanState, changed: ReadonlyArray<PlannedSession>
   return { ...plan, sessions: plan.sessions.map((s) => byId.get(s.sessionId) ?? s) };
 };
 
-const setStatus = (plan: PlanState, sessionId: string, status: PlannedSession["status"]): PlanState => {
+const setStatus = (plan: PlanState, sessionId: SessionId, status: PlannedSession["status"]): PlanState => {
   if (plan._tag !== "Active") return plan;
   return {
     ...plan,
@@ -112,32 +119,19 @@ export class Plan extends Domain.Aggregate("Plan", {
   decide: {
     CreatePlan: Effect.fn(function* (plan, cmd, { id }) {
       yield* mustOwn(cmd.athleteId);
-      if (athleteOfPlan(id) !== cmd.athleteId) {
-        return yield* new InvalidPlan({ reason: "The plan id must start with the athlete's id." });
-      }
+      if (ownerOf(id) !== cmd.athleteId) return yield* new InvalidPlan({ reason: "planOfAnotherAthlete" });
       if (plan._tag !== "Unplanned") return yield* new PlanAlreadyExists();
-      if (cmd.startDay > cmd.endDay) {
-        return yield* new InvalidPlan({ reason: "The plan ends before it starts." });
-      }
+      if (cmd.startDay > cmd.endDay) return yield* new InvalidPlan({ reason: "endsBeforeStart" });
       const days = cmd.sessions.map((s) => s.day);
-      if (new Set(days).size !== days.length) {
-        return yield* new InvalidPlan({ reason: "A plan has at most one session per day." });
-      }
+      if (new Set(days).size !== days.length) return yield* new InvalidPlan({ reason: "twoSessionsOneDay" });
       if (days.some((day) => day < cmd.startDay || day > cmd.endDay)) {
-        return yield* new InvalidPlan({ reason: "Every session must fall within the plan's dates." });
+        return yield* new InvalidPlan({ reason: "sessionOutsideDates" });
       }
-      if (cmd.sessions.length === 0) {
-        return yield* new InvalidPlan({ reason: "A plan needs at least one session." });
-      }
-      const sessions = cmd.sessions.map(
-        (draft): PlannedSession => ({
-          ...draft,
-          sessionId: draft.day,
-          status: "provisional",
-          workout: null,
-          externalId: externalIdFor(id, draft.day),
-        }),
-      );
+      if (cmd.sessions.length === 0) return yield* new InvalidPlan({ reason: "noSessions" });
+      const sessions = cmd.sessions.map((draft): PlannedSession => {
+        const sessionId = SessionIdOf(draft.day);
+        return { ...draft, sessionId, status: "provisional", workout: null, externalId: externalIdFor(id, sessionId) };
+      });
       return [
         new PlanCreated({
           athleteId: cmd.athleteId,
@@ -182,7 +176,7 @@ export class Plan extends Domain.Aggregate("Plan", {
               peakIntensity: problem.peakIntensity,
             });
           case "PurposeMismatch":
-            return yield* new PurposeMismatch({ day: cmd.day, reason: problem.reason });
+            return yield* new PurposeMismatch({ day: cmd.day, problem: problem.problem });
         }
       }
       return [
@@ -201,7 +195,7 @@ export class Plan extends Domain.Aggregate("Plan", {
         const session = plan.sessions.find((s) => s.day === limit.day && isOwnedByCadencia(s));
         if (!session || session.status === "skipped") continue;
         if (limit.unavailable) {
-          changed.push({ ...session, status: "skipped", targetMinutes: 0, workout: null });
+          changed.push({ ...session, status: "skipped", targetMinutes: Minutes.make(0), workout: null });
         } else if (limit.maxMinutes !== null && limit.maxMinutes < session.targetMinutes) {
           const workoutFits = session.workout !== null && totalMinutes(session.workout) <= limit.maxMinutes + 0.1;
           changed.push({
@@ -266,7 +260,7 @@ export class Plan extends Domain.Aggregate("Plan", {
 
     RetirePlan: Effect.fn(function* (state, _cmd, { now }) {
       const plan = yield* activeFor(state);
-      const today = DateTime.formatIsoDate(now);
+      const today = Day.make(DateTime.formatIsoDate(now));
       const withdrawn = plan.sessions
         .filter((s) => s.day >= today && isOwnedByCadencia(s) && s.status !== "skipped")
         .map((s) => s.externalId);

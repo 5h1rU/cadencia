@@ -1,9 +1,5 @@
 import * as Domain from "@alchemy.run/domain";
-import * as Schema from "effect/Schema";
+import { SessionId } from "./Session.id.ts";
 
 /** No session with that id in the plan. */
-export class SessionNotFound extends Domain.Rejection(
-  "SessionNotFound",
-  { sessionId: Schema.String },
-  { httpApiStatus: 404 },
-) {}
+export class SessionNotFound extends Domain.Rejection("SessionNotFound", { sessionId: SessionId }, { httpApiStatus: 404 }) {}

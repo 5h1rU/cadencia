@@ -1,12 +1,14 @@
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { inputOf, mustOwn, ownerOf } from "@cadencia/kernel/owns";
+import { ownerOf } from "@cadencia/identity/Athlete.id";
+import { mustOwn } from "@cadencia/identity/owns";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import { inputOf } from "../inputOf.ts";
 import { AcceptIntent, IntentAccepted } from "./AcceptIntent.command.ts";
 import { ConversationId } from "./Conversation.id.ts";
 import { DismissIntent, IntentDismissed } from "./DismissIntent.command.ts";
 import { Intent, IntentStatus } from "./Intent.ts";
+import { MessageId } from "./Message.id.ts";
 import { NoOpenIntent } from "./NoOpenIntent.rejection.ts";
 import { CoachReplied, RecordCoachReply } from "./RecordCoachReply.command.ts";
 import { IntentApplied, IntentRefused, RecordIntentOutcome } from "./RecordIntentOutcome.command.ts";
@@ -14,15 +16,15 @@ import { MessageSent, SendMessage } from "./SendMessage.command.ts";
 
 /** Only what decisions need: the intents and where each stands. The thread lives in a view. */
 const ConversationState = Schema.Struct({
-  intents: Schema.Array(Schema.Struct({ messageId: Schema.String, intent: Intent, status: IntentStatus })),
+  intents: Schema.Array(Schema.Struct({ messageId: MessageId, intent: Intent, status: IntentStatus })),
 });
 type ConversationState = typeof ConversationState.Type;
 
-const withStatus = (s: ConversationState, messageId: string, status: IntentStatus): ConversationState => ({
+const withStatus = (s: ConversationState, messageId: MessageId, status: IntentStatus): ConversationState => ({
   intents: s.intents.map((i) => (i.messageId === messageId ? { ...i, status } : i)),
 });
 
-const openIntent = (s: ConversationState, messageId: string) =>
+const openIntent = (s: ConversationState, messageId: MessageId) =>
   s.intents.find((i) => i.messageId === messageId && i.status === "proposed");
 
 /** One month of conversation between an athlete and the coach. */
@@ -33,31 +35,31 @@ export class Conversation extends Domain.Aggregate("Conversation", {
   commands: [SendMessage, RecordCoachReply, AcceptIntent, DismissIntent, RecordIntentOutcome],
   decide: {
     SendMessage: Effect.fn(function* (_, cmd, { id }) {
-      const athleteId = AthleteId.make(ownerOf(id));
+      const athleteId = ownerOf(id);
       yield* mustOwn(athleteId);
       return [new MessageSent({ athleteId, ...inputOf(cmd) })];
     }),
     RecordCoachReply: Effect.fn(function* (_, cmd, { id }) {
-      yield* mustOwn(AthleteId.make(ownerOf(id)));
+      yield* mustOwn(ownerOf(id));
       return [new CoachReplied(inputOf(cmd))];
     }),
     AcceptIntent: Effect.fn(function* (state, cmd, { id }) {
-      yield* mustOwn(AthleteId.make(ownerOf(id)));
+      yield* mustOwn(ownerOf(id));
       const open = openIntent(state, cmd.messageId);
       if (!open) return yield* new NoOpenIntent({ messageId: cmd.messageId });
       return [new IntentAccepted({ messageId: cmd.messageId, intent: open.intent })];
     }),
     DismissIntent: Effect.fn(function* (state, cmd, { id }) {
-      yield* mustOwn(AthleteId.make(ownerOf(id)));
+      yield* mustOwn(ownerOf(id));
       if (!openIntent(state, cmd.messageId)) return yield* new NoOpenIntent({ messageId: cmd.messageId });
       return [new IntentDismissed({ messageId: cmd.messageId })];
     }),
     RecordIntentOutcome: (state, cmd) => {
       const intent = state.intents.find((i) => i.messageId === cmd.messageId && i.status === "accepted");
       if (!intent) return [];
-      return cmd.accepted
+      return cmd.answer._tag === "Accepted"
         ? [new IntentApplied({ messageId: cmd.messageId })]
-        : [new IntentRefused({ messageId: cmd.messageId, reason: cmd.reason ?? "Refused by the plan" })];
+        : [new IntentRefused({ messageId: cmd.messageId, refusal: cmd.answer.refusal })];
     },
   },
   evolve: {

@@ -1,4 +1,4 @@
-import type { Workout } from "@cadencia/kernel/Workout";
+import type { Workout } from "@cadencia/kernel/Training/Workout";
 
 const percent = (intensity: number) => Math.round(intensity * 100);
 const floorPercent = (intensity: number) => Math.floor(intensity * 100 + 0.000001);
@@ -17,14 +17,14 @@ const duration = (seconds: number): string => {
 export const workoutText = (workout: Workout): string => {
   const ceiling = workout.intensityCeiling;
   const target = (intensity: number) =>
-    ceiling === undefined ? percent(intensity) : floorPercent(Math.min(intensity, ceiling));
+    ceiling === null ? percent(intensity) : floorPercent(Math.min(intensity, ceiling));
   const blocks = workout.steps.map((step) => {
     const start = target(step.startIntensity);
     const end = target(step.endIntensity);
     let line = `- ${duration(step.durationSeconds)} ${start === end ? `${start}%` : `ramp ${start}-${end}%`}`;
-    if (step.cadenceRpm !== undefined) line += ` ${step.cadenceRpm}rpm`;
+    if (step.cadenceRpm !== null) line += ` ${step.cadenceRpm}rpm`;
     return `${step.name}\n${line}`;
   });
   const text = blocks.join("\n\n");
-  return workout.rationale ? `${workout.rationale}\n\n${text}` : text;
+  return workout.rationale === null ? text : `${workout.rationale}\n\n${text}`;
 };

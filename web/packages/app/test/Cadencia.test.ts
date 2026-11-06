@@ -1,8 +1,8 @@
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { Day } from "@cadencia/kernel/Day";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { Day } from "@cadencia/kernel/Calendar/Day";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
-import { init, Message, update } from "../src/Cadencia.ts";
+import { declarationOf, init, Message, update } from "../src/Cadencia.ts";
 
 const signedIn = init({ athleteId: AthleteId.make("i100"), today: Day.make("2026-11-09"), session: "s" }).model;
 const signedOut = init({ athleteId: null, today: Day.make("2026-11-09"), session: "s" }).model;
@@ -34,5 +34,23 @@ describe("the web app", () => {
   it("names a refusal in the athlete's words", () => {
     const next = update(signedIn, Message.FailedWrite({ action: "moveSession", reason: "DayTaken" }));
     expect(Option.getOrNull(next.model.error)).toBe("Ese día ya tiene otra sesión.");
+  });
+});
+
+describe("the wellness form", () => {
+  const form = { mood: "", motivation: "", soreness: "", fatigue: "", weight: "", comments: "" };
+
+  it("sends only what the athlete filled in, in Intervals' units", () => {
+    expect(Option.getOrNull(declarationOf({ ...form, mood: "3", weight: "74.1", comments: " Legs heavy " }))).toEqual({
+      mood: 3,
+      weight: 74.1,
+      comments: "Legs heavy",
+    });
+  });
+
+  it("refuses values outside Intervals' scales", () => {
+    expect(Option.isNone(declarationOf({ ...form, mood: "5" }))).toBe(true);
+    expect(Option.isNone(declarationOf({ ...form, weight: "7" }))).toBe(true);
+    expect(Option.isNone(declarationOf({ ...form, fatigue: "two" }))).toBe(true);
   });
 });

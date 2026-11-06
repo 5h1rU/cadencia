@@ -1,5 +1,6 @@
-import { athlete } from "@cadencia/kernel/Actor";
+import { athlete } from "@cadencia/identity/Actor";
 import { Calendar } from "@cadencia/planning/Plan/Calendar.external";
+import { IntervalsEventId } from "@cadencia/planning/Plan/Session.id";
 import * as Domain from "@alchemy.run/domain";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -33,9 +34,12 @@ interface Recorded {
 }
 const recorded = JSON.parse(readFileSync(requestsFile, "utf8")) as Recorded;
 
+/** The consultation iOS opened: the target of its `StartConsultation`. */
+const consultationId = (recorded.commands.startConsultation?.body as { target?: string } | undefined)?.target ?? "";
+
 const FakeCalendar = Calendar.toLayer(
   Effect.succeed({
-    publishSession: () => Effect.succeed({ eventId: 1 }),
+    publishSession: () => Effect.succeed({ eventId: IntervalsEventId.make(1) }),
     withdrawSession: () => Effect.succeed({ withdrawn: true }),
   }),
 );
@@ -111,7 +115,7 @@ describe("Cadencia iOS contract", () => {
         yield* send("answerQuestion");
         yield* send("recordDraft");
         yield* send("acceptDraft");
-        views.consultation = yield* until("ConsultationView", "i100:c1", (c) => c.stage === "created");
+        views.consultation = yield* until("ConsultationView", consultationId, (c) => c.stage === "created");
         yield* until("CurrentPlan", "i100", (p) => p.status === "active");
 
         yield* send("recordDailyDecisionRefused");

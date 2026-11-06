@@ -1,8 +1,10 @@
+import { IntervalsEventId } from "@cadencia/planning/Plan/Session.id";
 import { Calendar } from "@cadencia/planning/Plan/Calendar.external";
 import type { PlannedSession } from "@cadencia/planning/Plan/PlanShape";
 import type { RuntimeContext } from "alchemy/RuntimeContext";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { Connections } from "../Connections.ts";
 import { athletePath, callIntervals } from "./IntervalsHttp.ts";
 import { workoutText } from "./WorkoutText.ts";
@@ -12,8 +14,7 @@ import { workoutText } from "./WorkoutText.ts";
  * ever run inside a policy, and every platform provides `RuntimeContext` (the
  * Worker's bindings, such as D1) to the handlers it runs. This states that.
  */
-const inHandler = <A, E>(effect: Effect.Effect<A, E, RuntimeContext>) =>
-  effect as unknown as Effect.Effect<A, E, never>;
+const inHandler = <A, E>(effect: Effect.Effect<A, E, RuntimeContext>) => effect as unknown as Effect.Effect<A, E, never>;
 
 /** The calendar entry Intervals shows for a planned session. */
 export const calendarEntry = (session: PlannedSession) => ({
@@ -29,6 +30,9 @@ export const calendarEntry = (session: PlannedSession) => ({
   ),
   description: session.workout ? workoutText(session.workout) : session.purpose,
 });
+
+/** What Intervals answers to a bulk upsert: the events it wrote. */
+const Upserted = Schema.Array(Schema.Struct({ id: IntervalsEventId }));
 
 /**
  * The Calendar external system over Intervals.icu. Upserts by `external_id`
@@ -55,8 +59,8 @@ export const IntervalsCalendar = Calendar.toLayer(
             query: { upsert: "true" },
             body: [calendarEntry(session)],
           }).pipe(Effect.orDie);
-          const events = Array.isArray(result) ? (result as Array<{ id?: number }>) : [];
-          return { eventId: events[0]?.id ?? 0 };
+          const events = Schema.decodeUnknownOption(Upserted)(result);
+          return { eventId: Option.match(events, { onNone: () => null, onSome: (e) => e[0]?.id ?? null }) };
         }),
       withdrawSession: ({ athleteId, externalId }) =>
         Effect.gen(function* () {

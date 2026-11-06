@@ -1,37 +1,29 @@
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { Day } from "@cadencia/kernel/Day";
-import { SessionKind } from "@cadencia/kernel/SessionKind";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { Day } from "@cadencia/kernel/Calendar/Day";
+import { Weekday } from "@cadencia/kernel/Calendar/Week";
+import { Paragraph, Title } from "@cadencia/kernel/Text";
+import { GoalKind } from "@cadencia/kernel/Training/Goal";
+import { Phase } from "@cadencia/kernel/Training/Phase";
+import { SessionKind } from "@cadencia/kernel/Training/SessionKind";
+import { Kilometers, Minutes } from "@cadencia/kernel/Training/Units";
 import * as Schema from "effect/Schema";
 
 /** The plan the coach drafted from a consultation, in the coach's language. Planning turns it into a plan. */
 export const PlanDraft = Schema.Struct({
   athleteId: AthleteId,
-  title: Schema.String,
-  goal: Schema.Literals(["climbing", "ftp", "durability", "endurance", "vo2max", "event", "strength"]),
-  objective: Schema.String,
-  rationale: Schema.String,
+  title: Title,
+  goal: GoalKind,
+  objective: Paragraph,
+  rationale: Paragraph,
   startDay: Day,
   endDay: Day,
-  phases: Schema.Array(
-    Schema.Struct({
-      focus: Schema.Literals(["prepare", "base", "build", "peak", "taper", "consolidate", "recover"]),
-      startWeek: Schema.Int,
-      endWeek: Schema.Int,
-      summary: Schema.String,
-    }),
-  ),
-  longRideWeekday: Schema.Int,
+  phases: Schema.Array(Phase),
+  longRideWeekday: Weekday,
   event: Schema.NullOr(
-    Schema.Struct({ name: Schema.String, day: Day, distanceKm: Schema.NullOr(Schema.Number), isRace: Schema.Boolean }),
+    Schema.Struct({ name: Title, day: Day, distanceKm: Schema.NullOr(Kilometers), isRace: Schema.Boolean }),
   ),
   sessions: Schema.Array(
-    Schema.Struct({
-      day: Day,
-      kind: SessionKind,
-      title: Schema.String,
-      targetMinutes: Schema.Int,
-      purpose: Schema.String,
-    }),
+    Schema.Struct({ day: Day, kind: SessionKind, title: Title, targetMinutes: Minutes, purpose: Paragraph }),
   ),
 });
 export type PlanDraft = typeof PlanDraft.Type;

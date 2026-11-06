@@ -1,12 +1,12 @@
-import { Day } from "@cadencia/kernel/Day";
-import { NotYours } from "@cadencia/kernel/NotYours.rejection";
-import { Session } from "@cadencia/kernel/Session.middleware";
+import { NotYours } from "@cadencia/identity/NotYours.rejection";
+import { Session } from "@cadencia/identity/Session.middleware";
+import { Day } from "@cadencia/kernel/Calendar/Day";
+import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
-import * as Schema from "effect/Schema";
 import { DayOutsidePlan } from "./DayOutsidePlan.rejection.ts";
-import { PlanId } from "./Plan.id.ts";
 import { PlanNotActive } from "./PlanNotActive.rejection.ts";
 import { PlannedSession } from "./PlanShape.ts";
+import { SessionId } from "./Session.id.ts";
 import { SessionNotFound } from "./SessionNotFound.rejection.ts";
 
 /** Another session already takes that day. */
@@ -18,13 +18,10 @@ export class SessionMoved extends Domain.Event("SessionMoved", {
 }) {}
 
 /** Move a planned session to another day of the plan. */
-export class MoveSession extends Domain.Command(
-  "MoveSession",
-  {
-    target: PlanId,
-    middleware: [Session],
-    input: { sessionId: Schema.String, toDay: Day },
-    events: [SessionMoved],
-    rejects: [PlanNotActive, SessionNotFound, DayOutsidePlan, DayTaken, NotYours],
-  }
-) {}
+export class MoveSession extends Domain.Command("MoveSession", {
+  target: PlanId,
+  middleware: [Session],
+  input: { sessionId: SessionId, toDay: Day },
+  events: [SessionMoved],
+  rejects: [PlanNotActive, SessionNotFound, DayOutsidePlan, DayTaken, NotYours],
+}) {}

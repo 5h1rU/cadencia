@@ -16,16 +16,21 @@ final class CoachStateTests: XCTestCase {
     }
 
     /// The plan as the backend's `CurrentPlan` view answers it: one session a day for a week.
-    func view(planId: String = "i1:p1", status: CadenciaAPI.CurrentPlanState.Status = .active) -> CadenciaAPI.CurrentPlanState {
+    func view(planId: CadenciaAPI.PlanId = TestIDs.plan, status: CadenciaAPI.CurrentPlanState.Status = .active) -> CadenciaAPI.CurrentPlanState {
         CadenciaAPI.CurrentPlanState(
-            planId: planId, status: status, title: "Base", goal: .endurance, startDay: day.iso, endDay: day.adding(days: 6).iso,
+            planId: planId, status: status, title: "Base", goal: .endurance, startDay: .init(day), endDay: .init(day.adding(days: 6)),
             phases: [.init(focus: .base, startWeek: 1, endWeek: 1, summary: "Base")], longRideWeekday: 1, event: nil,
             sessions: (0..<7).map { offset in
                 let d = day.adding(days: offset).iso
-                return .init(sessionId: d, day: d, kind: .endurance, title: "Endurance", targetMinutes: 60, purpose: "Base",
-                             status: .published, externalId: "cadencia-i1-p1-\(d)")
+                return .init(sessionId: .init(rawValue: d)!, day: .init(rawValue: d)!, kind: .endurance, title: "Endurance", targetMinutes: 60,
+                             purpose: "Base", status: .published, externalId: .init(rawValue: Self.externalID(planId, d))!)
             },
-            requirements: [.init(day: day.adding(days: 2).iso, instructions: "Only 40 minutes", maxMinutes: 40)])
+            requirements: [.init(day: .init(day.adding(days: 2)), instructions: "Only 40 minutes", maxMinutes: 40)])
+    }
+
+    /// The `external_id` the backend gives a plan's session in Intervals.
+    static func externalID(_ planId: CadenciaAPI.PlanId = TestIDs.plan, _ day: String) -> String {
+        "cadencia-\(planId.rawValue.replacingOccurrences(of: ":", with: "-"))-\(day)"
     }
 
     func testDecisionUpdatesThePlanSessionInPlace() {
@@ -58,11 +63,11 @@ final class CoachStateTests: XCTestCase {
     func testThePlanIsTheBackendsViewWithWhatIntervalsAdds() throws {
         var state = AppState()
         let first = day.adding(days: 1)
-        let event = try JSONDecoder().decode(IntervalsEvent.self, from: Data(#"{"id":77,"external_id":"cadencia-i1-p1-\#(first.iso)","category":"WORKOUT","start_date_local":"\#(first.iso)T00:00:00"}"#.utf8))
+        let event = try JSONDecoder().decode(IntervalsEvent.self, from: Data(#"{"id":77,"external_id":"\#(Self.externalID(TestIDs.plan, first.iso))","category":"WORKOUT","start_date_local":"\#(first.iso)T00:00:00"}"#.utf8))
         state.calendarEvents = [event]
         state.activities = [ActivitySummary(id: "a1", name: "Ride", type: "Ride", startDateLocal: first.date(), movingTime: 3600,
                                             isTrainer: true, pairedEventID: 77, compliance: 91)]
-        state.planContext = PlanContext(planId: "i1:p1", details: .init(objective: "Base", rationale: "Why", weeklyRides: []))
+        state.planContext = PlanContext(planId: TestIDs.plan, details: .init(objective: "Base", rationale: "Why", weeklyRides: []))
         state.adoptBackendPlan(view())
         let session = try XCTUnwrap(state.plan?.sessions.first { $0.day == first })
         XCTAssertEqual(session.intervalsEventID, 77)
@@ -71,7 +76,7 @@ final class CoachStateTests: XCTestCase {
         XCTAssertEqual(state.plan?.consultation?.objective, "Base")
         XCTAssertEqual(state.workoutRequest(on: day.adding(days: 2))?.maxMinutes, 40)
         // Another plan drops the old plan's context; no plan drops the plan.
-        state.adoptBackendPlan(view(planId: "i1:p2"))
+        state.adoptBackendPlan(view(planId: TestIDs.otherPlan))
         XCTAssertNil(state.planContext)
         XCTAssertNil(state.plan?.consultation)
         state.adoptBackendPlan(nil)
@@ -82,8 +87,8 @@ final class CoachStateTests: XCTestCase {
         var state = AppState()
         take(&state)
         state.today?.decidedAt = day.date() // whole seconds survive ISO 8601
-        state.coachThread = .init(.init(messages: [.init(messageId: "m1", role: .athlete, text: "Hi", at: "2028-03-17T08:00:00.000Z")]))
-        state.consultation = .init(id: "i1:c1", startedOn: day, view: .init(.init(stage: .open, turns: [.init(role: .coach, text: "Goal?")])))
+        state.coachThread = .init(.init(messages: [.init(messageId: TestIDs.message(1), role: .athlete, text: "Hi", at: "2028-03-17T08:00:00.000Z")]))
+        state.consultation = .init(id: TestIDs.consultation, startedOn: day, view: .init(.init(stage: .open, turns: [.init(role: .coach, text: "Goal?")])))
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
         XCTAssertEqual(try decoder.decode(AppState.self, from: encoder.encode(state)), state)
@@ -111,10 +116,10 @@ final class CoachStateTests: XCTestCase {
     func testOnlyAppliedProposalsCanAffectFutureDecisions() {
         var state = AppState()
         let at = ISO8601DateFormatter().string(from: day.date())
-        let intent = CadenciaAPI.Intent(planId: "i1:p1", summary: "Shorter", limits: [.init(day: day.iso, maxMinutes: 40, unavailable: false)])
+        let intent = CadenciaAPI.Intent(planId: TestIDs.plan, summary: "Shorter", limits: [.init(day: .init(day), maxMinutes: 40, unavailable: false)])
         state.coachThread = .init(.init(messages: [
-            .init(messageId: "m1", role: .athlete, text: "Only 40 minutes today", at: at),
-            .init(messageId: "m2", role: .coach, text: "Shorter, then", at: at, intent: intent, intentStatus: .proposed),
+            .init(messageId: TestIDs.message(1), role: .athlete, text: "Only 40 minutes today", at: at),
+            .init(messageId: TestIDs.message(2), role: .coach, text: "Shorter, then", at: at, intent: intent, intentStatus: .proposed),
         ]))
         XCTAssertTrue(state.appliedCoachNotes(on: day).isEmpty)
         state.coachThread?.value?.messages[1].intentStatus = .applied

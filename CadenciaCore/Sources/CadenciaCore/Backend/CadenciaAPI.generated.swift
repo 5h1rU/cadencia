@@ -5,91 +5,59 @@ import Foundation
 
 // The wire types, nested so they never clash with CadenciaCore's own `Workout`, `SessionKind`, ….
 extension CadenciaAPI {
-    public struct Receipt: Codable, Equatable, Sendable {
-        public var stream: String
-        public var version: Double
+    /// The domain's `AthleteId`: `^i[1-9][0-9]*$`.
+    public struct AthleteId: CadenciaAPI.Branded {
+        public let rawValue: String
 
-        public init(stream: String, version: Double) {
-            self.stream = stream
-            self.version = version
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
         }
 
-        private enum CodingKeys: String, CodingKey {
-            case stream, version
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(stream, forKey: .stream)
-            try container.encode(version, forKey: .version)
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^i[1-9][0-9]*$"#)
         }
     }
 
-    public struct Workout: Codable, Equatable, Sendable {
-        public var name: String
-        public var kind: SessionKind
-        public var steps: [WorkoutStep]
-        public var intensityCeiling: Double?
-        public var rationale: String
+    /// The domain's `Attempt`: at least 1.
+    public struct Attempt: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Int
 
-        public init(name: String, kind: SessionKind, steps: [WorkoutStep], intensityCeiling: Double? = nil, rationale: String) {
-            self.name = name
-            self.kind = kind
-            self.steps = steps
-            self.intensityCeiling = intensityCeiling
-            self.rationale = rationale
+        public init?(rawValue: Int) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
         }
 
-        private enum CodingKeys: String, CodingKey {
-            case name, kind, steps, intensityCeiling, rationale
+        public static func accepts(_ value: Int) -> Bool {
+            value >= 1
         }
 
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(name, forKey: .name)
-            try container.encode(kind, forKey: .kind)
-            try container.encode(steps, forKey: .steps)
-            try container.encodeIfPresent(intensityCeiling, forKey: .intensityCeiling)
-            try container.encode(rationale, forKey: .rationale)
-        }
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
     }
 
-    public struct WorkoutStep: Codable, Equatable, Sendable {
-        public var name: String
-        public var durationSeconds: Double
-        public var startIntensity: Double
-        public var endIntensity: Double
-        public var cadenceRpm: Int?
+    /// The domain's `CadenceRpm`: at least 20, at most 200.
+    public struct CadenceRpm: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Int
 
-        public init(name: String, durationSeconds: Double, startIntensity: Double, endIntensity: Double, cadenceRpm: Int? = nil) {
-            self.name = name
-            self.durationSeconds = durationSeconds
-            self.startIntensity = startIntensity
-            self.endIntensity = endIntensity
-            self.cadenceRpm = cadenceRpm
+        public init?(rawValue: Int) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
         }
 
-        private enum CodingKeys: String, CodingKey {
-            case name, durationSeconds, startIntensity, endIntensity, cadenceRpm
+        public static func accepts(_ value: Int) -> Bool {
+            value >= 20 && value <= 200
         }
 
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(name, forKey: .name)
-            try container.encode(durationSeconds, forKey: .durationSeconds)
-            try container.encode(startIntensity, forKey: .startIntensity)
-            try container.encode(endIntensity, forKey: .endIntensity)
-            try container.encodeIfPresent(cadenceRpm, forKey: .cadenceRpm)
-        }
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
     }
 
     public struct CoachNote: Codable, Equatable, Sendable {
-        public var headline: String
-        public var body: String
-        public var session: String
-        public var watch: String?
+        public var headline: Headline
+        public var body: Paragraph
+        public var session: Paragraph
+        public var watch: Paragraph?
 
-        public init(headline: String, body: String, session: String, watch: String? = nil) {
+        public init(headline: Headline, body: Paragraph, session: Paragraph, watch: Paragraph? = nil) {
             self.headline = headline
             self.body = body
             self.session = session
@@ -109,300 +77,126 @@ extension CadenciaAPI {
         }
     }
 
-    public struct EvidenceSnapshot: Codable, Equatable, Sendable {
-        public var fingerprint: String
-        public var readiness: Readiness
-        public var days: [DayConditions]
-        public var eventDays: [String]
+    /// The domain's `ConsultationId`: `^i[1-9][0-9]*:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
+    public struct ConsultationId: CadenciaAPI.Branded {
+        public let rawValue: String
 
-        public init(fingerprint: String, readiness: Readiness, days: [DayConditions], eventDays: [String]) {
-            self.fingerprint = fingerprint
-            self.readiness = readiness
-            self.days = days
-            self.eventDays = eventDays
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^i[1-9][0-9]*:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"#)
+        }
+    }
+
+    public struct ConsultationTurn: Codable, Equatable, Sendable {
+        public enum Role: String, Codable, Equatable, Sendable, CaseIterable {
+            case coach
+            case athlete
+        }
+
+        public var role: Role
+        public var text: MessageText
+
+        public init(role: Role, text: MessageText) {
+            self.role = role
+            self.text = text
         }
 
         private enum CodingKeys: String, CodingKey {
-            case fingerprint, readiness, days, eventDays
+            case role, text
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(fingerprint, forKey: .fingerprint)
-            try container.encode(readiness, forKey: .readiness)
-            try container.encode(days, forKey: .days)
-            try container.encode(eventDays, forKey: .eventDays)
+            try container.encode(role, forKey: .role)
+            try container.encode(text, forKey: .text)
         }
     }
 
-    public struct Readiness: Codable, Equatable, Sendable {
-        public var level: ReadinessLevel
-        public var score: Int
-        public var summary: String
-
-        public init(level: ReadinessLevel, score: Int, summary: String) {
-            self.level = level
-            self.score = score
-            self.summary = summary
+    public struct ConsultationViewState: Codable, Equatable, Sendable {
+        public enum Stage: String, Codable, Equatable, Sendable, CaseIterable {
+            case new
+            case open
+            case accepted
+            case created
         }
 
-        private enum CodingKeys: String, CodingKey {
-            case level, score, summary
-        }
+        public var stage: Stage
+        public var turns: [ConsultationTurn]
+        public var draft: PlanDraft?
+        public var planId: PlanId?
+        public var refusal: Refusal?
 
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(level, forKey: .level)
-            try container.encode(score, forKey: .score)
-            try container.encode(summary, forKey: .summary)
-        }
-    }
-
-    public struct DayConditions: Codable, Equatable, Sendable {
-        public var day: String
-        public var maxMinutes: Int?
-        public var unavailable: Bool
-        public var hardOtherTraining: Bool
-
-        public init(day: String, maxMinutes: Int? = nil, unavailable: Bool, hardOtherTraining: Bool) {
-            self.day = day
-            self.maxMinutes = maxMinutes
-            self.unavailable = unavailable
-            self.hardOtherTraining = hardOtherTraining
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case day, maxMinutes, unavailable, hardOtherTraining
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(day, forKey: .day)
-            try container.encode(maxMinutes, forKey: .maxMinutes)
-            try container.encode(unavailable, forKey: .unavailable)
-            try container.encode(hardOtherTraining, forKey: .hardOtherTraining)
-        }
-    }
-
-    public struct Intent: Codable, Equatable, Sendable {
-        public var planId: String
-        public var summary: String
-        public var limits: [DayLimit]
-
-        public init(planId: String, summary: String, limits: [DayLimit]) {
+        public init(stage: Stage, turns: [ConsultationTurn], draft: PlanDraft? = nil, planId: PlanId? = nil, refusal: Refusal? = nil) {
+            self.stage = stage
+            self.turns = turns
+            self.draft = draft
             self.planId = planId
-            self.summary = summary
-            self.limits = limits
+            self.refusal = refusal
         }
 
         private enum CodingKeys: String, CodingKey {
-            case planId, summary, limits
+            case stage, turns, draft, planId, refusal
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(stage, forKey: .stage)
+            try container.encode(turns, forKey: .turns)
+            try container.encode(draft, forKey: .draft)
             try container.encode(planId, forKey: .planId)
-            try container.encode(summary, forKey: .summary)
-            try container.encode(limits, forKey: .limits)
+            try container.encode(refusal, forKey: .refusal)
         }
     }
 
-    public struct DayLimit: Codable, Equatable, Sendable {
-        public var day: String
-        public var maxMinutes: Int?
-        public var unavailable: Bool
+    /// The domain's `ConversationId`: `^i[1-9][0-9]*:\d{4}-(0[1-9]|1[0-2])$`.
+    public struct ConversationId: CadenciaAPI.Branded {
+        public let rawValue: String
 
-        public init(day: String, maxMinutes: Int? = nil, unavailable: Bool) {
-            self.day = day
-            self.maxMinutes = maxMinutes
-            self.unavailable = unavailable
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^i[1-9][0-9]*:\d{4}-(0[1-9]|1[0-2])$"#)
+        }
+    }
+
+    public struct ConversationThreadState: Codable, Equatable, Sendable {
+        public var messages: [ThreadMessage]
+
+        public init(messages: [ThreadMessage]) {
+            self.messages = messages
         }
 
         private enum CodingKeys: String, CodingKey {
-            case day, maxMinutes, unavailable
+            case messages
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(day, forKey: .day)
-            try container.encode(maxMinutes, forKey: .maxMinutes)
-            try container.encode(unavailable, forKey: .unavailable)
+            try container.encode(messages, forKey: .messages)
         }
     }
 
-    public struct PlanDraft: Codable, Equatable, Sendable {
-        public var athleteId: String
-        public var title: String
-        public var goal: GoalKind
-        public var objective: String
-        public var rationale: String
-        public var startDay: String
-        public var endDay: String
-        public var phases: [PlanPhase]
-        public var longRideWeekday: Int
-        public var event: DraftEvent?
-        public var sessions: [DraftSession]
+    /// The domain's `Count`: at least 0.
+    public struct Count: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Int
 
-        public init(athleteId: String, title: String, goal: GoalKind, objective: String, rationale: String, startDay: String, endDay: String, phases: [PlanPhase], longRideWeekday: Int, event: DraftEvent? = nil, sessions: [DraftSession]) {
-            self.athleteId = athleteId
-            self.title = title
-            self.goal = goal
-            self.objective = objective
-            self.rationale = rationale
-            self.startDay = startDay
-            self.endDay = endDay
-            self.phases = phases
-            self.longRideWeekday = longRideWeekday
-            self.event = event
-            self.sessions = sessions
+        public init?(rawValue: Int) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
         }
 
-        private enum CodingKeys: String, CodingKey {
-            case athleteId, title, goal, objective, rationale, startDay, endDay, phases, longRideWeekday, event, sessions
+        public static func accepts(_ value: Int) -> Bool {
+            value >= 0
         }
 
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(athleteId, forKey: .athleteId)
-            try container.encode(title, forKey: .title)
-            try container.encode(goal, forKey: .goal)
-            try container.encode(objective, forKey: .objective)
-            try container.encode(rationale, forKey: .rationale)
-            try container.encode(startDay, forKey: .startDay)
-            try container.encode(endDay, forKey: .endDay)
-            try container.encode(phases, forKey: .phases)
-            try container.encode(longRideWeekday, forKey: .longRideWeekday)
-            try container.encode(event, forKey: .event)
-            try container.encode(sessions, forKey: .sessions)
-        }
-    }
-
-    public struct PlanPhase: Codable, Equatable, Sendable {
-        public var focus: PhaseFocus
-        public var startWeek: Int
-        public var endWeek: Int
-        public var summary: String
-
-        public init(focus: PhaseFocus, startWeek: Int, endWeek: Int, summary: String) {
-            self.focus = focus
-            self.startWeek = startWeek
-            self.endWeek = endWeek
-            self.summary = summary
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case focus, startWeek, endWeek, summary
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(focus, forKey: .focus)
-            try container.encode(startWeek, forKey: .startWeek)
-            try container.encode(endWeek, forKey: .endWeek)
-            try container.encode(summary, forKey: .summary)
-        }
-    }
-
-    public struct DraftEvent: Codable, Equatable, Sendable {
-        public var name: String
-        public var day: String
-        public var distanceKm: Double?
-        public var isRace: Bool
-
-        public init(name: String, day: String, distanceKm: Double? = nil, isRace: Bool) {
-            self.name = name
-            self.day = day
-            self.distanceKm = distanceKm
-            self.isRace = isRace
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case name, day, distanceKm, isRace
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(name, forKey: .name)
-            try container.encode(day, forKey: .day)
-            try container.encode(distanceKm, forKey: .distanceKm)
-            try container.encode(isRace, forKey: .isRace)
-        }
-    }
-
-    public struct DraftSession: Codable, Equatable, Sendable {
-        public var day: String
-        public var kind: SessionKind
-        public var title: String
-        public var targetMinutes: Int
-        public var purpose: String
-
-        public init(day: String, kind: SessionKind, title: String, targetMinutes: Int, purpose: String) {
-            self.day = day
-            self.kind = kind
-            self.title = title
-            self.targetMinutes = targetMinutes
-            self.purpose = purpose
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case day, kind, title, targetMinutes, purpose
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(day, forKey: .day)
-            try container.encode(kind, forKey: .kind)
-            try container.encode(title, forKey: .title)
-            try container.encode(targetMinutes, forKey: .targetMinutes)
-            try container.encode(purpose, forKey: .purpose)
-        }
-    }
-
-    public struct RiderReport: Codable, Equatable, Sendable {
-        public var riderType: RiderType
-        public var confidence: ProfileConfidence
-        public var headline: String
-        public var summary: String
-        public var strengths: [String]
-        public var development: [String]
-        public var evidence: [String]
-        public var caveats: [String]
-        public var oldest: String
-        public var newest: String
-        public var rideCount: Int
-
-        public init(riderType: RiderType, confidence: ProfileConfidence, headline: String, summary: String, strengths: [String], development: [String], evidence: [String], caveats: [String], oldest: String, newest: String, rideCount: Int) {
-            self.riderType = riderType
-            self.confidence = confidence
-            self.headline = headline
-            self.summary = summary
-            self.strengths = strengths
-            self.development = development
-            self.evidence = evidence
-            self.caveats = caveats
-            self.oldest = oldest
-            self.newest = newest
-            self.rideCount = rideCount
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case riderType, confidence, headline, summary, strengths, development, evidence, caveats, oldest, newest, rideCount
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(riderType, forKey: .riderType)
-            try container.encode(confidence, forKey: .confidence)
-            try container.encode(headline, forKey: .headline)
-            try container.encode(summary, forKey: .summary)
-            try container.encode(strengths, forKey: .strengths)
-            try container.encode(development, forKey: .development)
-            try container.encode(evidence, forKey: .evidence)
-            try container.encode(caveats, forKey: .caveats)
-            try container.encode(oldest, forKey: .oldest)
-            try container.encode(newest, forKey: .newest)
-            try container.encode(rideCount, forKey: .rideCount)
-        }
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
     }
 
     public struct CurrentPlanState: Codable, Equatable, Sendable {
@@ -412,19 +206,19 @@ extension CadenciaAPI {
             case retired
         }
 
-        public var planId: String?
+        public var planId: PlanId?
         public var status: Status
-        public var title: String
+        public var title: Title?
         public var goal: GoalKind?
-        public var startDay: String?
-        public var endDay: String?
+        public var startDay: Day?
+        public var endDay: Day?
         public var phases: [PlanPhase]
-        public var longRideWeekday: Int?
+        public var longRideWeekday: Weekday?
         public var event: GoalEvent?
         public var sessions: [PlannedSession]
         public var requirements: [DayRequirement]
 
-        public init(planId: String? = nil, status: Status, title: String, goal: GoalKind? = nil, startDay: String? = nil, endDay: String? = nil, phases: [PlanPhase], longRideWeekday: Int? = nil, event: GoalEvent? = nil, sessions: [PlannedSession], requirements: [DayRequirement]) {
+        public init(planId: PlanId? = nil, status: Status, title: Title? = nil, goal: GoalKind? = nil, startDay: Day? = nil, endDay: Day? = nil, phases: [PlanPhase], longRideWeekday: Weekday? = nil, event: GoalEvent? = nil, sessions: [PlannedSession], requirements: [DayRequirement]) {
             self.planId = planId
             self.status = status
             self.title = title
@@ -458,18 +252,501 @@ extension CadenciaAPI {
         }
     }
 
-    public struct PlannedSession: Codable, Equatable, Sendable {
-        public var sessionId: String
-        public var day: String
+    /// The domain's `DailyDecisionId`: `^i[1-9][0-9]*:\d{4}-\d{2}-\d{2}$`.
+    public struct DailyDecisionId: CadenciaAPI.Branded {
+        public let rawValue: String
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^i[1-9][0-9]*:\d{4}-\d{2}-\d{2}$"#)
+        }
+    }
+
+    /// The domain's `Day`: `^\d{4}-\d{2}-\d{2}$`.
+    public struct Day: CadenciaAPI.Branded {
+        public let rawValue: String
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^\d{4}-\d{2}-\d{2}$"#)
+        }
+    }
+
+    public struct DayConditions: Codable, Equatable, Sendable {
+        public var day: Day
+        public var maxMinutes: Minutes?
+        public var unavailable: Bool
+        public var hardOtherTraining: Bool
+
+        public init(day: Day, maxMinutes: Minutes? = nil, unavailable: Bool, hardOtherTraining: Bool) {
+            self.day = day
+            self.maxMinutes = maxMinutes
+            self.unavailable = unavailable
+            self.hardOtherTraining = hardOtherTraining
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case day, maxMinutes, unavailable, hardOtherTraining
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(day, forKey: .day)
+            try container.encode(maxMinutes, forKey: .maxMinutes)
+            try container.encode(unavailable, forKey: .unavailable)
+            try container.encode(hardOtherTraining, forKey: .hardOtherTraining)
+        }
+    }
+
+    public struct DayLimit: Codable, Equatable, Sendable {
+        public var day: Day
+        public var maxMinutes: Minutes?
+        public var unavailable: Bool
+
+        public init(day: Day, maxMinutes: Minutes? = nil, unavailable: Bool) {
+            self.day = day
+            self.maxMinutes = maxMinutes
+            self.unavailable = unavailable
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case day, maxMinutes, unavailable
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(day, forKey: .day)
+            try container.encode(maxMinutes, forKey: .maxMinutes)
+            try container.encode(unavailable, forKey: .unavailable)
+        }
+    }
+
+    public struct DayRequirement: Codable, Equatable, Sendable {
+        public var day: Day
+        public var instructions: Paragraph
+        public var maxMinutes: Minutes?
+
+        public init(day: Day, instructions: Paragraph, maxMinutes: Minutes? = nil) {
+            self.day = day
+            self.instructions = instructions
+            self.maxMinutes = maxMinutes
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case day, instructions, maxMinutes
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(day, forKey: .day)
+            try container.encode(instructions, forKey: .instructions)
+            try container.encode(maxMinutes, forKey: .maxMinutes)
+        }
+    }
+
+    public struct DraftEvent: Codable, Equatable, Sendable {
+        public var name: Title
+        public var day: Day
+        public var distanceKm: Kilometers?
+        public var isRace: Bool
+
+        public init(name: Title, day: Day, distanceKm: Kilometers? = nil, isRace: Bool) {
+            self.name = name
+            self.day = day
+            self.distanceKm = distanceKm
+            self.isRace = isRace
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case name, day, distanceKm, isRace
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(name, forKey: .name)
+            try container.encode(day, forKey: .day)
+            try container.encode(distanceKm, forKey: .distanceKm)
+            try container.encode(isRace, forKey: .isRace)
+        }
+    }
+
+    public struct DraftSession: Codable, Equatable, Sendable {
+        public var day: Day
         public var kind: SessionKind
-        public var title: String
-        public var targetMinutes: Int
-        public var purpose: String
+        public var title: Title
+        public var targetMinutes: Minutes
+        public var purpose: Paragraph
+
+        public init(day: Day, kind: SessionKind, title: Title, targetMinutes: Minutes, purpose: Paragraph) {
+            self.day = day
+            self.kind = kind
+            self.title = title
+            self.targetMinutes = targetMinutes
+            self.purpose = purpose
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case day, kind, title, targetMinutes, purpose
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(day, forKey: .day)
+            try container.encode(kind, forKey: .kind)
+            try container.encode(title, forKey: .title)
+            try container.encode(targetMinutes, forKey: .targetMinutes)
+            try container.encode(purpose, forKey: .purpose)
+        }
+    }
+
+    public struct EvidenceSnapshot: Codable, Equatable, Sendable {
+        public var fingerprint: Fingerprint
+        public var readiness: Readiness
+        public var days: [DayConditions]
+        public var eventDays: [Day]
+
+        public init(fingerprint: Fingerprint, readiness: Readiness, days: [DayConditions], eventDays: [Day]) {
+            self.fingerprint = fingerprint
+            self.readiness = readiness
+            self.days = days
+            self.eventDays = eventDays
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case fingerprint, readiness, days, eventDays
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(fingerprint, forKey: .fingerprint)
+            try container.encode(readiness, forKey: .readiness)
+            try container.encode(days, forKey: .days)
+            try container.encode(eventDays, forKey: .eventDays)
+        }
+    }
+
+    /// The domain's `ExternalId`: `^cadencia-i[1-9][0-9]*-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\d{4}-\d{2}-\d{2}$`.
+    public struct ExternalId: CadenciaAPI.Branded {
+        public let rawValue: String
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^cadencia-i[1-9][0-9]*-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\d{4}-\d{2}-\d{2}$"#)
+        }
+    }
+
+    /// The domain's `Fingerprint`: `^[0-9a-f]{64}$`.
+    public struct Fingerprint: CadenciaAPI.Branded {
+        public let rawValue: String
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^[0-9a-f]{64}$"#)
+        }
+    }
+
+    /// The domain's `FtpFraction`: at least 0, at most 3.
+    public struct FtpFraction: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Double
+
+        public init?(rawValue: Double) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: Double) -> Bool {
+            value.isFinite && value >= 0 && value <= 3
+        }
+
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    /// The domain's `FtpWatts`: at least 30, at most 700.
+    public struct FtpWatts: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Int
+
+        public init?(rawValue: Int) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: Int) -> Bool {
+            value >= 30 && value <= 700
+        }
+
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    public struct GoalEvent: Codable, Equatable, Sendable {
+        public var name: Title
+        public var day: Day
+        public var distanceKm: Kilometers?
+        public var isRace: Bool
+        public var objective: Paragraph
+
+        public init(name: Title, day: Day, distanceKm: Kilometers? = nil, isRace: Bool, objective: Paragraph) {
+            self.name = name
+            self.day = day
+            self.distanceKm = distanceKm
+            self.isRace = isRace
+            self.objective = objective
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case name, day, distanceKm, isRace, objective
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(name, forKey: .name)
+            try container.encode(day, forKey: .day)
+            try container.encode(distanceKm, forKey: .distanceKm)
+            try container.encode(isRace, forKey: .isRace)
+            try container.encode(objective, forKey: .objective)
+        }
+    }
+
+    public enum GoalKind: String, Codable, Equatable, Sendable, CaseIterable {
+        case climbing
+        case ftp
+        case durability
+        case endurance
+        case vo2max
+        case event
+        case strength
+    }
+
+    /// The domain's `Headline`: 1+ characters, up to 200 characters, `^\S[\s\S]*\S$|^\S$|^$`.
+    public struct Headline: CadenciaAPI.Branded, CadenciaAPI.BoundedText {
+        public let rawValue: String
+        public static let maxLength = 200
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            value.utf16.count >= 1 && value.utf16.count <= 200 && CadenciaAPI.matches(value, #"^\S[\s\S]*\S$|^\S$|^$"#)
+        }
+    }
+
+    public struct Intent: Codable, Equatable, Sendable {
+        public var planId: PlanId
+        public var summary: Headline
+        public var limits: [DayLimit]
+
+        public init(planId: PlanId, summary: Headline, limits: [DayLimit]) {
+            self.planId = planId
+            self.summary = summary
+            self.limits = limits
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case planId, summary, limits
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(planId, forKey: .planId)
+            try container.encode(summary, forKey: .summary)
+            try container.encode(limits, forKey: .limits)
+        }
+    }
+
+    public enum InterpretedOn: String, Codable, Equatable, Sendable, CaseIterable {
+        case ios
+    }
+
+    /// The domain's `Kilometers`: at least 0, at most 2000.
+    public struct Kilometers: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Double
+
+        public init?(rawValue: Double) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: Double) -> Bool {
+            value.isFinite && value >= 0 && value <= 2000
+        }
+
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    /// The domain's `MessageId`: `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
+    public struct MessageId: CadenciaAPI.Branded {
+        public let rawValue: String
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"#)
+        }
+    }
+
+    /// The domain's `MessageText`: 1+ characters, up to 8000 characters, `^\S[\s\S]*\S$|^\S$|^$`.
+    public struct MessageText: CadenciaAPI.Branded, CadenciaAPI.BoundedText {
+        public let rawValue: String
+        public static let maxLength = 8000
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            value.utf16.count >= 1 && value.utf16.count <= 8000 && CadenciaAPI.matches(value, #"^\S[\s\S]*\S$|^\S$|^$"#)
+        }
+    }
+
+    /// The domain's `Minutes`: at least 0, at most 1440.
+    public struct Minutes: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Int
+
+        public init?(rawValue: Int) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: Int) -> Bool {
+            value >= 0 && value <= 1440
+        }
+
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    /// The domain's `ModelName`: `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$`.
+    public struct ModelName: CadenciaAPI.Branded {
+        public let rawValue: String
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$"#)
+        }
+    }
+
+    /// The domain's `Paragraph`: 1+ characters, up to 4000 characters, `^\S[\s\S]*\S$|^\S$|^$`.
+    public struct Paragraph: CadenciaAPI.Branded, CadenciaAPI.BoundedText {
+        public let rawValue: String
+        public static let maxLength = 4000
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            value.utf16.count >= 1 && value.utf16.count <= 4000 && CadenciaAPI.matches(value, #"^\S[\s\S]*\S$|^\S$|^$"#)
+        }
+    }
+
+    public enum PhaseFocus: String, Codable, Equatable, Sendable, CaseIterable {
+        case prepare
+        case base
+        case build
+        case peak
+        case taper
+        case consolidate
+        case recover
+    }
+
+    public struct PlanDraft: Codable, Equatable, Sendable {
+        public var athleteId: AthleteId
+        public var title: Title
+        public var goal: GoalKind
+        public var objective: Paragraph
+        public var rationale: Paragraph
+        public var startDay: Day
+        public var endDay: Day
+        public var phases: [PlanPhase]
+        public var longRideWeekday: Weekday
+        public var event: DraftEvent?
+        public var sessions: [DraftSession]
+
+        public init(athleteId: AthleteId, title: Title, goal: GoalKind, objective: Paragraph, rationale: Paragraph, startDay: Day, endDay: Day, phases: [PlanPhase], longRideWeekday: Weekday, event: DraftEvent? = nil, sessions: [DraftSession]) {
+            self.athleteId = athleteId
+            self.title = title
+            self.goal = goal
+            self.objective = objective
+            self.rationale = rationale
+            self.startDay = startDay
+            self.endDay = endDay
+            self.phases = phases
+            self.longRideWeekday = longRideWeekday
+            self.event = event
+            self.sessions = sessions
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case athleteId, title, goal, objective, rationale, startDay, endDay, phases, longRideWeekday, event, sessions
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(athleteId, forKey: .athleteId)
+            try container.encode(title, forKey: .title)
+            try container.encode(goal, forKey: .goal)
+            try container.encode(objective, forKey: .objective)
+            try container.encode(rationale, forKey: .rationale)
+            try container.encode(startDay, forKey: .startDay)
+            try container.encode(endDay, forKey: .endDay)
+            try container.encode(phases, forKey: .phases)
+            try container.encode(longRideWeekday, forKey: .longRideWeekday)
+            try container.encode(event, forKey: .event)
+            try container.encode(sessions, forKey: .sessions)
+        }
+    }
+
+    /// The domain's `PlanId`: `^i[1-9][0-9]*:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
+    public struct PlanId: CadenciaAPI.Branded {
+        public let rawValue: String
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^i[1-9][0-9]*:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"#)
+        }
+    }
+
+    public struct PlannedSession: Codable, Equatable, Sendable {
+        public var sessionId: SessionId
+        public var day: Day
+        public var kind: SessionKind
+        public var title: Title
+        public var targetMinutes: Minutes
+        public var purpose: Paragraph
         public var status: SessionStatus
         public var workout: Workout?
-        public var externalId: String
+        public var externalId: ExternalId
 
-        public init(sessionId: String, day: String, kind: SessionKind, title: String, targetMinutes: Int, purpose: String, status: SessionStatus, workout: Workout? = nil, externalId: String) {
+        public init(sessionId: SessionId, day: Day, kind: SessionKind, title: Title, targetMinutes: Minutes, purpose: Paragraph, status: SessionStatus, workout: Workout? = nil, externalId: ExternalId) {
             self.sessionId = sessionId
             self.day = day
             self.kind = kind
@@ -499,55 +776,335 @@ extension CadenciaAPI {
         }
     }
 
-    public struct GoalEvent: Codable, Equatable, Sendable {
-        public var name: String
-        public var day: String
-        public var distanceKm: Double?
-        public var isRace: Bool
-        public var objective: String
+    public struct PlanPhase: Codable, Equatable, Sendable {
+        public var focus: PhaseFocus
+        public var startWeek: WeekNumber
+        public var endWeek: WeekNumber
+        public var summary: Paragraph
 
-        public init(name: String, day: String, distanceKm: Double? = nil, isRace: Bool, objective: String) {
-            self.name = name
-            self.day = day
-            self.distanceKm = distanceKm
-            self.isRace = isRace
-            self.objective = objective
+        public init(focus: PhaseFocus, startWeek: WeekNumber, endWeek: WeekNumber, summary: Paragraph) {
+            self.focus = focus
+            self.startWeek = startWeek
+            self.endWeek = endWeek
+            self.summary = summary
         }
 
         private enum CodingKeys: String, CodingKey {
-            case name, day, distanceKm, isRace, objective
+            case focus, startWeek, endWeek, summary
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(name, forKey: .name)
-            try container.encode(day, forKey: .day)
-            try container.encode(distanceKm, forKey: .distanceKm)
-            try container.encode(isRace, forKey: .isRace)
-            try container.encode(objective, forKey: .objective)
+            try container.encode(focus, forKey: .focus)
+            try container.encode(startWeek, forKey: .startWeek)
+            try container.encode(endWeek, forKey: .endWeek)
+            try container.encode(summary, forKey: .summary)
         }
     }
 
-    public struct DayRequirement: Codable, Equatable, Sendable {
-        public var day: String
-        public var instructions: String
-        public var maxMinutes: Int?
+    public enum ProfileConfidence: String, Codable, Equatable, Sendable, CaseIterable {
+        case limited
+        case moderate
+        case high
+    }
 
-        public init(day: String, instructions: String, maxMinutes: Int? = nil) {
-            self.day = day
-            self.instructions = instructions
-            self.maxMinutes = maxMinutes
+    public struct Readiness: Codable, Equatable, Sendable {
+        public var level: ReadinessLevel
+        public var score: ReadinessScore
+        public var summary: Paragraph
+
+        public init(level: ReadinessLevel, score: ReadinessScore, summary: Paragraph) {
+            self.level = level
+            self.score = score
+            self.summary = summary
         }
 
         private enum CodingKeys: String, CodingKey {
-            case day, instructions, maxMinutes
+            case level, score, summary
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(day, forKey: .day)
-            try container.encode(instructions, forKey: .instructions)
-            try container.encode(maxMinutes, forKey: .maxMinutes)
+            try container.encode(level, forKey: .level)
+            try container.encode(score, forKey: .score)
+            try container.encode(summary, forKey: .summary)
+        }
+    }
+
+    public enum ReadinessLevel: String, Codable, Equatable, Sendable, CaseIterable {
+        case rest
+        case easy
+        case normal
+        case strong
+    }
+
+    /// The domain's `ReadinessScore`: at least 0, at most 100.
+    public struct ReadinessScore: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Int
+
+        public init?(rawValue: Int) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: Int) -> Bool {
+            value >= 0 && value <= 100
+        }
+
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    public struct Receipt: Codable, Equatable, Sendable {
+        public var stream: String
+        public var version: Double
+
+        public init(stream: String, version: Double) {
+            self.stream = stream
+            self.version = version
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case stream, version
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(stream, forKey: .stream)
+            try container.encode(version, forKey: .version)
+        }
+    }
+
+    public struct Refusal: Codable, Equatable, Sendable {
+        public enum Reason: String, Codable, Equatable, Sendable, CaseIterable {
+            case planNotActive
+            case dayNotPlanned
+            case dayOutsidePlan
+            case dayTaken
+            case sessionNotFound
+            case availabilityExceeded
+            case intensityAfterHardTraining
+            case hardensPlan
+            case purposeMismatch
+            case invalidPlan
+            case planAlreadyExists
+            case notYours
+        }
+
+        public var reason: Reason
+        public var detail: Paragraph?
+
+        public init(reason: Reason, detail: Paragraph? = nil) {
+            self.reason = reason
+            self.detail = detail
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case reason, detail
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(reason, forKey: .reason)
+            try container.encode(detail, forKey: .detail)
+        }
+    }
+
+    public struct RiderProfileCardState: Codable, Equatable, Sendable {
+        public var report: RiderReport?
+        public var model: ModelName?
+        public var dismissedFtp: FtpWatts?
+
+        public init(report: RiderReport? = nil, model: ModelName? = nil, dismissedFtp: FtpWatts? = nil) {
+            self.report = report
+            self.model = model
+            self.dismissedFtp = dismissedFtp
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case report, model, dismissedFtp
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(report, forKey: .report)
+            try container.encode(model, forKey: .model)
+            try container.encode(dismissedFtp, forKey: .dismissedFtp)
+        }
+    }
+
+    public struct RiderReport: Codable, Equatable, Sendable {
+        public var riderType: RiderType
+        public var confidence: ProfileConfidence
+        public var headline: Headline
+        public var summary: Paragraph
+        public var strengths: [Paragraph]
+        public var development: [Paragraph]
+        public var evidence: [Paragraph]
+        public var caveats: [Paragraph]
+        public var oldest: Day
+        public var newest: Day
+        public var rideCount: Count
+
+        public init(riderType: RiderType, confidence: ProfileConfidence, headline: Headline, summary: Paragraph, strengths: [Paragraph], development: [Paragraph], evidence: [Paragraph], caveats: [Paragraph], oldest: Day, newest: Day, rideCount: Count) {
+            self.riderType = riderType
+            self.confidence = confidence
+            self.headline = headline
+            self.summary = summary
+            self.strengths = strengths
+            self.development = development
+            self.evidence = evidence
+            self.caveats = caveats
+            self.oldest = oldest
+            self.newest = newest
+            self.rideCount = rideCount
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case riderType, confidence, headline, summary, strengths, development, evidence, caveats, oldest, newest, rideCount
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(riderType, forKey: .riderType)
+            try container.encode(confidence, forKey: .confidence)
+            try container.encode(headline, forKey: .headline)
+            try container.encode(summary, forKey: .summary)
+            try container.encode(strengths, forKey: .strengths)
+            try container.encode(development, forKey: .development)
+            try container.encode(evidence, forKey: .evidence)
+            try container.encode(caveats, forKey: .caveats)
+            try container.encode(oldest, forKey: .oldest)
+            try container.encode(newest, forKey: .newest)
+            try container.encode(rideCount, forKey: .rideCount)
+        }
+    }
+
+    public enum RiderType: String, Codable, Equatable, Sendable, CaseIterable {
+        case climber
+        case puncheur
+        case sprinter
+        case timeTrialist
+        case endurance
+        case allRounder
+        case developing
+    }
+
+    /// The domain's `Seconds`: at least 0, at most 86400.
+    public struct Seconds: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Double
+
+        public init?(rawValue: Double) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: Double) -> Bool {
+            value.isFinite && value >= 0 && value <= 86400
+        }
+
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    /// The domain's `SessionId`: `^\d{4}-\d{2}-\d{2}$`.
+    public struct SessionId: CadenciaAPI.Branded {
+        public let rawValue: String
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            CadenciaAPI.matches(value, #"^\d{4}-\d{2}-\d{2}$"#)
+        }
+    }
+
+    public enum SessionKind: String, Codable, Equatable, Sendable, CaseIterable {
+        case rest
+        case recovery
+        case endurance
+        case tempo
+        case threshold
+        case vo2max
+        case openerActivation
+        case longRide
+        case groupRide
+        case race
+        case strength
+    }
+
+    public enum SessionStatus: String, Codable, Equatable, Sendable, CaseIterable {
+        case provisional
+        case concrete
+        case published
+        case skipped
+        case changedInIntervals
+        case removedInIntervals
+    }
+
+    public struct ThreadMessage: Codable, Equatable, Sendable {
+        public enum Role: String, Codable, Equatable, Sendable, CaseIterable {
+            case athlete
+            case coach
+        }
+
+        public enum IntentStatus: String, Codable, Equatable, Sendable, CaseIterable {
+            case proposed
+            case accepted
+            case dismissed
+            case applied
+            case refused
+        }
+
+        public var messageId: MessageId
+        public var role: Role
+        public var text: MessageText
+        public var at: String
+        public var intent: Intent?
+        public var intentStatus: IntentStatus?
+        public var refusal: Refusal?
+        public var model: ModelName?
+
+        public init(messageId: MessageId, role: Role, text: MessageText, at: String, intent: Intent? = nil, intentStatus: IntentStatus? = nil, refusal: Refusal? = nil, model: ModelName? = nil) {
+            self.messageId = messageId
+            self.role = role
+            self.text = text
+            self.at = at
+            self.intent = intent
+            self.intentStatus = intentStatus
+            self.refusal = refusal
+            self.model = model
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case messageId, role, text, at, intent, intentStatus, refusal, model
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(messageId, forKey: .messageId)
+            try container.encode(role, forKey: .role)
+            try container.encode(text, forKey: .text)
+            try container.encode(at, forKey: .at)
+            try container.encode(intent, forKey: .intent)
+            try container.encode(intentStatus, forKey: .intentStatus)
+            try container.encode(refusal, forKey: .refusal)
+            try container.encode(model, forKey: .model)
+        }
+    }
+
+    /// The domain's `Title`: 1+ characters, up to 120 characters, `^\S[\s\S]*\S$|^\S$|^$`.
+    public struct Title: CadenciaAPI.Branded, CadenciaAPI.BoundedText {
+        public let rawValue: String
+        public static let maxLength = 120
+
+        public init?(rawValue: String) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: String) -> Bool {
+            value.utf16.count >= 1 && value.utf16.count <= 120 && CadenciaAPI.matches(value, #"^\S[\s\S]*\S$|^\S$|^$"#)
         }
     }
 
@@ -559,18 +1116,18 @@ extension CadenciaAPI {
             case refused
         }
 
-        public var athleteId: String?
-        public var day: String?
-        public var attempt: Int
+        public var athleteId: AthleteId?
+        public var day: Day?
+        public var attempt: Attempt?
         public var status: Status
         public var workout: Workout?
         public var note: CoachNote?
         public var evidence: EvidenceSnapshot?
-        public var model: String?
+        public var model: ModelName?
         public var interpretedOn: InterpretedOn?
-        public var refusal: String?
+        public var refusal: Refusal?
 
-        public init(athleteId: String? = nil, day: String? = nil, attempt: Int, status: Status, workout: Workout? = nil, note: CoachNote? = nil, evidence: EvidenceSnapshot? = nil, model: String? = nil, interpretedOn: InterpretedOn? = nil, refusal: String? = nil) {
+        public init(athleteId: AthleteId? = nil, day: Day? = nil, attempt: Attempt? = nil, status: Status, workout: Workout? = nil, note: CoachNote? = nil, evidence: EvidenceSnapshot? = nil, model: ModelName? = nil, interpretedOn: InterpretedOn? = nil, refusal: Refusal? = nil) {
             self.athleteId = athleteId
             self.day = day
             self.attempt = attempt
@@ -602,238 +1159,105 @@ extension CadenciaAPI {
         }
     }
 
-    public struct ConversationThreadState: Codable, Equatable, Sendable {
-        public var messages: [ThreadMessage]
+    /// The domain's `Weekday`: at least 1, at most 7.
+    public struct Weekday: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Int
 
-        public init(messages: [ThreadMessage]) {
-            self.messages = messages
+        public init?(rawValue: Int) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: Int) -> Bool {
+            value >= 1 && value <= 7
+        }
+
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    /// The domain's `WeekNumber`: at least 1, at most 104.
+    public struct WeekNumber: CadenciaAPI.Branded, Comparable {
+        public let rawValue: Int
+
+        public init?(rawValue: Int) {
+            guard Self.accepts(rawValue) else { return nil }
+            self.rawValue = rawValue
+        }
+
+        public static func accepts(_ value: Int) -> Bool {
+            value >= 1 && value <= 104
+        }
+
+        public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
+    }
+
+    public struct Workout: Codable, Equatable, Sendable {
+        public var name: Title
+        public var kind: SessionKind
+        public var steps: [WorkoutStep]
+        public var intensityCeiling: FtpFraction?
+        public var rationale: Paragraph?
+
+        public init(name: Title, kind: SessionKind, steps: [WorkoutStep], intensityCeiling: FtpFraction? = nil, rationale: Paragraph? = nil) {
+            self.name = name
+            self.kind = kind
+            self.steps = steps
+            self.intensityCeiling = intensityCeiling
+            self.rationale = rationale
         }
 
         private enum CodingKeys: String, CodingKey {
-            case messages
+            case name, kind, steps, intensityCeiling, rationale
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(messages, forKey: .messages)
+            try container.encode(name, forKey: .name)
+            try container.encode(kind, forKey: .kind)
+            try container.encode(steps, forKey: .steps)
+            try container.encode(intensityCeiling, forKey: .intensityCeiling)
+            try container.encode(rationale, forKey: .rationale)
         }
     }
 
-    public struct ThreadMessage: Codable, Equatable, Sendable {
-        public enum Role: String, Codable, Equatable, Sendable, CaseIterable {
-            case athlete
-            case coach
-        }
+    public struct WorkoutStep: Codable, Equatable, Sendable {
+        public var name: Title
+        public var durationSeconds: Seconds
+        public var startIntensity: FtpFraction
+        public var endIntensity: FtpFraction
+        public var cadenceRpm: CadenceRpm?
 
-        public enum IntentStatus: String, Codable, Equatable, Sendable, CaseIterable {
-            case proposed
-            case accepted
-            case dismissed
-            case applied
-            case refused
-        }
-
-        public var messageId: String
-        public var role: Role
-        public var text: String
-        public var at: String
-        public var intent: Intent?
-        public var intentStatus: IntentStatus?
-        public var refusal: String?
-        public var model: String?
-
-        public init(messageId: String, role: Role, text: String, at: String, intent: Intent? = nil, intentStatus: IntentStatus? = nil, refusal: String? = nil, model: String? = nil) {
-            self.messageId = messageId
-            self.role = role
-            self.text = text
-            self.at = at
-            self.intent = intent
-            self.intentStatus = intentStatus
-            self.refusal = refusal
-            self.model = model
+        public init(name: Title, durationSeconds: Seconds, startIntensity: FtpFraction, endIntensity: FtpFraction, cadenceRpm: CadenceRpm? = nil) {
+            self.name = name
+            self.durationSeconds = durationSeconds
+            self.startIntensity = startIntensity
+            self.endIntensity = endIntensity
+            self.cadenceRpm = cadenceRpm
         }
 
         private enum CodingKeys: String, CodingKey {
-            case messageId, role, text, at, intent, intentStatus, refusal, model
+            case name, durationSeconds, startIntensity, endIntensity, cadenceRpm
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(messageId, forKey: .messageId)
-            try container.encode(role, forKey: .role)
-            try container.encode(text, forKey: .text)
-            try container.encode(at, forKey: .at)
-            try container.encode(intent, forKey: .intent)
-            try container.encode(intentStatus, forKey: .intentStatus)
-            try container.encode(refusal, forKey: .refusal)
-            try container.encode(model, forKey: .model)
+            try container.encode(name, forKey: .name)
+            try container.encode(durationSeconds, forKey: .durationSeconds)
+            try container.encode(startIntensity, forKey: .startIntensity)
+            try container.encode(endIntensity, forKey: .endIntensity)
+            try container.encode(cadenceRpm, forKey: .cadenceRpm)
         }
-    }
-
-    public struct ConsultationViewState: Codable, Equatable, Sendable {
-        public enum Stage: String, Codable, Equatable, Sendable, CaseIterable {
-            case new
-            case open
-            case accepted
-            case created
-            case refused
-        }
-
-        public var stage: Stage
-        public var turns: [ConsultationTurn]
-        public var draft: PlanDraft?
-        public var planId: String?
-        public var refusal: String?
-
-        public init(stage: Stage, turns: [ConsultationTurn], draft: PlanDraft? = nil, planId: String? = nil, refusal: String? = nil) {
-            self.stage = stage
-            self.turns = turns
-            self.draft = draft
-            self.planId = planId
-            self.refusal = refusal
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case stage, turns, draft, planId, refusal
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(stage, forKey: .stage)
-            try container.encode(turns, forKey: .turns)
-            try container.encode(draft, forKey: .draft)
-            try container.encode(planId, forKey: .planId)
-            try container.encode(refusal, forKey: .refusal)
-        }
-    }
-
-    public struct ConsultationTurn: Codable, Equatable, Sendable {
-        public enum Role: String, Codable, Equatable, Sendable, CaseIterable {
-            case coach
-            case athlete
-        }
-
-        public var role: Role
-        public var text: String
-
-        public init(role: Role, text: String) {
-            self.role = role
-            self.text = text
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case role, text
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(role, forKey: .role)
-            try container.encode(text, forKey: .text)
-        }
-    }
-
-    public struct RiderProfileCardState: Codable, Equatable, Sendable {
-        public var report: RiderReport?
-        public var model: String?
-        public var dismissedFtp: Int?
-
-        public init(report: RiderReport? = nil, model: String? = nil, dismissedFtp: Int? = nil) {
-            self.report = report
-            self.model = model
-            self.dismissedFtp = dismissedFtp
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case report, model, dismissedFtp
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(report, forKey: .report)
-            try container.encode(model, forKey: .model)
-            try container.encode(dismissedFtp, forKey: .dismissedFtp)
-        }
-    }
-
-    public enum SessionKind: String, Codable, Equatable, Sendable, CaseIterable {
-        case rest
-        case recovery
-        case endurance
-        case tempo
-        case threshold
-        case vo2max
-        case openerActivation
-        case longRide
-        case groupRide
-        case race
-        case strength
-    }
-
-    public enum GoalKind: String, Codable, Equatable, Sendable, CaseIterable {
-        case climbing
-        case ftp
-        case durability
-        case endurance
-        case vo2max
-        case event
-        case strength
-    }
-
-    public enum PhaseFocus: String, Codable, Equatable, Sendable, CaseIterable {
-        case prepare
-        case base
-        case build
-        case peak
-        case taper
-        case consolidate
-        case recover
-    }
-
-    public enum ReadinessLevel: String, Codable, Equatable, Sendable, CaseIterable {
-        case rest
-        case easy
-        case normal
-        case strong
-    }
-
-    public enum InterpretedOn: String, Codable, Equatable, Sendable, CaseIterable {
-        case ios
-    }
-
-    public enum SessionStatus: String, Codable, Equatable, Sendable, CaseIterable {
-        case provisional
-        case concrete
-        case published
-        case skipped
-        case changedInIntervals
-        case removedInIntervals
-    }
-
-    public enum RiderType: String, Codable, Equatable, Sendable, CaseIterable {
-        case climber
-        case puncheur
-        case sprinter
-        case timeTrialist
-        case endurance
-        case allRounder
-        case developing
-    }
-
-    public enum ProfileConfidence: String, Codable, Equatable, Sendable, CaseIterable {
-        case limited
-        case moderate
-        case high
     }
 
     public struct RecordDailyDecisionInput: Codable, Equatable, Sendable {
-        public var planId: String
+        public var planId: PlanId
         public var workout: Workout
         public var note: CoachNote
         public var evidence: EvidenceSnapshot
-        public var model: String
+        public var model: ModelName
         public var interpretedOn: InterpretedOn
 
-        public init(planId: String, workout: Workout, note: CoachNote, evidence: EvidenceSnapshot, model: String, interpretedOn: InterpretedOn) {
+        public init(planId: PlanId, workout: Workout, note: CoachNote, evidence: EvidenceSnapshot, model: ModelName, interpretedOn: InterpretedOn) {
             self.planId = planId
             self.workout = workout
             self.note = note
@@ -858,10 +1282,10 @@ extension CadenciaAPI {
     }
 
     public struct SendMessageInput: Codable, Equatable, Sendable {
-        public var messageId: String
-        public var text: String
+        public var messageId: MessageId
+        public var text: MessageText
 
-        public init(messageId: String, text: String) {
+        public init(messageId: MessageId, text: MessageText) {
             self.messageId = messageId
             self.text = text
         }
@@ -878,14 +1302,14 @@ extension CadenciaAPI {
     }
 
     public struct RecordCoachReplyInput: Codable, Equatable, Sendable {
-        public var messageId: String
-        public var inReplyTo: String
-        public var text: String
+        public var messageId: MessageId
+        public var inReplyTo: MessageId
+        public var text: MessageText
         public var intent: Intent?
-        public var model: String
+        public var model: ModelName
         public var interpretedOn: InterpretedOn
 
-        public init(messageId: String, inReplyTo: String, text: String, intent: Intent? = nil, model: String, interpretedOn: InterpretedOn) {
+        public init(messageId: MessageId, inReplyTo: MessageId, text: MessageText, intent: Intent? = nil, model: ModelName, interpretedOn: InterpretedOn) {
             self.messageId = messageId
             self.inReplyTo = inReplyTo
             self.text = text
@@ -910,11 +1334,11 @@ extension CadenciaAPI {
     }
 
     public struct RecordCoachQuestionInput: Codable, Equatable, Sendable {
-        public var text: String
-        public var model: String
+        public var text: MessageText
+        public var model: ModelName
         public var interpretedOn: InterpretedOn
 
-        public init(text: String, model: String, interpretedOn: InterpretedOn) {
+        public init(text: MessageText, model: ModelName, interpretedOn: InterpretedOn) {
             self.text = text
             self.model = model
             self.interpretedOn = interpretedOn
@@ -933,9 +1357,9 @@ extension CadenciaAPI {
     }
 
     public struct AnswerQuestionInput: Codable, Equatable, Sendable {
-        public var text: String
+        public var text: MessageText
 
-        public init(text: String) {
+        public init(text: MessageText) {
             self.text = text
         }
 
@@ -951,10 +1375,10 @@ extension CadenciaAPI {
 
     public struct RecordDraftInput: Codable, Equatable, Sendable {
         public var draft: PlanDraft
-        public var model: String
+        public var model: ModelName
         public var interpretedOn: InterpretedOn
 
-        public init(draft: PlanDraft, model: String, interpretedOn: InterpretedOn) {
+        public init(draft: PlanDraft, model: ModelName, interpretedOn: InterpretedOn) {
             self.draft = draft
             self.model = model
             self.interpretedOn = interpretedOn
@@ -973,9 +1397,9 @@ extension CadenciaAPI {
     }
 
     public struct AcceptDraftInput: Codable, Equatable, Sendable {
-        public var planId: String
+        public var planId: PlanId
 
-        public init(planId: String) {
+        public init(planId: PlanId) {
             self.planId = planId
         }
 
@@ -1008,10 +1432,10 @@ extension CadenciaAPI {
 
     public struct RecordProfileInput: Codable, Equatable, Sendable {
         public var report: RiderReport
-        public var model: String
+        public var model: ModelName
         public var interpretedOn: InterpretedOn
 
-        public init(report: RiderReport, model: String, interpretedOn: InterpretedOn) {
+        public init(report: RiderReport, model: ModelName, interpretedOn: InterpretedOn) {
             self.report = report
             self.model = model
             self.interpretedOn = interpretedOn
@@ -1030,9 +1454,9 @@ extension CadenciaAPI {
     }
 
     public struct AcceptIntentInput: Codable, Equatable, Sendable {
-        public var messageId: String
+        public var messageId: MessageId
 
-        public init(messageId: String) {
+        public init(messageId: MessageId) {
             self.messageId = messageId
         }
 
@@ -1047,9 +1471,9 @@ extension CadenciaAPI {
     }
 
     public struct DismissIntentInput: Codable, Equatable, Sendable {
-        public var messageId: String
+        public var messageId: MessageId
 
-        public init(messageId: String) {
+        public init(messageId: MessageId) {
             self.messageId = messageId
         }
 
@@ -1064,9 +1488,9 @@ extension CadenciaAPI {
     }
 
     public struct DismissFtpProposalInput: Codable, Equatable, Sendable {
-        public var ftp: Int
+        public var ftp: FtpWatts
 
-        public init(ftp: Int) {
+        public init(ftp: FtpWatts) {
             self.ftp = ftp
         }
 
@@ -1081,10 +1505,10 @@ extension CadenciaAPI {
     }
 
     public struct MoveSessionInput: Codable, Equatable, Sendable {
-        public var sessionId: String
-        public var toDay: String
+        public var sessionId: SessionId
+        public var toDay: Day
 
-        public init(sessionId: String, toDay: String) {
+        public init(sessionId: SessionId, toDay: Day) {
             self.sessionId = sessionId
             self.toDay = toDay
         }
@@ -1103,112 +1527,112 @@ extension CadenciaAPI {
 
 extension CadenciaAPI {
     /// `POST /v1/RecordDailyDecision`. Rejections: NotYours (403), DecisionAlreadyAccepted (409), Unauthorized (422).
-    public func recordDailyDecision(_ target: String, _ input: RecordDailyDecisionInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("RecordDailyDecision", target: target, input: input, commandId: commandId)
+    public func recordDailyDecision(_ target: DailyDecisionId, _ input: RecordDailyDecisionInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("RecordDailyDecision", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/SendMessage`. Rejections: NotYours (403), Unauthorized (422).
-    public func sendMessage(_ target: String, _ input: SendMessageInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("SendMessage", target: target, input: input, commandId: commandId)
+    public func sendMessage(_ target: ConversationId, _ input: SendMessageInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("SendMessage", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/RecordCoachReply`. Rejections: NotYours (403), Unauthorized (422).
-    public func recordCoachReply(_ target: String, _ input: RecordCoachReplyInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("RecordCoachReply", target: target, input: input, commandId: commandId)
+    public func recordCoachReply(_ target: ConversationId, _ input: RecordCoachReplyInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("RecordCoachReply", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/StartConsultation`. Rejections: NotYours (403), ConsultationAlreadyStarted (409), Unauthorized (422).
-    public func startConsultation(_ target: String, commandId: String? = nil) async throws -> Receipt {
-        try await command("StartConsultation", target: target, input: EmptyObject(), commandId: commandId)
+    public func startConsultation(_ target: ConsultationId, commandId: String? = nil) async throws -> Receipt {
+        try await command("StartConsultation", target: target.rawValue, input: EmptyObject(), commandId: commandId)
     }
 
     /// `POST /v1/RecordCoachQuestion`. Rejections: NotYours (403), ConsultationNotOpen (409), Unauthorized (422).
-    public func recordCoachQuestion(_ target: String, _ input: RecordCoachQuestionInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("RecordCoachQuestion", target: target, input: input, commandId: commandId)
+    public func recordCoachQuestion(_ target: ConsultationId, _ input: RecordCoachQuestionInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("RecordCoachQuestion", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/AnswerQuestion`. Rejections: NotYours (403), ConsultationNotOpen (409), Unauthorized (422).
-    public func answerQuestion(_ target: String, _ input: AnswerQuestionInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("AnswerQuestion", target: target, input: input, commandId: commandId)
+    public func answerQuestion(_ target: ConsultationId, _ input: AnswerQuestionInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("AnswerQuestion", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/RecordDraft`. Rejections: NotYours (403), ConsultationNotOpen (409), Unauthorized (422).
-    public func recordDraft(_ target: String, _ input: RecordDraftInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("RecordDraft", target: target, input: input, commandId: commandId)
+    public func recordDraft(_ target: ConsultationId, _ input: RecordDraftInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("RecordDraft", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/AcceptDraft`. Rejections: NotYours (403), ConsultationNotOpen | NoDraft (409), Unauthorized (422).
-    public func acceptDraft(_ target: String, _ input: AcceptDraftInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("AcceptDraft", target: target, input: input, commandId: commandId)
+    public func acceptDraft(_ target: ConsultationId, _ input: AcceptDraftInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("AcceptDraft", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/RecordProfileAttempt`. Rejections: NotYours (403), AutomaticAttemptUsed (409), Unauthorized (422).
-    public func recordProfileAttempt(_ target: String, _ input: RecordProfileAttemptInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("RecordProfileAttempt", target: target, input: input, commandId: commandId)
+    public func recordProfileAttempt(_ target: AthleteId, _ input: RecordProfileAttemptInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("RecordProfileAttempt", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/RecordProfile`. Rejections: NotYours (403), Unauthorized (422).
-    public func recordProfile(_ target: String, _ input: RecordProfileInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("RecordProfile", target: target, input: input, commandId: commandId)
+    public func recordProfile(_ target: AthleteId, _ input: RecordProfileInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("RecordProfile", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/AcceptIntent`. Rejections: NotYours (403), NoOpenIntent (409), Unauthorized (422).
-    public func acceptIntent(_ target: String, _ input: AcceptIntentInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("AcceptIntent", target: target, input: input, commandId: commandId)
+    public func acceptIntent(_ target: ConversationId, _ input: AcceptIntentInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("AcceptIntent", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/DismissIntent`. Rejections: NotYours (403), NoOpenIntent (409), Unauthorized (422).
-    public func dismissIntent(_ target: String, _ input: DismissIntentInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("DismissIntent", target: target, input: input, commandId: commandId)
+    public func dismissIntent(_ target: ConversationId, _ input: DismissIntentInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("DismissIntent", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/DismissFtpProposal`. Rejections: NotYours (403), Unauthorized (422).
-    public func dismissFtpProposal(_ target: String, _ input: DismissFtpProposalInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("DismissFtpProposal", target: target, input: input, commandId: commandId)
+    public func dismissFtpProposal(_ target: AthleteId, _ input: DismissFtpProposalInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("DismissFtpProposal", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `GET /v1/TodayDecision/{key}`: nil while the key has no data. With `after`, waits until the view includes that write.
     /// Rejections: NotYours (403), ConsistencyTimeout | Unauthorized (422).
-    public func getTodayDecision(_ key: String, after receipt: Receipt? = nil) async throws -> TodayDecisionState? {
-        try await read("TodayDecision", key: key, after: receipt)
+    public func getTodayDecision(_ key: DailyDecisionId, after receipt: Receipt? = nil) async throws -> TodayDecisionState? {
+        try await read("TodayDecision", key: key.rawValue, after: receipt)
     }
 
     /// `GET /v1/ConversationThread/{key}`: nil while the key has no data. With `after`, waits until the view includes that write.
     /// Rejections: NotYours (403), ConsistencyTimeout | Unauthorized (422).
-    public func getConversationThread(_ key: String, after receipt: Receipt? = nil) async throws -> ConversationThreadState? {
-        try await read("ConversationThread", key: key, after: receipt)
+    public func getConversationThread(_ key: ConversationId, after receipt: Receipt? = nil) async throws -> ConversationThreadState? {
+        try await read("ConversationThread", key: key.rawValue, after: receipt)
     }
 
     /// `GET /v1/ConsultationView/{key}`: nil while the key has no data. With `after`, waits until the view includes that write.
     /// Rejections: NotYours (403), ConsistencyTimeout | Unauthorized (422).
-    public func getConsultationView(_ key: String, after receipt: Receipt? = nil) async throws -> ConsultationViewState? {
-        try await read("ConsultationView", key: key, after: receipt)
+    public func getConsultationView(_ key: ConsultationId, after receipt: Receipt? = nil) async throws -> ConsultationViewState? {
+        try await read("ConsultationView", key: key.rawValue, after: receipt)
     }
 
     /// `GET /v1/RiderProfileCard/{key}`: nil while the key has no data. With `after`, waits until the view includes that write.
     /// Rejections: NotYours (403), ConsistencyTimeout | Unauthorized (422).
-    public func getRiderProfileCard(_ key: String, after receipt: Receipt? = nil) async throws -> RiderProfileCardState? {
-        try await read("RiderProfileCard", key: key, after: receipt)
+    public func getRiderProfileCard(_ key: AthleteId, after receipt: Receipt? = nil) async throws -> RiderProfileCardState? {
+        try await read("RiderProfileCard", key: key.rawValue, after: receipt)
     }
 
     /// `POST /v1/MoveSession`. Rejections: NotYours (403), SessionNotFound (404), PlanNotActive | DayTaken (409), DayOutsidePlan | Unauthorized (422).
-    public func moveSession(_ target: String, _ input: MoveSessionInput, commandId: String? = nil) async throws -> Receipt {
-        try await command("MoveSession", target: target, input: input, commandId: commandId)
+    public func moveSession(_ target: PlanId, _ input: MoveSessionInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("MoveSession", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/RecordDayRequirement`. Rejections: NotYours (403), PlanNotActive (409), DayOutsidePlan | Unauthorized (422).
-    public func recordDayRequirement(_ target: String, _ input: DayRequirement, commandId: String? = nil) async throws -> Receipt {
-        try await command("RecordDayRequirement", target: target, input: input, commandId: commandId)
+    public func recordDayRequirement(_ target: PlanId, _ input: DayRequirement, commandId: String? = nil) async throws -> Receipt {
+        try await command("RecordDayRequirement", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `POST /v1/RetirePlan`. Rejections: NotYours (403), PlanNotActive (409), Unauthorized (422).
-    public func retirePlan(_ target: String, commandId: String? = nil) async throws -> Receipt {
-        try await command("RetirePlan", target: target, input: EmptyObject(), commandId: commandId)
+    public func retirePlan(_ target: PlanId, commandId: String? = nil) async throws -> Receipt {
+        try await command("RetirePlan", target: target.rawValue, input: EmptyObject(), commandId: commandId)
     }
 
     /// `GET /v1/CurrentPlan/{key}`: nil while the key has no data. With `after`, waits until the view includes that write.
     /// Rejections: NotYours (403), ConsistencyTimeout | Unauthorized (422).
-    public func getCurrentPlan(_ key: String, after receipt: Receipt? = nil) async throws -> CurrentPlanState? {
-        try await read("CurrentPlan", key: key, after: receipt)
+    public func getCurrentPlan(_ key: AthleteId, after receipt: Receipt? = nil) async throws -> CurrentPlanState? {
+        try await read("CurrentPlan", key: key.rawValue, after: receipt)
     }
 }

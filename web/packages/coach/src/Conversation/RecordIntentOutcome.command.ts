@@ -1,17 +1,15 @@
 import * as Domain from "@alchemy.run/domain";
-import * as Schema from "effect/Schema";
+import { PlanAnswer, Refusal } from "../CoachShape.ts";
 import { ConversationId } from "./Conversation.id.ts";
+import { MessageId } from "./Message.id.ts";
 
-export class IntentApplied extends Domain.Event("IntentApplied", { messageId: Schema.String }) {}
+export class IntentApplied extends Domain.Event("IntentApplied", { messageId: MessageId }) {}
 
-export class IntentRefused extends Domain.Event("IntentRefused", {
-  messageId: Schema.String,
-  reason: Schema.String,
-}) {}
+export class IntentRefused extends Domain.Event("IntentRefused", { messageId: MessageId, refusal: Refusal }) {}
 
 /** Record what the plan did with an accepted intent. Sent by `IntentApplier`; it never rejects. */
 export class RecordIntentOutcome extends Domain.Command("RecordIntentOutcome", {
   target: ConversationId,
-  input: { messageId: Schema.String, accepted: Schema.Boolean, reason: Schema.NullOr(Schema.String) },
+  input: { messageId: MessageId, answer: PlanAnswer },
   events: [IntentApplied, IntentRefused],
 }) {}

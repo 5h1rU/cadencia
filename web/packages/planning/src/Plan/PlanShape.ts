@@ -1,47 +1,22 @@
-import { Day } from "@cadencia/kernel/Day";
-import { SessionKind } from "@cadencia/kernel/SessionKind";
-import { Workout } from "@cadencia/kernel/Workout";
+import { Day } from "@cadencia/kernel/Calendar/Day";
+import { Paragraph, Title } from "@cadencia/kernel/Text";
+import { SessionKind } from "@cadencia/kernel/Training/SessionKind";
+import { Kilometers, Minutes } from "@cadencia/kernel/Training/Units";
+import { Workout } from "@cadencia/kernel/Training/Workout";
 import * as Schema from "effect/Schema";
+import { ExternalId, SessionId } from "./Session.id.ts";
 
-/** What the plan is training for. Raw values match `GoalKind` in Cadencia iOS. */
-export const GoalKind = Schema.Literals([
-  "climbing",
-  "ftp",
-  "durability",
-  "endurance",
-  "vo2max",
-  "event",
-  "strength",
-]);
-export type GoalKind = typeof GoalKind.Type;
-
-export const PhaseFocus = Schema.Literals([
-  "prepare",
-  "base",
-  "build",
-  "peak",
-  "taper",
-  "consolidate",
-  "recover",
-]);
-
-/** A block of weeks with one focus. Weeks are 1-based from the plan's start. */
-export const Phase = Schema.Struct({
-  focus: PhaseFocus,
-  startWeek: Schema.Int,
-  endWeek: Schema.Int,
-  summary: Schema.String,
-});
-export type Phase = typeof Phase.Type;
+export { GoalKind } from "@cadencia/kernel/Training/Goal";
+export { Phase, PhaseFocus } from "@cadencia/kernel/Training/Phase";
 
 /** The day the plan builds towards. */
 export const GoalEvent = Schema.Struct({
-  name: Schema.String,
+  name: Title,
   day: Day,
-  distanceKm: Schema.NullOr(Schema.Number),
+  distanceKm: Schema.NullOr(Kilometers),
   /** A race is ridden at the limit; a group ride or gran fondo is a priority day, not a race effort. */
   isRace: Schema.Boolean,
-  objective: Schema.String,
+  objective: Paragraph,
 });
 export type GoalEvent = typeof GoalEvent.Type;
 
@@ -62,16 +37,16 @@ export type SessionStatus = typeof SessionStatus.Type;
 
 /** One session of the plan, as intent and, once concrete, as a workout. */
 export const PlannedSession = Schema.Struct({
-  sessionId: Schema.String,
+  sessionId: SessionId,
   day: Day,
   kind: SessionKind,
-  title: Schema.String,
-  targetMinutes: Schema.Int,
-  purpose: Schema.String,
+  title: Title,
+  targetMinutes: Minutes,
+  purpose: Paragraph,
   status: SessionStatus,
   workout: Schema.NullOr(Workout),
   /** The Intervals `external_id` this session is published under. */
-  externalId: Schema.String,
+  externalId: ExternalId,
 });
 export type PlannedSession = typeof PlannedSession.Type;
 
@@ -79,20 +54,16 @@ export type PlannedSession = typeof PlannedSession.Type;
 export const SessionDraft = Schema.Struct({
   day: Day,
   kind: SessionKind,
-  title: Schema.String,
-  targetMinutes: Schema.Int,
-  purpose: Schema.String,
+  title: Title,
+  targetMinutes: Minutes,
+  purpose: Paragraph,
 });
 export type SessionDraft = typeof SessionDraft.Type;
 
 /** An athlete-authored requirement for one day ("Thursday, 45 minutes at most"). */
 export const DayRequirement = Schema.Struct({
   day: Day,
-  instructions: Schema.String,
-  maxMinutes: Schema.NullOr(Schema.Int),
+  instructions: Paragraph,
+  maxMinutes: Schema.NullOr(Minutes),
 });
 export type DayRequirement = typeof DayRequirement.Type;
-
-/** The `external_id` of a plan session in Intervals. The prefix is the one Cadencia iOS uses. */
-export const externalIdFor = (planId: string, sessionId: string): string =>
-  `cadencia-${planId.replace(":", "-")}-${sessionId}`;

@@ -1,6 +1,6 @@
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
-import { Planner } from "../Planner.external.ts";
+import { Planner, requestFor } from "../Planner.external.ts";
 import { DailyDecision } from "./DailyDecision.aggregate.ts";
 import { DailyDecisionRecorded } from "./RecordDailyDecision.command.ts";
 import { RecordPlanVerdict } from "./RecordPlanVerdict.command.ts";
@@ -15,14 +15,15 @@ export const DecisionToPlanLive = DecisionToPlan.toLayer(
   Effect.gen(function* () {
     const planner = yield* Planner;
     const decisions = yield* DailyDecision;
-    return Effect.fn(function* ({ source, event }) {
-      const answer = yield* planner.concretizeSession({
+    return Effect.fn(function* ({ source, event, envelope }) {
+      const { answer } = yield* planner.concretizeSession({
+        requestId: requestFor(envelope),
         planId: event.planId,
         day: event.day,
         workout: event.workout,
         evidence: event.evidence,
       });
-      yield* decisions.send(source, new RecordPlanVerdict({ attempt: event.attempt, ...answer }));
+      yield* decisions.send(source, new RecordPlanVerdict({ attempt: event.attempt, answer }));
     });
   }),
 );

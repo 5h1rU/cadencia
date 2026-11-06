@@ -1,9 +1,11 @@
-import { NotYours } from "@cadencia/kernel/NotYours.rejection";
-import { mustOwn } from "@cadencia/kernel/owns";
-import { Session } from "@cadencia/kernel/Session.middleware";
+import { FtpWatts } from "@cadencia/athlete/Measures";
+import { NotYours } from "@cadencia/identity/NotYours.rejection";
+import { mustOwn } from "@cadencia/identity/owns";
+import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import { ModelName } from "../CoachText.ts";
 import { RiderProfile } from "./RiderProfile.aggregate.ts";
 import { RiderReport } from "./RiderReport.ts";
 
@@ -15,8 +17,8 @@ export class RiderProfileCard extends Domain.View("RiderProfileCard", {
   rejects: [NotYours],
   state: Schema.Struct({
     report: Schema.NullOr(RiderReport),
-    model: Schema.NullOr(Schema.String),
-    dismissedFtp: Schema.NullOr(Schema.Int),
+    model: Schema.NullOr(ModelName),
+    dismissedFtp: Schema.NullOr(FtpWatts),
   }),
   initial: { report: null, model: null, dismissedFtp: null },
   evolve: {

@@ -97,7 +97,7 @@ final class SessionIntentTests: XCTestCase {
         XCTAssertNotEqual(second, requested.fingerprint)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         let oldFingerprint = SHA256.hash(Array(try encoder.encode(base))).map { String(format: "%02x", $0) }.joined()
-        XCTAssertNotEqual(base.fingerprint, oldFingerprint)
+        XCTAssertNotEqual(base.fingerprint.rawValue, oldFingerprint)
     }
 
     func testLateStartingPlansKeepEventAndEveryAvailableDayAcrossWeekBoundaries() {

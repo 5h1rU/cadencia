@@ -4,7 +4,9 @@
   "private": true,
   "license": "AGPL-3.0-or-later",
   "type": "module",
-  "exports": { "./*": "./src/*.ts" },
+  "exports": {
+    "./*": "./src/*.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p .",
@@ -13,7 +15,9 @@
   "dependencies": {
     "@alchemy.run/cloudflare": "2.0.0-beta.85",
     "@alchemy.run/domain": "2.0.0-beta.85",
+    "@cadencia/athlete": "workspace:*",
     "@cadencia/coach": "workspace:*",
+    "@cadencia/identity": "workspace:*",
     "@cadencia/kernel": "workspace:*",
     "@cadencia/planning": "workspace:*",
     "@cloudflare/workers-types": "5.20261106.1",

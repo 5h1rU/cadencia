@@ -32,12 +32,13 @@ struct PlanConsultationPreview: View {
             review: empty ? String(localized: "Let’s get to know your riding.") :
                 String(localized: "Your recent rides give us a starting point. We can fill in the missing details as we talk."),
             question: String(localized: "What other training would you like to include?"), topic: .otherTraining)
-        state.consultation = .init(id: "i12345:preview", startedOn: session.startedOn,
-                                   view: .init(.init(stage: .open, turns: [.init(role: .coach, text: session.reply!.question)])))
+        let athlete = state.athlete.flatMap { CadenciaAPI.AthleteId(rawValue: $0.id) } ?? CadenciaAPI.AthleteId(rawValue: "i12345")!
+        state.consultation = .init(id: BackendID.newConsultation(athlete: athlete), startedOn: session.startedOn,
+                                   view: .init(.init(stage: .open, turns: [.init(role: .coach, text: try! .init(fitting: session.reply!.question))])))
         let transport = ConsultationPreviewTransport()
         let coach = LLMCoach(transport: transport, endpoint: URL(string: "https://example.invalid/chat/completions")!, apiKey: "preview")
         let backend = CoachBackend(api: CadenciaAPI(baseURL: URL(string: "https://cadencia.invalid")!, transport: transport, sessionToken: "preview"),
-                                   athleteId: state.athlete?.id ?? "i12345", pause: { _ in })
+                                   athleteId: athlete, pause: { _ in })
         let model = AppModel(state: state, credential: .apiKey("preview"), store: .temporary(), keychain: KeychainStore(service: "preview.consultation"),
                              transport: transport, coachOverride: coach, backendOverride: backend)
         model.previewConsultationReply(session.reply!)

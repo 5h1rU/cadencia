@@ -1,6 +1,6 @@
-import { type Actor, Actor as ActorSchema } from "@cadencia/kernel/Actor";
-import { CurrentActor } from "@cadencia/kernel/CurrentActor.context";
-import { SESSION_COOKIE, Session, Unauthorized } from "@cadencia/kernel/Session.middleware";
+import { type Actor, Actor as ActorSchema } from "@cadencia/identity/Actor";
+import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
+import { Session, SESSION_COOKIE, Unauthorized } from "@cadencia/identity/Session.middleware";
 import * as Alchemy from "alchemy";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -42,21 +42,33 @@ const hmacKey = Effect.fn(function* () {
   );
 });
 
-/** What a signed token says: who, for what, and until when. */
-const Claims = Schema.fromJsonString(
-  Schema.Struct({ actor: ActorSchema, purpose: Schema.Literals(["session", "handoff"]), expires: Schema.Number }),
-);
+/** Milliseconds since the Unix epoch. */
+const EpochMillis = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0)), Schema.brand("EpochMillis"));
 
-const sign = Effect.fn(function* (actor: Actor, purpose: "session" | "handoff", lifetimeMs: number) {
-  const expires = (yield* Clock.currentTimeMillis) + lifetimeMs;
+/** What a token is good for: a session, or a one-minute handoff from the browser to iOS. */
+const TokenPurpose = Schema.Literals(["session", "handoff"]);
+type TokenPurpose = typeof TokenPurpose.Type;
+
+/** What a signed token says: who, for what, and until when. */
+const Claims = Schema.fromJsonString(Schema.Struct({ actor: ActorSchema, purpose: TokenPurpose, expires: EpochMillis }));
+
+/** A token Cadencia signed: base64url claims, a dot, and their base64url HMAC. */
+export const SignedToken = Schema.String.pipe(
+  Schema.check(Schema.isPattern(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/)),
+  Schema.brand("SignedToken"),
+);
+export type SignedToken = typeof SignedToken.Type;
+
+const sign = Effect.fn(function* (actor: Actor, purpose: TokenPurpose, lifetimeMs: number) {
+  const expires = EpochMillis.make((yield* Clock.currentTimeMillis) + lifetimeMs);
   const json = yield* Schema.encodeEffect(Claims)({ actor, purpose, expires }).pipe(Effect.orDie);
   const claims = Base64Url.encode(json);
   const key = yield* hmacKey();
   const signature = yield* Effect.promise(() => crypto.subtle.sign("HMAC", key, new TextEncoder().encode(claims)));
-  return `${claims}.${Base64Url.encode(new Uint8Array(signature))}`;
+  return SignedToken.make(`${claims}.${Base64Url.encode(new Uint8Array(signature))}`);
 });
 
-const verify = Effect.fn(function* (token: string, purpose: "session" | "handoff") {
+const verify = Effect.fn(function* (token: string, purpose: TokenPurpose) {
   const [claims, mac, ...rest] = token.split(".");
   if (!claims || !mac || rest.length > 0) return Option.none<Actor>();
   const signature = Base64Url.decode(mac);

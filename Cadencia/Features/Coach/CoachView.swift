@@ -305,7 +305,7 @@ struct MessageRow: View {
         HStack(alignment: .top) {
             if message.role == .athlete { Spacer(minLength: 48) }
             VStack(alignment: .leading, spacing: 8) {
-                Text(verbatim: message.text)
+                Text(verbatim: message.text.rawValue)
                 if let intent = message.intent {
                     UnderstoodCard(intent: intent, status: message.intentStatus ?? .proposed, refusal: message.refusal,
                                    busy: busy, accept: accept, dismiss: dismiss)
@@ -325,7 +325,7 @@ struct UnderstoodCard: View {
     @Environment(AppModel.self) private var model
     let intent: CadenciaAPI.Intent
     let status: CadenciaAPI.ThreadMessage.IntentStatus
-    let refusal: String?
+    let refusal: CadenciaAPI.Refusal?
     var busy = false
     let accept: () -> Void
     let dismiss: () -> Void
@@ -334,10 +334,10 @@ struct UnderstoodCard: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("What I understood").font(.caption).foregroundStyle(.secondary).textCase(.uppercase)
             ForEach(intent.limits, id: \.day) { limit in
-                if let day = Day(iso: limit.day) {
+                if let day = Day(limit.day) {
                     Label {
                         if limit.unavailable { Text("\(Format.day(day)): no training") }
-                        else if let m = limit.maxMinutes { Text("\(Format.day(day)): up to \(m) min") }
+                        else if let m = limit.maxMinutes?.rawValue { Text("\(Format.day(day)): up to \(m) min") }
                         else { Text("\(Format.day(day)): your request for the session") }
                     } icon: { Image(systemName: limit.maxMinutes == nil && !limit.unavailable ? "bicycle" : "clock") }
                 }
@@ -362,7 +362,7 @@ struct UnderstoodCard: View {
                 Label("Not applied", systemImage: "xmark").foregroundStyle(.secondary)
             case .refused:
                 Label("Your plan couldn't take this change.", systemImage: "exclamationmark.triangle").foregroundStyle(.secondary)
-                if let refusal { Text(verbatim: refusal).font(.footnote).foregroundStyle(.secondary) }
+                if let refusal { Text(verbatim: refusal.explanation).font(.footnote).foregroundStyle(.secondary) }
             }
         }
         .font(.subheadline)

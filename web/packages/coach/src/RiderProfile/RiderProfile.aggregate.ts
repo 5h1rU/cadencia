@@ -1,17 +1,12 @@
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { inputOf, mustOwn } from "@cadencia/kernel/owns";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { mustOwn } from "@cadencia/identity/owns";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import {
-  AutomaticAttemptUsed,
-  DismissFtpProposal,
-  FtpProposalDismissed,
-  ProfileAttempted,
-  ProfileRecorded,
-  RecordProfile,
-  RecordProfileAttempt,
-} from "./RiderProfile.commands.ts";
+import { inputOf } from "../inputOf.ts";
+import { DismissFtpProposal, FtpProposalDismissed } from "./DismissFtpProposal.command.ts";
+import { ProfileRecorded, RecordProfile } from "./RecordProfile.command.ts";
+import { AutomaticAttemptUsed, ProfileAttempted, RecordProfileAttempt } from "./RecordProfileAttempt.command.ts";
 
 /** What the coach has learned about the rider's profile, keyed by athlete. */
 export class RiderProfile extends Domain.Aggregate("RiderProfile", {

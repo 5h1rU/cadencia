@@ -16,6 +16,9 @@ Durable Objects, and a [foldkit](https://foldkit.dev) web app.
   in with Intervals.icu OAuth, publishes sessions to their Intervals calendar,
   notices changes made there, and serves a plain HTTP API with OpenAPI at
   `/v1/openapi.json` for iOS.
+- **Shared packages**: `identity` (who acts and whose data it is), `kernel`
+  (the terms both models share: days, plan ids, text, training) and `athlete`
+  (what Intervals.icu says about the athlete: evidence, readiness, measures).
 - **App** (`packages/app`) shows everything live and writes only what needs no
   AI: moving a session, a day's limit, retiring the plan, accepting or
   dismissing a proposal, and wellness declarations.

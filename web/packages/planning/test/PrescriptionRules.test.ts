@@ -1,7 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
-import { addDays } from "@cadencia/kernel/Day";
 import { openerProblem, problemWith } from "../src/Plan/PrescriptionRules.ts";
-import { endurance, evidence, longRide, steady, tuesday, workout } from "./fixtures.ts";
+import { endurance, evidence, longRide, minutes, steady, tuesday, workout } from "./fixtures.ts";
 
 const opener = workout("openerActivation", [
   steady("Warm-up", 20, 0.6),
@@ -18,7 +17,7 @@ describe("openers", () => {
 
   it("need a warm-up before the first effort", () => {
     expect(openerProblem(workout("openerActivation", [steady("Effort", 1, 1.05), steady("Easy", 30, 0.55)]))).toBe(
-      "Include an easy warm-up before the first activation.",
+      "openerWithoutWarmUp",
     );
   });
 
@@ -29,12 +28,12 @@ describe("openers", () => {
       steady("Effort", 2, 1.0),
       steady("Easy", 30, 0.55),
     ]);
-    expect(openerProblem(split)).toBe("An opener activation is too long. Use brief efforts, not sustained training intervals.");
+    expect(openerProblem(split)).toBe("openerEffortTooLong");
   });
 
   it("are allowed the day before a confirmed event", () => {
-    const tuesdayOpener = { ...longRide, day: tuesday, kind: "openerActivation" as const, targetMinutes: 60 };
-    const withEvent = { ...evidence(), eventDays: [addDays(tuesday, 1)] };
+    const tuesdayOpener = { ...longRide, day: tuesday, kind: "openerActivation" as const, targetMinutes: minutes(60) };
+    const withEvent = evidence([], ["2026-11-11"]);
     expect(problemWith({ session: tuesdayOpener, workout: opener, evidence: withEvent, requirement: undefined, goalEvent: null })).toBeUndefined();
   });
 });
@@ -49,6 +48,6 @@ describe("rest days", () => {
         requirement: undefined,
         goalEvent: null,
       }),
-    ).toEqual({ _tag: "PurposeMismatch", reason: "A rest day must have no riding blocks." });
+    ).toEqual({ _tag: "PurposeMismatch", problem: "restWithRiding" });
   });
 });

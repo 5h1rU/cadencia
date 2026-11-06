@@ -1,5 +1,5 @@
-import { athlete } from "@cadencia/kernel/Actor";
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
+import { athlete } from "@cadencia/identity/Actor";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
 import * as Effect from "effect/Effect";
 import * as Base64Url from "effect/encoding/Base64Url";
 import * as Cookies from "effect/http/Cookies";
@@ -11,28 +11,42 @@ import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { Connections } from "../Connections.ts";
-import { signHandoff, signSession, verifyHandoff, withSessionCookie } from "../Session.ts";
+import { SignedToken, signHandoff, signSession, verifyHandoff, withSessionCookie } from "../Session.ts";
 import { INTERVALS } from "./IntervalsHttp.ts";
 
 /** What Cadencia needs from Intervals: the same scopes Cadencia iOS asks for. */
-export const SCOPES = ["ACTIVITY:WRITE", "WELLNESS:WRITE", "CALENDAR:WRITE", "SETTINGS:WRITE", "CHATS:WRITE"];
+export const SCOPES = ["ACTIVITY:WRITE", "WELLNESS:WRITE", "CALENDAR:WRITE", "SETTINGS:WRITE", "CHATS:WRITE"] as const;
 
 /** Where a sign-in returns: the web app, or Cadencia iOS through its URL scheme. */
 const IOS_CALLBACK = "cadencia://auth/callback";
 
 const FLOW_COOKIE = "cadencia_oauth";
 
-const Flow = Schema.fromJsonString(
-  Schema.Struct({ state: Schema.String, verifier: Schema.String, client: Schema.Literals(["web", "ios"]) }),
-);
+/** 32 random bytes in base64url: the OAuth `state` and the PKCE verifier are both made this way. */
+const RandomToken = Schema.String.pipe(Schema.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/)));
+const OAuthState = RandomToken.pipe(Schema.brand("OAuthState"));
+const PkceVerifier = RandomToken.pipe(Schema.brand("PkceVerifier"));
 
+/** Where a sign-in returns to. */
+const SignInClient = Schema.Literals(["web", "ios"]);
+
+/** The sign-in in progress, kept in a short-lived cookie. */
+const Flow = Schema.fromJsonString(Schema.Struct({ state: OAuthState, verifier: PkceVerifier, client: SignInClient }));
+
+/** A permission Cadencia asks Intervals for. */
+const IntervalsScope = Schema.Literals(SCOPES);
+
+/** What Intervals answers when it exchanges the code; the token never appears in logs. */
 const TokenResponse = Schema.Struct({
-  access_token: Schema.String,
+  access_token: Schema.RedactedFromValue(Schema.String),
   scope: Schema.String,
-  athlete: Schema.Struct({ id: Schema.String }),
+  athlete: Schema.Struct({ id: AthleteId }),
 });
 
-const randomString = () => Base64Url.encode(crypto.getRandomValues(new Uint8Array(32)));
+const scopesOf = (scope: string): ReadonlyArray<typeof IntervalsScope.Type> =>
+  scope.split(",").flatMap((s) => Option.toArray(Schema.decodeUnknownOption(IntervalsScope)(s.trim())));
+
+const randomToken = () => Base64Url.encode(crypto.getRandomValues(new Uint8Array(32)));
 
 const challengeOf = (verifier: string) =>
   Effect.promise(async () =>
@@ -56,8 +70,8 @@ export const startRoute = (config: OAuthConfig) =>
     const request = yield* HttpServerRequest;
     const url = new URL(request.url, "http://localhost");
     const client = url.searchParams.get("client") === "ios" ? "ios" : "web";
-    const state = randomString();
-    const verifier = randomString();
+    const state = OAuthState.make(randomToken());
+    const verifier = PkceVerifier.make(randomToken());
     const authorize = new URL("/oauth/authorize", INTERVALS);
     authorize.searchParams.set("client_id", config.clientId);
     authorize.searchParams.set("redirect_uri", config.redirectUri);
@@ -120,12 +134,8 @@ export const callbackRoute = (config: OAuthConfig) =>
     if (Option.isNone(exchanged)) {
       return HttpServerResponse.text("Intervals.icu did not accept the sign-in. Try again.", { status: 502 });
     }
-    const athleteId = AthleteId.make(exchanged.value.athlete.id);
-    yield* connections.save({
-      athleteId,
-      token: Redacted.make(exchanged.value.access_token),
-      scopes: exchanged.value.scope.split(",").filter(Boolean),
-    });
+    const athleteId = exchanged.value.athlete.id;
+    yield* connections.save({ athleteId, token: exchanged.value.access_token, scopes: scopesOf(exchanged.value.scope) });
     const clearFlow = HttpServerResponse.setCookieUnsafe(FLOW_COOKIE, "", { path: "/auth", maxAge: 0 });
     if (flow.value.client === "ios") {
       const handoff = yield* signHandoff(athlete(athleteId));
@@ -142,7 +152,7 @@ export const exchangeRoute = Effect.gen(function* () {
   const request = yield* HttpServerRequest;
   if (request.method !== "POST") return HttpServerResponse.empty({ status: 405 });
   const body = yield* request.json.pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Struct({ handoff: Schema.String }))),
+    Effect.flatMap(Schema.decodeUnknownEffect(Schema.Struct({ handoff: SignedToken }))),
     Effect.option,
   );
   if (Option.isNone(body)) return HttpServerResponse.text("Expected { handoff }", { status: 400 });

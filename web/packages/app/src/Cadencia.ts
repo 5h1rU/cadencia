@@ -1,18 +1,25 @@
-import type * as Domain from "@alchemy.run/domain";
-import * as DomainFoldkit from "@alchemy.run/domain/Foldkit";
+import { IntervalsActivityId } from "@cadencia/athlete/Activity.id";
+import { EvidenceSnapshot } from "@cadencia/athlete/Evidence";
+import { Bpm, FtpWatts, HrvMs, Kilograms, Rpe, TrainingLoad, Watts, WellnessScale } from "@cadencia/athlete/Measures";
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
-import { CoachNote } from "@cadencia/coach/CoachShape";
+import { CoachNote, Refusal, type RefusalReason } from "@cadencia/coach/CoachShape";
+import { ModelName } from "@cadencia/coach/CoachText";
 import { ConversationId } from "@cadencia/coach/Conversation/Conversation.id";
 import { ThreadMessage } from "@cadencia/coach/Conversation/ConversationThread.view";
+import { MessageId } from "@cadencia/coach/Conversation/Message.id";
 import { DailyDecisionId } from "@cadencia/coach/DailyDecision/DailyDecision.id";
 import { RiderReport } from "@cadencia/coach/RiderProfile/RiderReport";
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { addDays, Day } from "@cadencia/kernel/Day";
-import { EvidenceSnapshot } from "@cadencia/kernel/Evidence";
-import { Workout } from "@cadencia/kernel/Workout";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { addDays, Day } from "@cadencia/kernel/Calendar/Day";
+import { PlanId } from "@cadencia/kernel/Plan.id";
+import { Paragraph, Title } from "@cadencia/kernel/Text";
+import { Minutes, Seconds } from "@cadencia/kernel/Training/Units";
+import { Workout } from "@cadencia/kernel/Training/Workout";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
-import { PlanId } from "@cadencia/planning/Plan/Plan.id";
 import { DayRequirement, Phase, PlannedSession } from "@cadencia/planning/Plan/PlanShape";
+import { SessionId } from "@cadencia/planning/Plan/Session.id";
+import type * as Domain from "@alchemy.run/domain";
+import * as DomainFoldkit from "@alchemy.run/domain/Foldkit";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -31,9 +38,9 @@ export const Section = Schema.Literals(["home", "coach", "plan", "history", "pro
 export type Section = typeof Section.Type;
 
 const PlanView = Schema.Struct({
-  planId: Schema.String,
+  planId: PlanId,
   status: Schema.Literals(["none", "active", "retired"]),
-  title: Schema.String,
+  title: Schema.NullOr(Title),
   startDay: Schema.NullOr(Day),
   endDay: Schema.NullOr(Day),
   phases: Schema.Array(Phase),
@@ -47,42 +54,48 @@ const DecisionView = Schema.Struct({
   workout: Schema.NullOr(Workout),
   note: Schema.NullOr(CoachNote),
   evidence: Schema.NullOr(EvidenceSnapshot),
-  model: Schema.NullOr(Schema.String),
-  refusal: Schema.NullOr(Schema.String),
+  model: Schema.NullOr(ModelName),
+  refusal: Schema.NullOr(Refusal),
 });
 type DecisionView = typeof DecisionView.Type;
 
-const ProfileView = Schema.Struct({ report: Schema.NullOr(RiderReport), model: Schema.NullOr(Schema.String) });
+const ProfileView = Schema.Struct({ report: Schema.NullOr(RiderReport), model: Schema.NullOr(ModelName) });
 
-/** The fields the server passes through from Intervals.icu. */
+/**
+ * The fields the server passes through from Intervals.icu. `name` and
+ * `start_date_local` stay Intervals' own text: any app, or the athlete, wrote them.
+ */
 export const ActivityRow = Schema.Struct({
-  id: Schema.String,
+  id: IntervalsActivityId,
   name: Schema.optional(Schema.NullOr(Schema.String)),
   start_date_local: Schema.optional(Schema.NullOr(Schema.String)),
-  moving_time: Schema.optional(Schema.NullOr(Schema.Number)),
-  icu_training_load: Schema.optional(Schema.NullOr(Schema.Number)),
-  icu_weighted_avg_watts: Schema.optional(Schema.NullOr(Schema.Number)),
-  icu_rpe: Schema.optional(Schema.NullOr(Schema.Number)),
+  moving_time: Schema.optional(Schema.NullOr(Seconds)),
+  icu_training_load: Schema.optional(Schema.NullOr(TrainingLoad)),
+  icu_weighted_avg_watts: Schema.optional(Schema.NullOr(Watts)),
+  icu_rpe: Schema.optional(Schema.NullOr(Rpe)),
 });
 export type ActivityRow = typeof ActivityRow.Type;
 
 export const WellnessRow = Schema.Struct({
-  id: Schema.String,
-  ctl: Schema.optional(Schema.NullOr(Schema.Number)),
-  atl: Schema.optional(Schema.NullOr(Schema.Number)),
-  weight: Schema.optional(Schema.NullOr(Schema.Number)),
-  hrv: Schema.optional(Schema.NullOr(Schema.Number)),
-  restingHR: Schema.optional(Schema.NullOr(Schema.Number)),
+  id: Day,
+  ctl: Schema.optional(Schema.NullOr(TrainingLoad)),
+  atl: Schema.optional(Schema.NullOr(TrainingLoad)),
+  weight: Schema.optional(Schema.NullOr(Kilograms)),
+  hrv: Schema.optional(Schema.NullOr(HrvMs)),
+  restingHR: Schema.optional(Schema.NullOr(Bpm)),
 });
 export type WellnessRow = typeof WellnessRow.Type;
 
 export const AthleteRow = Schema.Struct({
   name: Schema.NullOr(Schema.String),
-  weight: Schema.NullOr(Schema.Number),
-  ftp: Schema.NullOr(Schema.Number),
+  weight: Schema.NullOr(Kilograms),
+  ftp: Schema.NullOr(FtpWatts),
 });
 
-/** The day's declaration, as the form holds it: empty means "not declared". */
+/**
+ * The day's declaration as the form holds it: what the athlete typed, not yet
+ * checked. It is decoded into `WellnessDeclaration` when they save it.
+ */
 const Declaration = Schema.Struct({
   mood: Schema.String,
   motivation: Schema.String,
@@ -124,6 +137,10 @@ export type Model = typeof Model.Type;
 
 // MESSAGE
 
+/** The writes the web makes, none of which needs AI. */
+const WriteAction = Schema.Literals(["acceptIntent", "dismissIntent", "moveSession", "requirement", "retire", "declaration"]);
+type WriteAction = typeof WriteAction.Type;
+
 export const Message = defineMessageUnion({
   ClickedSection: { section: Section },
   ReceivedPlan: { plan: Schema.Option(PlanView) },
@@ -137,8 +154,8 @@ export const Message = defineMessageUnion({
     athlete: Schema.Option(AthleteRow),
   },
   FailedIntervals: { reason: Schema.String },
-  ClickedAcceptIntent: { messageId: Schema.String },
-  ClickedDismissIntent: { messageId: Schema.String },
+  ClickedAcceptIntent: { messageId: MessageId },
+  ClickedDismissIntent: { messageId: MessageId },
   ChangedMove: { field: Schema.Literals(["sessionId", "toDay"]), value: Schema.String },
   SubmittedMove: {},
   ChangedRequirement: { field: Schema.Literals(["day", "maxMinutes", "instructions"]), value: Schema.String },
@@ -152,8 +169,8 @@ export const Message = defineMessageUnion({
   },
   SubmittedDeclaration: {},
   CompletedDeclaration: {},
-  CompletedWrite: { action: Schema.String },
-  FailedWrite: { action: Schema.String, reason: Schema.String },
+  CompletedWrite: { action: WriteAction },
+  FailedWrite: { action: WriteAction, reason: Schema.String },
 });
 export type Message = typeof Message.Type;
 
@@ -191,21 +208,40 @@ export const LoadIntervals = Command.define("LoadIntervals", {
   },
 });
 
-const numberOrUndefined = (value: string) => (value.trim() === "" ? undefined : Number(value));
+/** What the athlete may declare from the web, each in its Intervals unit. */
+export const WellnessDeclaration = Schema.Struct({
+  mood: Schema.optional(WellnessScale),
+  motivation: Schema.optional(WellnessScale),
+  soreness: Schema.optional(WellnessScale),
+  fatigue: Schema.optional(WellnessScale),
+  weight: Schema.optional(Kilograms),
+  comments: Schema.optional(Paragraph),
+});
+export type WellnessDeclaration = typeof WellnessDeclaration.Type;
+
+/** The form, decoded: empty fields are left out; anything else must be valid. */
+export const declarationOf = (form: Declaration) => {
+  const number = (value: string) => (value.trim() === "" ? undefined : Number(value));
+  return Schema.decodeUnknownOption(WellnessDeclaration)(
+    Object.fromEntries(
+      Object.entries({
+        mood: number(form.mood),
+        motivation: number(form.motivation),
+        soreness: number(form.soreness),
+        fatigue: number(form.fatigue),
+        weight: number(form.weight),
+        comments: form.comments.trim() === "" ? undefined : form.comments.trim(),
+      }).filter(([, v]) => v !== undefined),
+    ),
+  );
+};
 
 export const SaveDeclaration = Command.define("SaveDeclaration", {
-  args: { today: Day, declaration: Declaration },
+  args: { today: Day, declaration: WellnessDeclaration },
   messages: [Message.CompletedDeclaration, Message.FailedWrite],
   execute: ({ today, declaration }) =>
     Effect.tryPromise(async () => {
-      const body = {
-        mood: numberOrUndefined(declaration.mood),
-        motivation: numberOrUndefined(declaration.motivation),
-        soreness: numberOrUndefined(declaration.soreness),
-        fatigue: numberOrUndefined(declaration.fatigue),
-        weight: numberOrUndefined(declaration.weight),
-        comments: declaration.comments.trim() === "" ? undefined : declaration.comments.trim(),
-      };
+      const body = Schema.encodeSync(WellnessDeclaration)(declaration);
       const response = await fetch(`/api/intervals/wellness/${today}`, {
         method: "PUT",
         credentials: "same-origin",
@@ -223,7 +259,7 @@ export const SaveDeclaration = Command.define("SaveDeclaration", {
 
 /** A domain command's result as a plain outcome: done, or the rejection's name. */
 const outcome =
-  (action: string) =>
+  (action: WriteAction) =>
   (result: { readonly _tag: string }): Message => {
     if (!result._tag.startsWith("Failed")) return Message.CompletedWrite({ action });
     const failure = (result as { readonly failure?: unknown }).failure as
@@ -262,7 +298,7 @@ const send = (
 };
 
 const planIdOf = (model: Model) =>
-  Option.flatMap(model.plan, (plan) => (plan.status === "active" ? Option.some(PlanId.make(plan.planId)) : Option.none()));
+  Option.flatMap(model.plan, (plan) => (plan.status === "active" ? Option.some(plan.planId) : Option.none()));
 
 /** Keys are only read while signed in; a placeholder keeps them well-formed before that. */
 const owner = (model: Model) => model.athleteId ?? "signed-out";
@@ -306,14 +342,15 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
     SubmittedMove: () => {
       const planId = planIdOf(model);
       const toDay = Schema.decodeUnknownOption(Day)(model.move.toDay);
-      if (Option.isNone(planId) || Option.isNone(toDay) || model.move.sessionId === "") {
+      const sessionId = Schema.decodeUnknownOption(SessionId)(model.move.sessionId);
+      if (Option.isNone(planId) || Option.isNone(toDay) || Option.isNone(sessionId)) {
         return { model: modifyFields(model, { error: () => Option.some("Elige una sesión y un día nuevo.") }) };
       }
       return send(model, (commandId) =>
         Command.mapMessage(
           PlanningClient.MoveSession({
             target: planId.value,
-            input: { sessionId: model.move.sessionId, toDay: toDay.value },
+            input: { sessionId: sessionId.value, toDay: toDay.value },
             commandId,
           }),
           outcome("moveSession"),
@@ -326,15 +363,17 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
     SubmittedRequirement: () => {
       const planId = planIdOf(model);
       const day = Schema.decodeUnknownOption(Day)(model.requirement.day);
-      const minutes = model.requirement.maxMinutes.trim() === "" ? null : Math.round(Number(model.requirement.maxMinutes));
-      if (Option.isNone(planId) || Option.isNone(day) || (minutes !== null && !(minutes >= 0))) {
+      const instructions = Schema.decodeUnknownOption(Paragraph)(model.requirement.instructions.trim());
+      const raw = model.requirement.maxMinutes.trim();
+      const minutes = raw === "" ? Option.some(null) : Schema.decodeUnknownOption(Minutes)(Number(raw));
+      if (Option.isNone(planId) || Option.isNone(day) || Option.isNone(instructions) || Option.isNone(minutes)) {
         return { model: modifyFields(model, { error: () => Option.some("Indica un día y, si quieres, un máximo de minutos.") }) };
       }
       return send(model, (commandId) =>
         Command.mapMessage(
           PlanningClient.RecordDayRequirement({
             target: planId.value,
-            input: { day: day.value, instructions: model.requirement.instructions, maxMinutes: minutes },
+            input: { day: day.value, instructions: instructions.value, maxMinutes: minutes.value },
             commandId,
           }),
           outcome("requirement"),
@@ -354,10 +393,18 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
     ChangedDeclaration: ({ field, value }) => ({
       model: modifyFields(model, { declaration: (d) => ({ ...d, [field]: value }) }),
     }),
-    SubmittedDeclaration: () => ({
-      model: modifyFields(model, { error: () => Option.none(), notice: () => Option.none() }),
-      commands: [SaveDeclaration({ today: model.today, declaration: model.declaration })],
-    }),
+    SubmittedDeclaration: () =>
+      Option.match(declarationOf(model.declaration), {
+        onNone: () => ({
+          model: modifyFields(model, {
+            error: () => Option.some("Revisa los datos: las escalas van de 1 a 4 y el peso, de 20 a 350 kg."),
+          }),
+        }),
+        onSome: (declaration) => ({
+          model: modifyFields(model, { error: () => Option.none(), notice: () => Option.none() }),
+          commands: [SaveDeclaration({ today: model.today, declaration })],
+        }),
+      }),
     CompletedDeclaration: () => ({
       model: modifyFields(model, {
         declaration: () => emptyDeclaration,
@@ -477,6 +524,23 @@ const STATUS: Record<string, readonly [string, string]> = {
   removedInIntervals: ["Borrada en Intervals", "bad"],
 };
 
+const REFUSALS: Record<RefusalReason, string> = {
+  planNotActive: "el plan no está activo",
+  dayNotPlanned: "ese día no tiene sesión",
+  dayOutsidePlan: "el día está fuera del plan",
+  dayTaken: "ese día ya tiene sesión",
+  sessionNotFound: "la sesión ya no existe",
+  availabilityExceeded: "supera el tiempo disponible",
+  intensityAfterHardTraining: "hay entrenamiento duro el mismo día o el anterior",
+  hardensPlan: "endurecía una sesión suave del plan",
+  purposeMismatch: "no encaja con el propósito de la sesión",
+  invalidPlan: "el borrador no es un plan válido",
+  planAlreadyExists: "el plan ya existe",
+  notYours: "no tienes permiso",
+};
+
+const refusalText = (refusal: Refusal | null) => (refusal === null ? "" : REFUSALS[refusal.reason]);
+
 const minutesOf = (workout: Workout) => Math.round(workout.steps.reduce((s, step) => s + step.durationSeconds, 0) / 60);
 
 const pill = (h: HtmlBuilder<Message>, text: string, tone: string) => h.span([h.Class(`pill ${tone}`)], [text]);
@@ -498,7 +562,7 @@ const homeView = (model: Model, h: HtmlBuilder<Message>) => {
           decision.status === "accepted"
             ? pill(h, "Aceptada por el plan", "good")
             : decision.status === "refused"
-              ? pill(h, `El plan la rechazó: ${decision.refusal ?? ""}`, "bad")
+              ? pill(h, `El plan la rechazó: ${refusalText(decision.refusal)}`, "bad")
               : pill(h, "Esperando al plan", "info"),
           h.p([], [decision.note.body]),
           h.p([], [decision.note.session]),
@@ -563,7 +627,7 @@ const coachView = (model: Model, h: HtmlBuilder<Message>) => [
                         m.intentStatus === "applied"
                           ? "Aplicada al plan"
                           : m.intentStatus === "refused"
-                            ? `El plan la rechazó: ${m.refusal ?? ""}`
+                            ? `El plan la rechazó: ${refusalText(m.refusal)}`
                             : m.intentStatus === "dismissed"
                               ? "Descartada"
                               : "Aceptada",
@@ -586,7 +650,7 @@ const planView = (model: Model, h: HtmlBuilder<Message>) =>
     ],
     onSome: (plan) => [
       h.div([h.Class("card")], [
-        h.h2([], [plan.title]),
+        h.h2([], [plan.title ?? "Plan"]),
         pill(h, plan.status === "active" ? "Activo" : "Retirado", plan.status === "active" ? "good" : "warn"),
         h.p([h.Class("muted")], [`${plan.startDay ?? ""} → ${plan.endDay ?? ""}`]),
         h.ul([], plan.phases.map((p) => h.li([], [`Semanas ${p.startWeek}–${p.endWeek}: ${p.summary}`]))),

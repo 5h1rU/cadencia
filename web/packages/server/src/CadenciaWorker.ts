@@ -1,5 +1,5 @@
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
-import { Day } from "@cadencia/kernel/Day";
+import { Day } from "@cadencia/kernel/Calendar/Day";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as DomainCloudflare from "@alchemy.run/cloudflare/Domain";
@@ -10,11 +10,11 @@ import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Layer from "effect/Layer";
 import { clientHttp } from "./ClientHttpApi.ts";
 import { Connections, D1Connections } from "./Connections.ts";
+import { CoachHosted, overCoach, overPlanning, PlanningHosted } from "./Hosting.ts";
 import { athleteReadsRoute } from "./Intervals/AthleteReads.ts";
 import { syncAll } from "./Intervals/ChangeSync.ts";
 import { IntervalsCalendar } from "./Intervals/IntervalsCalendar.ts";
 import { callbackRoute, exchangeRoute, startRoute } from "./Intervals/IntervalsOAuth.ts";
-import { CoachHosted, overCoach, overPlanning, PlanningHosted } from "./Hosting.ts";
 import { PlanningPlanner } from "./Planner.ts";
 import { SessionKey, SessionKeyLive, SessionLive, sessionRoute } from "./Session.ts";
 

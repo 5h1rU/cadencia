@@ -1,12 +1,14 @@
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { Day } from "@cadencia/kernel/Day";
-import { EvidenceSnapshot, Fingerprint } from "@cadencia/kernel/Evidence";
-import { NotYours } from "@cadencia/kernel/NotYours.rejection";
-import { Session } from "@cadencia/kernel/Session.middleware";
-import { Workout } from "@cadencia/kernel/Workout";
+import { EvidenceSnapshot, Fingerprint } from "@cadencia/athlete/Evidence";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { NotYours } from "@cadencia/identity/NotYours.rejection";
+import { Session } from "@cadencia/identity/Session.middleware";
+import { Day } from "@cadencia/kernel/Calendar/Day";
+import { PlanId } from "@cadencia/kernel/Plan.id";
+import { Workout } from "@cadencia/kernel/Training/Workout";
 import * as Domain from "@alchemy.run/domain";
-import * as Schema from "effect/Schema";
 import { CoachNote, InterpretedOn } from "../CoachShape.ts";
+import { ModelName } from "../CoachText.ts";
+import { Attempt } from "../Counts.ts";
 import { DailyDecisionId } from "./DailyDecision.id.ts";
 
 /** The plan already accepted a decision for this day from the same evidence. */
@@ -19,12 +21,12 @@ export class DecisionAlreadyAccepted extends Domain.Rejection(
 export class DailyDecisionRecorded extends Domain.Event("DailyDecisionRecorded", {
   athleteId: AthleteId,
   day: Day,
-  attempt: Schema.Int,
-  planId: Schema.String,
+  attempt: Attempt,
+  planId: PlanId,
   workout: Workout,
   note: CoachNote,
   evidence: EvidenceSnapshot,
-  model: Schema.String,
+  model: ModelName,
   interpretedOn: InterpretedOn,
 }) {}
 
@@ -36,11 +38,11 @@ export class RecordDailyDecision extends Domain.Command("RecordDailyDecision", {
   target: DailyDecisionId,
   middleware: [Session],
   input: {
-    planId: Schema.String,
+    planId: PlanId,
     workout: Workout,
     note: CoachNote,
     evidence: EvidenceSnapshot,
-    model: Schema.String,
+    model: ModelName,
     interpretedOn: InterpretedOn,
   },
   events: [DailyDecisionRecorded],

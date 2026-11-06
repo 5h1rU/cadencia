@@ -170,7 +170,7 @@
         }
       ]
     },
-    "planId": "i100:p1",
+    "planId": "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
     "refusal": null
   },
   "decisionRefused": {
@@ -186,23 +186,26 @@
           "name": "60%",
           "durationSeconds": 900,
           "startIntensity": 0.6,
-          "endIntensity": 0.6
+          "endIntensity": 0.6,
+          "cadenceRpm": null
         },
         {
           "name": "98%",
           "durationSeconds": 1800,
           "startIntensity": 0.98,
-          "endIntensity": 0.98
+          "endIntensity": 0.98,
+          "cadenceRpm": null
         },
         {
           "name": "55%",
           "durationSeconds": 900,
           "startIntensity": 0.55,
-          "endIntensity": 0.55
+          "endIntensity": 0.55,
+          "cadenceRpm": null
         }
       ],
       "intensityCeiling": 1,
-      "rationale": ""
+      "rationale": null
     },
     "note": {
       "headline": "Easy endurance",
@@ -211,7 +214,7 @@
       "watch": null
     },
     "evidence": {
-      "fingerprint": "fp-1",
+      "fingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
       "readiness": {
         "level": "normal",
         "score": 62,
@@ -271,7 +274,10 @@
     },
     "model": "gpt-5.5",
     "interpretedOn": "ios",
-    "refusal": "HardensPlannedSession: day=\"2026-11-10\", planned=\"endurance\", proposed=\"threshold\", peakIntensity=0.98"
+    "refusal": {
+      "reason": "hardensPlan",
+      "detail": "day=\"2026-11-10\", planned=\"endurance\", proposed=\"threshold\", peakIntensity=0.98"
+    }
   },
   "decisionAccepted": {
     "athleteId": "i100",
@@ -286,9 +292,11 @@
           "name": "65%",
           "durationSeconds": 3600,
           "startIntensity": 0.65,
-          "endIntensity": 0.65
+          "endIntensity": 0.65,
+          "cadenceRpm": null
         }
       ],
+      "intensityCeiling": null,
       "rationale": "Typical HRV."
     },
     "note": {
@@ -298,7 +306,7 @@
       "watch": null
     },
     "evidence": {
-      "fingerprint": "fp-1",
+      "fingerprint": "1111111111111111111111111111111111111111111111111111111111111111",
       "readiness": {
         "level": "normal",
         "score": 62,
@@ -363,7 +371,7 @@
   "thread": {
     "messages": [
       {
-        "messageId": "m1",
+        "messageId": "00000000-0000-4000-8000-000000000001",
         "role": "athlete",
         "text": "Thursday I only have 40 minutes.",
         "at": "2026-11-10T07:00:00.000Z",
@@ -373,12 +381,12 @@
         "model": null
       },
       {
-        "messageId": "m2",
+        "messageId": "00000000-0000-4000-8000-000000000002",
         "role": "coach",
         "text": "I'll shorten Thursday to 40 minutes.",
         "at": "2026-11-10T07:00:00.000Z",
         "intent": {
-          "planId": "i100:p1",
+          "planId": "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
           "summary": "I'll shorten Thursday to 40 minutes.",
           "limits": [
             {
@@ -393,7 +401,7 @@
         "model": "gpt-5.5"
       },
       {
-        "messageId": "m3",
+        "messageId": "00000000-0000-4000-8000-000000000003",
         "role": "athlete",
         "text": "Thanks!",
         "at": "2026-11-10T07:00:00.000Z",
@@ -403,7 +411,7 @@
         "model": null
       },
       {
-        "messageId": "m4",
+        "messageId": "00000000-0000-4000-8000-000000000004",
         "role": "coach",
         "text": "You're welcome.",
         "at": "2026-11-10T07:00:00.000Z",
@@ -413,7 +421,7 @@
         "model": "gpt-5.5"
       },
       {
-        "messageId": "m5",
+        "messageId": "00000000-0000-4000-8000-000000000005",
         "role": "athlete",
         "text": "Saturday I'm away.",
         "at": "2026-11-10T07:00:00.000Z",
@@ -423,12 +431,12 @@
         "model": null
       },
       {
-        "messageId": "m6",
+        "messageId": "00000000-0000-4000-8000-000000000006",
         "role": "coach",
         "text": "Saturday off, then.",
         "at": "2026-11-10T07:00:00.000Z",
         "intent": {
-          "planId": "i100:p1",
+          "planId": "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
           "summary": "Saturday off, then.",
           "limits": [
             {
@@ -445,7 +453,7 @@
     ]
   },
   "plan": {
-    "planId": "i100:p1",
+    "planId": "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
     "status": "active",
     "title": "Base block",
     "goal": "endurance",
@@ -490,12 +498,14 @@
               "name": "65%",
               "durationSeconds": 3600,
               "startIntensity": 0.65,
-              "endIntensity": 0.65
+              "endIntensity": 0.65,
+              "cadenceRpm": null
             }
           ],
+          "intensityCeiling": null,
           "rationale": "Typical HRV."
         },
-        "externalId": "cadencia-i100-p1-2026-11-10"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-10"
       },
       {
         "sessionId": "2026-11-12",
@@ -506,7 +516,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-12"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-12"
       },
       {
         "sessionId": "2026-11-15",
@@ -517,7 +527,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-15"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-15"
       },
       {
         "sessionId": "2026-11-17",
@@ -528,7 +538,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-17"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-17"
       },
       {
         "sessionId": "2026-11-19",
@@ -539,7 +549,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-19"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-19"
       },
       {
         "sessionId": "2026-11-22",
@@ -550,7 +560,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-22"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-22"
       },
       {
         "sessionId": "2026-11-24",
@@ -561,7 +571,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-24"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-24"
       },
       {
         "sessionId": "2026-11-26",
@@ -572,7 +582,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-26"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-26"
       },
       {
         "sessionId": "2026-11-29",
@@ -583,7 +593,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-29"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-29"
       },
       {
         "sessionId": "2026-12-01",
@@ -594,7 +604,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-01"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-01"
       },
       {
         "sessionId": "2026-12-03",
@@ -605,7 +615,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-03"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-03"
       },
       {
         "sessionId": "2026-12-06",
@@ -616,7 +626,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-06"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-06"
       },
       {
         "sessionId": "2026-12-08",
@@ -627,7 +637,7 @@
         "purpose": "Longer tempo",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-08"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-08"
       },
       {
         "sessionId": "2026-12-10",
@@ -638,7 +648,7 @@
         "purpose": "Longer tempo",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-10"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-10"
       },
       {
         "sessionId": "2026-12-13",
@@ -649,7 +659,7 @@
         "purpose": "Longer tempo",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-13"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-13"
       },
       {
         "sessionId": "2026-12-15",
@@ -660,7 +670,7 @@
         "purpose": "Absorb",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-15"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-15"
       },
       {
         "sessionId": "2026-12-17",
@@ -671,7 +681,7 @@
         "purpose": "Absorb",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-17"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-17"
       },
       {
         "sessionId": "2026-12-20",
@@ -682,7 +692,7 @@
         "purpose": "Absorb",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-20"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-20"
       }
     ],
     "requirements": []
@@ -711,7 +721,7 @@
     "dismissedFtp": null
   },
   "planChanged": {
-    "planId": "i100:p1",
+    "planId": "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
     "status": "active",
     "title": "Base block",
     "goal": "endurance",
@@ -756,12 +766,14 @@
               "name": "65%",
               "durationSeconds": 3600,
               "startIntensity": 0.65,
-              "endIntensity": 0.65
+              "endIntensity": 0.65,
+              "cadenceRpm": null
             }
           ],
+          "intensityCeiling": null,
           "rationale": "Typical HRV."
         },
-        "externalId": "cadencia-i100-p1-2026-11-10"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-10"
       },
       {
         "sessionId": "2026-11-12",
@@ -772,7 +784,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-12"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-12"
       },
       {
         "sessionId": "2026-11-15",
@@ -783,7 +795,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-15"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-15"
       },
       {
         "sessionId": "2026-11-17",
@@ -794,7 +806,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-17"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-17"
       },
       {
         "sessionId": "2026-11-19",
@@ -805,7 +817,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-19"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-19"
       },
       {
         "sessionId": "2026-11-22",
@@ -816,7 +828,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-22"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-22"
       },
       {
         "sessionId": "2026-11-24",
@@ -827,7 +839,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-24"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-24"
       },
       {
         "sessionId": "2026-11-26",
@@ -838,7 +850,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-26"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-26"
       },
       {
         "sessionId": "2026-11-29",
@@ -849,7 +861,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-29"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-29"
       },
       {
         "sessionId": "2026-12-01",
@@ -860,7 +872,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-01"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-01"
       },
       {
         "sessionId": "2026-12-03",
@@ -871,7 +883,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-03"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-03"
       },
       {
         "sessionId": "2026-12-06",
@@ -882,7 +894,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-06"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-06"
       },
       {
         "sessionId": "2026-12-08",
@@ -893,7 +905,7 @@
         "purpose": "Longer tempo",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-08"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-08"
       },
       {
         "sessionId": "2026-12-10",
@@ -904,7 +916,7 @@
         "purpose": "Longer tempo",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-10"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-10"
       },
       {
         "sessionId": "2026-12-13",
@@ -915,7 +927,7 @@
         "purpose": "Longer tempo",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-13"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-13"
       },
       {
         "sessionId": "2026-12-15",
@@ -926,7 +938,7 @@
         "purpose": "Absorb",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-15"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-15"
       },
       {
         "sessionId": "2026-12-17",
@@ -937,7 +949,7 @@
         "purpose": "Absorb",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-17"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-17"
       },
       {
         "sessionId": "2026-12-20",
@@ -948,7 +960,7 @@
         "purpose": "Absorb",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-20"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-20"
       }
     ],
     "requirements": [
@@ -960,7 +972,7 @@
     ]
   },
   "planRetired": {
-    "planId": "i100:p1",
+    "planId": "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
     "status": "retired",
     "title": "Base block",
     "goal": "endurance",
@@ -1005,12 +1017,14 @@
               "name": "65%",
               "durationSeconds": 3600,
               "startIntensity": 0.65,
-              "endIntensity": 0.65
+              "endIntensity": 0.65,
+              "cadenceRpm": null
             }
           ],
+          "intensityCeiling": null,
           "rationale": "Typical HRV."
         },
-        "externalId": "cadencia-i100-p1-2026-11-10"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-10"
       },
       {
         "sessionId": "2026-11-12",
@@ -1021,7 +1035,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-12"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-12"
       },
       {
         "sessionId": "2026-11-15",
@@ -1032,7 +1046,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-15"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-15"
       },
       {
         "sessionId": "2026-11-17",
@@ -1043,7 +1057,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-17"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-17"
       },
       {
         "sessionId": "2026-11-19",
@@ -1054,7 +1068,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-19"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-19"
       },
       {
         "sessionId": "2026-11-22",
@@ -1065,7 +1079,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-22"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-22"
       },
       {
         "sessionId": "2026-11-24",
@@ -1076,7 +1090,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-24"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-24"
       },
       {
         "sessionId": "2026-11-26",
@@ -1087,7 +1101,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-26"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-26"
       },
       {
         "sessionId": "2026-11-29",
@@ -1098,7 +1112,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-11-29"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-11-29"
       },
       {
         "sessionId": "2026-12-01",
@@ -1109,7 +1123,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-01"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-01"
       },
       {
         "sessionId": "2026-12-03",
@@ -1120,7 +1134,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-03"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-03"
       },
       {
         "sessionId": "2026-12-06",
@@ -1131,7 +1145,7 @@
         "purpose": "Aerobic base",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-06"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-06"
       },
       {
         "sessionId": "2026-12-08",
@@ -1142,7 +1156,7 @@
         "purpose": "Longer tempo",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-08"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-08"
       },
       {
         "sessionId": "2026-12-10",
@@ -1153,7 +1167,7 @@
         "purpose": "Longer tempo",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-10"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-10"
       },
       {
         "sessionId": "2026-12-13",
@@ -1164,7 +1178,7 @@
         "purpose": "Longer tempo",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-13"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-13"
       },
       {
         "sessionId": "2026-12-15",
@@ -1175,7 +1189,7 @@
         "purpose": "Absorb",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-15"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-15"
       },
       {
         "sessionId": "2026-12-17",
@@ -1186,7 +1200,7 @@
         "purpose": "Absorb",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-17"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-17"
       },
       {
         "sessionId": "2026-12-20",
@@ -1197,7 +1211,7 @@
         "purpose": "Absorb",
         "status": "published",
         "workout": null,
-        "externalId": "cadencia-i100-p1-2026-12-20"
+        "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-20"
       }
     ],
     "requirements": [

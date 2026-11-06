@@ -14,7 +14,9 @@ with tempfile.TemporaryDirectory(prefix="cadencia-state-tests-") as directory:
     package = Path(directory)
     tests = package / "Tests" / "StateTests"
     tests.mkdir(parents=True)
-    for source in [root / "Cadencia/App/AppState.swift", root / "Cadencia/App/AppConfig.swift", root / "Tests/AppStateTests.swift"]:
+    # The brands' test literals and ids are CadenciaCore's.
+    for source in [root / "Cadencia/App/AppState.swift", root / "Cadencia/App/AppConfig.swift", root / "Tests/AppStateTests.swift",
+                   root / "CadenciaCore/Tests/CadenciaCoreTests/BrandLiterals.swift"]:
         (tests / source.name).symlink_to(source)
     core = json.dumps(str(root / "CadenciaCore"), ensure_ascii=False)
     (package / "Package.swift").write_text(f'''// swift-tools-version: 6.0

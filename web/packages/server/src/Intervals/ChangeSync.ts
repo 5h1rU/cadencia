@@ -1,17 +1,17 @@
-import { system } from "@cadencia/kernel/Actor";
-import type { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { addDays, Day } from "@cadencia/kernel/Day";
+import { system } from "@cadencia/identity/Actor";
+import type { AthleteId } from "@cadencia/identity/Athlete.id";
+import { addDays, type Day } from "@cadencia/kernel/Calendar/Day";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
 import { IntervalsSyncApi } from "@cadencia/planning/IntervalsSyncApi.api";
-import { PlanId } from "@cadencia/planning/Plan/Plan.id";
 import type { PlannedSession } from "@cadencia/planning/Plan/PlanShape";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import { Connections } from "../Connections.ts";
 import { overPlanning } from "../Hosting.ts";
 import { actingAs } from "../Session.ts";
 import { calendarEntry } from "./IntervalsCalendar.ts";
-import { athletePath, callIntervals, type IntervalsEvent } from "./IntervalsHttp.ts";
+import { athletePath, callIntervals, IntervalsEvent } from "./IntervalsHttp.ts";
 
 /** What changed about a published session, if the athlete touched it in Intervals. */
 export const changeOf = (session: PlannedSession, event: IntervalsEvent | undefined): "changed" | "removed" | null => {
@@ -40,16 +40,13 @@ export const syncAthlete = (athleteId: AthleteId, today: Day) =>
     const events = yield* callIntervals(connection.value.token, "GET", athletePath(athleteId, "/events.json"), {
       query: { oldest: addDays(today, -1), newest: plan.endDay },
     }).pipe(Effect.orDie);
-    const byExternalId = new Map(
-      (Array.isArray(events) ? (events as Array<IntervalsEvent>) : [])
-        .filter((e) => e.external_id)
-        .map((e) => [e.external_id!, e]),
-    );
+    const decoded = yield* Schema.decodeUnknownEffect(Schema.Array(IntervalsEvent))(events).pipe(Effect.orDie);
+    const byExternalId = new Map(decoded.filter((e) => e.external_id).map((e) => [e.external_id!, e]));
     for (const session of watched) {
       const change = changeOf(session, byExternalId.get(session.externalId));
       if (change === null) continue;
       yield* sync.RecordExternalChange(
-        PlanId.make(plan.planId),
+        plan.planId,
         { externalId: session.externalId, change },
         { commandId: `sync:${session.externalId}:${change}` },
       );

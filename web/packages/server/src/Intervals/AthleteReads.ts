@@ -1,4 +1,7 @@
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
+import { FtpWatts, Kilograms, WellnessScale } from "@cadencia/athlete/Measures";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { Day } from "@cadencia/kernel/Calendar/Day";
+import { Paragraph } from "@cadencia/kernel/Text";
 import * as Effect from "effect/Effect";
 import { HttpServerRequest } from "effect/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
@@ -29,18 +32,21 @@ const ACTIVITY_FIELDS = [
 
 /** What an athlete may declare from the web. Each maps to an Intervals wellness field. */
 const WellnessDeclaration = Schema.Struct({
-  weight: Schema.optional(Schema.Number),
-  soreness: Schema.optional(Schema.Int),
-  fatigue: Schema.optional(Schema.Int),
-  stress: Schema.optional(Schema.Int),
-  mood: Schema.optional(Schema.Int),
-  motivation: Schema.optional(Schema.Int),
-  sleepQuality: Schema.optional(Schema.Int),
-  injury: Schema.optional(Schema.Int),
-  comments: Schema.optional(Schema.String),
+  weight: Schema.optional(Kilograms),
+  soreness: Schema.optional(WellnessScale),
+  fatigue: Schema.optional(WellnessScale),
+  stress: Schema.optional(WellnessScale),
+  mood: Schema.optional(WellnessScale),
+  motivation: Schema.optional(WellnessScale),
+  sleepQuality: Schema.optional(WellnessScale),
+  injury: Schema.optional(WellnessScale),
+  comments: Schema.optional(Paragraph),
 });
 
-const DAY = /^\d{4}-\d{2}-\d{2}$/;
+/** A range of days to read, from the query string. */
+const DayRange = Schema.Struct({ oldest: Day, newest: Day }).pipe(
+  Schema.check(Schema.makeFilter((r) => (r.oldest <= r.newest ? undefined : "oldest comes on or before newest"))),
+);
 
 /**
  * `/api/intervals/*`: reads and declarations the web makes on Intervals.icu,
@@ -56,11 +62,8 @@ export const athleteReadsRoute = Effect.gen(function* () {
   const token = connection.value.token;
   const url = new URL(request.url, "http://localhost");
   const path = url.pathname.replace(/^\/api\/intervals/, "");
-  const range = () => {
-    const oldest = url.searchParams.get("oldest") ?? "";
-    const newest = url.searchParams.get("newest") ?? "";
-    return DAY.test(oldest) && DAY.test(newest) ? Option.some({ oldest, newest }) : Option.none();
-  };
+  const range = () =>
+    Schema.decodeUnknownOption(DayRange)({ oldest: url.searchParams.get("oldest"), newest: url.searchParams.get("newest") });
   const fail = () => HttpServerResponse.text("Intervals.icu did not answer. Try again.", { status: 502 });
 
   if (request.method === "GET" && path === "/wellness") {
@@ -98,12 +101,12 @@ export const athleteReadsRoute = Effect.gen(function* () {
       Effect.catchTag("IntervalsError", () => Effect.succeed(fail())),
     );
   }
-  const wellnessDay = /^\/wellness\/(\d{4}-\d{2}-\d{2})$/.exec(path);
-  if (request.method === "PUT" && wellnessDay) {
+  const wellnessDay = Option.flatMap(Option.fromNullishOr(/^\/wellness\/([^/]+)$/.exec(path)?.[1]), Schema.decodeUnknownOption(Day));
+  if (request.method === "PUT" && Option.isSome(wellnessDay)) {
     const body = yield* request.json.pipe(Effect.flatMap(Schema.decodeUnknownEffect(WellnessDeclaration)), Effect.option);
     if (Option.isNone(body)) return HttpServerResponse.text("Unexpected wellness fields", { status: 400 });
-    return yield* callIntervals(token, "PUT", athletePath(athleteId, `/wellness/${wellnessDay[1]}`), {
-      body: { id: wellnessDay[1], ...body.value },
+    return yield* callIntervals(token, "PUT", athletePath(athleteId, `/wellness/${wellnessDay.value}`), {
+      body: { id: wellnessDay.value, ...body.value },
     }).pipe(
       Effect.as(HttpServerResponse.empty({ status: 204 })),
       Effect.catchTag("IntervalsError", () => Effect.succeed(fail())),
@@ -111,10 +114,10 @@ export const athleteReadsRoute = Effect.gen(function* () {
   }
   if (request.method === "PUT" && path === "/ftp") {
     const body = yield* request.json.pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Struct({ ftp: Schema.Int }))),
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Struct({ ftp: FtpWatts }))),
       Effect.option,
     );
-    if (Option.isNone(body) || body.value.ftp < 30 || body.value.ftp > 700) {
+    if (Option.isNone(body)) {
       return HttpServerResponse.text("Expected { ftp } between 30 and 700 W", { status: 400 });
     }
     return yield* callIntervals(token, "PUT", `/api/v1/athlete/${athleteId}/sport-settings/Ride`, {

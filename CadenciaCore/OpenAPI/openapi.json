@@ -62,7 +62,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/DailyDecisionId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -78,7 +78,7 @@
                     "type": "object",
                     "properties": {
                       "planId": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/PlanId"
                       },
                       "workout": {
                         "$ref": "#/components/schemas/Workout"
@@ -90,7 +90,7 @@
                         "$ref": "#/components/schemas/EvidenceSnapshot"
                       },
                       "model": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/ModelName"
                       },
                       "interpretedOn": {
                         "$ref": "#/components/schemas/InterpretedOn"
@@ -166,7 +166,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/ConversationId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -182,10 +182,10 @@
                     "type": "object",
                     "properties": {
                       "messageId": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/MessageId"
                       },
                       "text": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/MessageText"
                       }
                     },
                     "required": [
@@ -254,7 +254,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/ConversationId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -270,13 +270,13 @@
                     "type": "object",
                     "properties": {
                       "messageId": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/MessageId"
                       },
                       "inReplyTo": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/MessageId"
                       },
                       "text": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/MessageText"
                       },
                       "intent": {
                         "anyOf": [
@@ -289,7 +289,7 @@
                         ]
                       },
                       "model": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/ModelName"
                       },
                       "interpretedOn": {
                         "$ref": "#/components/schemas/InterpretedOn"
@@ -375,7 +375,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/ConsultationId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -462,7 +462,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/ConsultationId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -478,10 +478,10 @@
                     "type": "object",
                     "properties": {
                       "text": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/MessageText"
                       },
                       "model": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/ModelName"
                       },
                       "interpretedOn": {
                         "$ref": "#/components/schemas/InterpretedOn"
@@ -564,7 +564,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/ConsultationId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -580,7 +580,7 @@
                     "type": "object",
                     "properties": {
                       "text": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/MessageText"
                       }
                     },
                     "required": [
@@ -658,7 +658,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/ConsultationId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -677,7 +677,7 @@
                         "$ref": "#/components/schemas/PlanDraft"
                       },
                       "model": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/ModelName"
                       },
                       "interpretedOn": {
                         "$ref": "#/components/schemas/InterpretedOn"
@@ -767,7 +767,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/ConsultationId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -783,7 +783,7 @@
                     "type": "object",
                     "properties": {
                       "planId": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/PlanId"
                       }
                     },
                     "required": [
@@ -861,7 +861,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/AthleteId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -945,7 +945,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/AthleteId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -964,7 +964,7 @@
                         "$ref": "#/components/schemas/RiderReport"
                       },
                       "model": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/ModelName"
                       },
                       "interpretedOn": {
                         "$ref": "#/components/schemas/InterpretedOn"
@@ -1047,7 +1047,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/ConversationId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -1063,7 +1063,7 @@
                     "type": "object",
                     "properties": {
                       "messageId": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/MessageId"
                       }
                     },
                     "required": [
@@ -1141,7 +1141,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/ConversationId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -1157,7 +1157,7 @@
                     "type": "object",
                     "properties": {
                       "messageId": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/MessageId"
                       }
                     },
                     "required": [
@@ -1225,7 +1225,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/AthleteId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -1241,7 +1241,7 @@
                     "type": "object",
                     "properties": {
                       "ftp": {
-                        "type": "integer"
+                        "$ref": "#/components/schemas/FtpWatts"
                       }
                     },
                     "required": [
@@ -1273,7 +1273,7 @@
             "name": "key",
             "in": "path",
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/DailyDecisionId"
             },
             "required": true
           },
@@ -1367,7 +1367,7 @@
             "name": "key",
             "in": "path",
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/ConversationId"
             },
             "required": true
           },
@@ -1461,7 +1461,7 @@
             "name": "key",
             "in": "path",
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/ConsultationId"
             },
             "required": true
           },
@@ -1555,7 +1555,7 @@
             "name": "key",
             "in": "path",
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/AthleteId"
             },
             "required": true
           },
@@ -1719,7 +1719,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/PlanId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -1735,10 +1735,10 @@
                     "type": "object",
                     "properties": {
                       "sessionId": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/SessionId"
                       },
                       "toDay": {
-                        "type": "string"
+                        "$ref": "#/components/schemas/Day"
                       }
                     },
                     "required": [
@@ -1824,7 +1824,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/PlanId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -1909,7 +1909,7 @@
                 "type": "object",
                 "properties": {
                   "target": {
-                    "type": "string"
+                    "$ref": "#/components/schemas/PlanId"
                   },
                   "commandId": {
                     "anyOf": [
@@ -1950,7 +1950,7 @@
             "name": "key",
             "in": "path",
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/AthleteId"
             },
             "required": true
           },
@@ -2036,18 +2036,65 @@
   },
   "components": {
     "schemas": {
-      "UnauthorizedEncoded": {
+      "AthleteId": {
+        "type": "string",
+        "pattern": "^i[1-9][0-9]*$",
+        "x-brand": "AthleteId"
+      },
+      "Attempt": {
+        "type": "integer",
+        "minimum": 1,
+        "x-brand": "Attempt"
+      },
+      "AutomaticAttemptUsedEncoded": {
         "type": "object",
         "properties": {
           "_tag": {
             "type": "string",
             "enum": [
-              "Unauthorized"
+              "AutomaticAttemptUsed"
             ]
           }
         },
         "required": [
           "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "CadenceRpm": {
+        "type": "integer",
+        "minimum": 20,
+        "maximum": 200,
+        "x-brand": "CadenceRpm"
+      },
+      "CoachNote": {
+        "type": "object",
+        "properties": {
+          "headline": {
+            "$ref": "#/components/schemas/Headline"
+          },
+          "body": {
+            "$ref": "#/components/schemas/Paragraph"
+          },
+          "session": {
+            "$ref": "#/components/schemas/Paragraph"
+          },
+          "watch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Paragraph"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "headline",
+          "body",
+          "session",
+          "watch"
         ],
         "additionalProperties": false
       },
@@ -2082,13 +2129,13 @@
         ],
         "additionalProperties": false
       },
-      "NotYoursEncoded": {
+      "ConsultationAlreadyStartedEncoded": {
         "type": "object",
         "properties": {
           "_tag": {
             "type": "string",
             "enum": [
-              "NotYours"
+              "ConsultationAlreadyStarted"
             ]
           }
         },
@@ -2097,134 +2144,10 @@
         ],
         "additionalProperties": false
       },
-      "PlanNotActiveEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": [
-              "PlanNotActive"
-            ]
-          }
-        },
-        "required": [
-          "_tag"
-        ],
-        "additionalProperties": false
-      },
-      "DayOutsidePlanEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": [
-              "DayOutsidePlan"
-            ]
-          },
-          "day": {
-            "type": "string"
-          },
-          "startDay": {
-            "type": "string"
-          },
-          "endDay": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "_tag",
-          "day",
-          "startDay",
-          "endDay"
-        ],
-        "additionalProperties": false
-      },
-      "SessionNotFoundEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": [
-              "SessionNotFound"
-            ]
-          },
-          "sessionId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "_tag",
-          "sessionId"
-        ],
-        "additionalProperties": false
-      },
-      "DayTakenEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": [
-              "DayTaken"
-            ]
-          },
-          "day": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "_tag",
-          "day"
-        ],
-        "additionalProperties": false
-      },
-      "NoOpenIntentEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": [
-              "NoOpenIntent"
-            ]
-          },
-          "messageId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "_tag",
-          "messageId"
-        ],
-        "additionalProperties": false
-      },
-      "AutomaticAttemptUsedEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": [
-              "AutomaticAttemptUsed"
-            ]
-          }
-        },
-        "required": [
-          "_tag"
-        ],
-        "additionalProperties": false
-      },
-      "NoDraftEncoded": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": [
-              "NoDraft"
-            ]
-          }
-        },
-        "required": [
-          "_tag"
-        ],
-        "additionalProperties": false
+      "ConsultationId": {
+        "type": "string",
+        "pattern": "^i[1-9][0-9]*:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "x-brand": "ConsultationId"
       },
       "ConsultationNotOpenEncoded": {
         "type": "object",
@@ -2241,504 +2164,108 @@
         ],
         "additionalProperties": false
       },
-      "ConsultationAlreadyStartedEncoded": {
+      "ConsultationTurn": {
         "type": "object",
         "properties": {
-          "_tag": {
+          "role": {
             "type": "string",
             "enum": [
-              "ConsultationAlreadyStarted"
+              "coach",
+              "athlete"
             ]
+          },
+          "text": {
+            "$ref": "#/components/schemas/MessageText"
           }
         },
         "required": [
-          "_tag"
+          "role",
+          "text"
         ],
         "additionalProperties": false
       },
-      "DecisionAlreadyAcceptedEncoded": {
+      "ConsultationViewState": {
         "type": "object",
         "properties": {
-          "_tag": {
+          "stage": {
             "type": "string",
             "enum": [
-              "DecisionAlreadyAccepted"
+              "new",
+              "open",
+              "accepted",
+              "created"
             ]
           },
-          "fingerprint": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "_tag",
-          "fingerprint"
-        ],
-        "additionalProperties": false
-      },
-      "Receipt": {
-        "type": "object",
-        "properties": {
-          "reply": {
-            "type": "null"
-          },
-          "stream": {
-            "type": "string"
-          },
-          "version": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "reply",
-          "stream",
-          "version"
-        ],
-        "additionalProperties": false
-      },
-      "Workout": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/SessionKind"
-          },
-          "steps": {
+          "turns": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/WorkoutStep"
+              "$ref": "#/components/schemas/ConsultationTurn"
             }
           },
-          "intensityCeiling": {
+          "draft": {
             "anyOf": [
               {
-                "type": "number"
+                "$ref": "#/components/schemas/PlanDraft"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "rationale": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "kind",
-          "steps",
-          "rationale"
-        ],
-        "additionalProperties": false
-      },
-      "WorkoutStep": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "durationSeconds": {
-            "type": "number"
-          },
-          "startIntensity": {
-            "type": "number"
-          },
-          "endIntensity": {
-            "type": "number"
-          },
-          "cadenceRpm": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "name",
-          "durationSeconds",
-          "startIntensity",
-          "endIntensity"
-        ],
-        "additionalProperties": false
-      },
-      "CoachNote": {
-        "type": "object",
-        "properties": {
-          "headline": {
-            "type": "string"
-          },
-          "body": {
-            "type": "string"
-          },
-          "session": {
-            "type": "string"
-          },
-          "watch": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "headline",
-          "body",
-          "session",
-          "watch"
-        ],
-        "additionalProperties": false
-      },
-      "EvidenceSnapshot": {
-        "type": "object",
-        "properties": {
-          "fingerprint": {
-            "type": "string"
-          },
-          "readiness": {
-            "$ref": "#/components/schemas/Readiness"
-          },
-          "days": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DayConditions"
-            }
-          },
-          "eventDays": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "fingerprint",
-          "readiness",
-          "days",
-          "eventDays"
-        ],
-        "additionalProperties": false
-      },
-      "Readiness": {
-        "type": "object",
-        "properties": {
-          "level": {
-            "$ref": "#/components/schemas/ReadinessLevel"
-          },
-          "score": {
-            "type": "integer"
-          },
-          "summary": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "level",
-          "score",
-          "summary"
-        ],
-        "additionalProperties": false
-      },
-      "DayConditions": {
-        "type": "object",
-        "properties": {
-          "day": {
-            "type": "string"
-          },
-          "maxMinutes": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "unavailable": {
-            "type": "boolean"
-          },
-          "hardOtherTraining": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "day",
-          "maxMinutes",
-          "unavailable",
-          "hardOtherTraining"
-        ],
-        "additionalProperties": false
-      },
-      "Intent": {
-        "type": "object",
-        "properties": {
           "planId": {
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanId"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "summary": {
-            "type": "string"
-          },
-          "limits": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DayLimit"
-            }
+          "refusal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Refusal"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
+          "stage",
+          "turns",
+          "draft",
           "planId",
-          "summary",
-          "limits"
+          "refusal"
         ],
         "additionalProperties": false
       },
-      "DayLimit": {
-        "type": "object",
-        "properties": {
-          "day": {
-            "type": "string"
-          },
-          "maxMinutes": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "unavailable": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "day",
-          "maxMinutes",
-          "unavailable"
-        ],
-        "additionalProperties": false
+      "ConversationId": {
+        "type": "string",
+        "pattern": "^i[1-9][0-9]*:\\d{4}-(0[1-9]|1[0-2])$",
+        "x-brand": "ConversationId"
       },
-      "PlanDraft": {
+      "ConversationThreadState": {
         "type": "object",
         "properties": {
-          "athleteId": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "goal": {
-            "$ref": "#/components/schemas/GoalKind"
-          },
-          "objective": {
-            "type": "string"
-          },
-          "rationale": {
-            "type": "string"
-          },
-          "startDay": {
-            "type": "string"
-          },
-          "endDay": {
-            "type": "string"
-          },
-          "phases": {
+          "messages": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/PlanPhase"
-            }
-          },
-          "longRideWeekday": {
-            "type": "integer"
-          },
-          "event": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DraftEvent"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "sessions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/DraftSession"
+              "$ref": "#/components/schemas/ThreadMessage"
             }
           }
         },
         "required": [
-          "athleteId",
-          "title",
-          "goal",
-          "objective",
-          "rationale",
-          "startDay",
-          "endDay",
-          "phases",
-          "longRideWeekday",
-          "event",
-          "sessions"
+          "messages"
         ],
         "additionalProperties": false
       },
-      "PlanPhase": {
-        "type": "object",
-        "properties": {
-          "focus": {
-            "$ref": "#/components/schemas/PhaseFocus"
-          },
-          "startWeek": {
-            "type": "integer"
-          },
-          "endWeek": {
-            "type": "integer"
-          },
-          "summary": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "focus",
-          "startWeek",
-          "endWeek",
-          "summary"
-        ],
-        "additionalProperties": false
-      },
-      "DraftEvent": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "day": {
-            "type": "string"
-          },
-          "distanceKm": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "isRace": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "name",
-          "day",
-          "distanceKm",
-          "isRace"
-        ],
-        "additionalProperties": false
-      },
-      "DraftSession": {
-        "type": "object",
-        "properties": {
-          "day": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/SessionKind"
-          },
-          "title": {
-            "type": "string"
-          },
-          "targetMinutes": {
-            "type": "integer"
-          },
-          "purpose": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "day",
-          "kind",
-          "title",
-          "targetMinutes",
-          "purpose"
-        ],
-        "additionalProperties": false
-      },
-      "RiderReport": {
-        "type": "object",
-        "properties": {
-          "riderType": {
-            "$ref": "#/components/schemas/RiderType"
-          },
-          "confidence": {
-            "$ref": "#/components/schemas/ProfileConfidence"
-          },
-          "headline": {
-            "type": "string"
-          },
-          "summary": {
-            "type": "string"
-          },
-          "strengths": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "development": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "evidence": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "caveats": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "oldest": {
-            "type": "string"
-          },
-          "newest": {
-            "type": "string"
-          },
-          "rideCount": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "riderType",
-          "confidence",
-          "headline",
-          "summary",
-          "strengths",
-          "development",
-          "evidence",
-          "caveats",
-          "oldest",
-          "newest",
-          "rideCount"
-        ],
-        "additionalProperties": false
+      "Count": {
+        "type": "integer",
+        "minimum": 0,
+        "x-brand": "Count"
       },
       "CurrentPlanState": {
         "type": "object",
@@ -2746,7 +2273,7 @@
           "planId": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/PlanId"
               },
               {
                 "type": "null"
@@ -2762,7 +2289,14 @@
             ]
           },
           "title": {
-            "type": "string"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Title"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "goal": {
             "anyOf": [
@@ -2777,7 +2311,7 @@
           "startDay": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Day"
               },
               {
                 "type": "null"
@@ -2787,7 +2321,7 @@
           "endDay": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Day"
               },
               {
                 "type": "null"
@@ -2803,7 +2337,7 @@
           "longRideWeekday": {
             "anyOf": [
               {
-                "type": "integer"
+                "$ref": "#/components/schemas/Weekday"
               },
               {
                 "type": "null"
@@ -2848,26 +2382,548 @@
         ],
         "additionalProperties": false
       },
-      "PlannedSession": {
+      "DailyDecisionId": {
+        "type": "string",
+        "pattern": "^i[1-9][0-9]*:\\d{4}-\\d{2}-\\d{2}$",
+        "x-brand": "DailyDecisionId"
+      },
+      "Day": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        "x-brand": "Day"
+      },
+      "DayConditions": {
         "type": "object",
         "properties": {
-          "sessionId": {
-            "type": "string"
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "maxMinutes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Minutes"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unavailable": {
+            "type": "boolean"
+          },
+          "hardOtherTraining": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "day",
+          "maxMinutes",
+          "unavailable",
+          "hardOtherTraining"
+        ],
+        "additionalProperties": false
+      },
+      "DayLimit": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "maxMinutes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Minutes"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unavailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "day",
+          "maxMinutes",
+          "unavailable"
+        ],
+        "additionalProperties": false
+      },
+      "DayOutsidePlanEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "DayOutsidePlan"
+            ]
           },
           "day": {
             "type": "string"
+          },
+          "startDay": {
+            "type": "string"
+          },
+          "endDay": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "day",
+          "startDay",
+          "endDay"
+        ],
+        "additionalProperties": false
+      },
+      "DayRequirement": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "instructions": {
+            "$ref": "#/components/schemas/Paragraph"
+          },
+          "maxMinutes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Minutes"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "day",
+          "instructions",
+          "maxMinutes"
+        ],
+        "additionalProperties": false
+      },
+      "DayTakenEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "DayTaken"
+            ]
+          },
+          "day": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "day"
+        ],
+        "additionalProperties": false
+      },
+      "DecisionAlreadyAcceptedEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "DecisionAlreadyAccepted"
+            ]
+          },
+          "fingerprint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "fingerprint"
+        ],
+        "additionalProperties": false
+      },
+      "DraftEvent": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/Title"
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "distanceKm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Kilometers"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isRace": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "day",
+          "distanceKm",
+          "isRace"
+        ],
+        "additionalProperties": false
+      },
+      "DraftSession": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "$ref": "#/components/schemas/Day"
           },
           "kind": {
             "$ref": "#/components/schemas/SessionKind"
           },
           "title": {
-            "type": "string"
+            "$ref": "#/components/schemas/Title"
           },
           "targetMinutes": {
-            "type": "integer"
+            "$ref": "#/components/schemas/Minutes"
           },
           "purpose": {
+            "$ref": "#/components/schemas/Paragraph"
+          }
+        },
+        "required": [
+          "day",
+          "kind",
+          "title",
+          "targetMinutes",
+          "purpose"
+        ],
+        "additionalProperties": false
+      },
+      "EvidenceSnapshot": {
+        "type": "object",
+        "properties": {
+          "fingerprint": {
+            "$ref": "#/components/schemas/Fingerprint"
+          },
+          "readiness": {
+            "$ref": "#/components/schemas/Readiness"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DayConditions"
+            }
+          },
+          "eventDays": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Day"
+            }
+          }
+        },
+        "required": [
+          "fingerprint",
+          "readiness",
+          "days",
+          "eventDays"
+        ],
+        "additionalProperties": false
+      },
+      "ExternalId": {
+        "type": "string",
+        "pattern": "^cadencia-i[1-9][0-9]*-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-\\d{4}-\\d{2}-\\d{2}$",
+        "x-brand": "ExternalId"
+      },
+      "Fingerprint": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$",
+        "x-brand": "Fingerprint"
+      },
+      "FtpFraction": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 3,
+        "x-brand": "FtpFraction"
+      },
+      "FtpWatts": {
+        "type": "integer",
+        "minimum": 30,
+        "maximum": 700,
+        "x-brand": "FtpWatts"
+      },
+      "GoalEvent": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/Title"
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "distanceKm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Kilometers"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isRace": {
+            "type": "boolean"
+          },
+          "objective": {
+            "$ref": "#/components/schemas/Paragraph"
+          }
+        },
+        "required": [
+          "name",
+          "day",
+          "distanceKm",
+          "isRace",
+          "objective"
+        ],
+        "additionalProperties": false
+      },
+      "GoalKind": {
+        "type": "string",
+        "enum": [
+          "climbing",
+          "ftp",
+          "durability",
+          "endurance",
+          "vo2max",
+          "event",
+          "strength"
+        ]
+      },
+      "Headline": {
+        "type": "string",
+        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+        "minLength": 1,
+        "maxLength": 200,
+        "x-brand": "Headline"
+      },
+      "Intent": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "$ref": "#/components/schemas/PlanId"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Headline"
+          },
+          "limits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DayLimit"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "planId",
+          "summary",
+          "limits"
+        ],
+        "additionalProperties": false
+      },
+      "InterpretedOn": {
+        "type": "string",
+        "enum": [
+          "ios"
+        ]
+      },
+      "Kilometers": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 2000,
+        "x-brand": "Kilometers"
+      },
+      "MessageId": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "x-brand": "MessageId"
+      },
+      "MessageText": {
+        "type": "string",
+        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+        "minLength": 1,
+        "maxLength": 8000,
+        "x-brand": "MessageText"
+      },
+      "Minutes": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1440,
+        "x-brand": "Minutes"
+      },
+      "ModelName": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,99}$",
+        "x-brand": "ModelName"
+      },
+      "NoDraftEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "NoDraft"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "NoOpenIntentEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "NoOpenIntent"
+            ]
+          },
+          "messageId": {
             "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "messageId"
+        ],
+        "additionalProperties": false
+      },
+      "NotYoursEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "NotYours"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "Paragraph": {
+        "type": "string",
+        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+        "minLength": 1,
+        "maxLength": 4000,
+        "x-brand": "Paragraph"
+      },
+      "PhaseFocus": {
+        "type": "string",
+        "enum": [
+          "prepare",
+          "base",
+          "build",
+          "peak",
+          "taper",
+          "consolidate",
+          "recover"
+        ]
+      },
+      "PlanDraft": {
+        "type": "object",
+        "properties": {
+          "athleteId": {
+            "$ref": "#/components/schemas/AthleteId"
+          },
+          "title": {
+            "$ref": "#/components/schemas/Title"
+          },
+          "goal": {
+            "$ref": "#/components/schemas/GoalKind"
+          },
+          "objective": {
+            "$ref": "#/components/schemas/Paragraph"
+          },
+          "rationale": {
+            "$ref": "#/components/schemas/Paragraph"
+          },
+          "startDay": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "endDay": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "phases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanPhase"
+            }
+          },
+          "longRideWeekday": {
+            "$ref": "#/components/schemas/Weekday"
+          },
+          "event": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftEvent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DraftSession"
+            }
+          }
+        },
+        "required": [
+          "athleteId",
+          "title",
+          "goal",
+          "objective",
+          "rationale",
+          "startDay",
+          "endDay",
+          "phases",
+          "longRideWeekday",
+          "event",
+          "sessions"
+        ],
+        "additionalProperties": false
+      },
+      "PlanId": {
+        "type": "string",
+        "pattern": "^i[1-9][0-9]*:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        "x-brand": "PlanId"
+      },
+      "PlannedSession": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "day": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SessionKind"
+          },
+          "title": {
+            "$ref": "#/components/schemas/Title"
+          },
+          "targetMinutes": {
+            "$ref": "#/components/schemas/Minutes"
+          },
+          "purpose": {
+            "$ref": "#/components/schemas/Paragraph"
           },
           "status": {
             "$ref": "#/components/schemas/SessionStatus"
@@ -2883,7 +2939,7 @@
             ]
           },
           "externalId": {
-            "type": "string"
+            "$ref": "#/components/schemas/ExternalId"
           }
         },
         "required": [
@@ -2899,54 +2955,132 @@
         ],
         "additionalProperties": false
       },
-      "GoalEvent": {
+      "PlanNotActiveEncoded": {
         "type": "object",
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "day": {
-            "type": "string"
-          },
-          "distanceKm": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "PlanNotActive"
             ]
-          },
-          "isRace": {
-            "type": "boolean"
-          },
-          "objective": {
-            "type": "string"
           }
         },
         "required": [
-          "name",
-          "day",
-          "distanceKm",
-          "isRace",
-          "objective"
+          "_tag"
         ],
         "additionalProperties": false
       },
-      "DayRequirement": {
+      "PlanPhase": {
         "type": "object",
         "properties": {
-          "day": {
+          "focus": {
+            "$ref": "#/components/schemas/PhaseFocus"
+          },
+          "startWeek": {
+            "$ref": "#/components/schemas/WeekNumber"
+          },
+          "endWeek": {
+            "$ref": "#/components/schemas/WeekNumber"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Paragraph"
+          }
+        },
+        "required": [
+          "focus",
+          "startWeek",
+          "endWeek",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
+      "ProfileConfidence": {
+        "type": "string",
+        "enum": [
+          "limited",
+          "moderate",
+          "high"
+        ]
+      },
+      "Readiness": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/ReadinessLevel"
+          },
+          "score": {
+            "$ref": "#/components/schemas/ReadinessScore"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Paragraph"
+          }
+        },
+        "required": [
+          "level",
+          "score",
+          "summary"
+        ],
+        "additionalProperties": false
+      },
+      "ReadinessLevel": {
+        "type": "string",
+        "enum": [
+          "rest",
+          "easy",
+          "normal",
+          "strong"
+        ]
+      },
+      "ReadinessScore": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 100,
+        "x-brand": "ReadinessScore"
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "reply": {
+            "type": "null"
+          },
+          "stream": {
             "type": "string"
           },
-          "instructions": {
-            "type": "string"
+          "version": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "reply",
+          "stream",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "Refusal": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "planNotActive",
+              "dayNotPlanned",
+              "dayOutsidePlan",
+              "dayTaken",
+              "sessionNotFound",
+              "availabilityExceeded",
+              "intensityAfterHardTraining",
+              "hardensPlan",
+              "purposeMismatch",
+              "invalidPlan",
+              "planAlreadyExists",
+              "notYours"
+            ]
           },
-          "maxMinutes": {
+          "detail": {
             "anyOf": [
               {
-                "type": "integer"
+                "$ref": "#/components/schemas/Paragraph"
               },
               {
                 "type": "null"
@@ -2955,11 +3089,270 @@
           }
         },
         "required": [
-          "day",
-          "instructions",
-          "maxMinutes"
+          "reason",
+          "detail"
         ],
         "additionalProperties": false
+      },
+      "RiderProfileCardState": {
+        "type": "object",
+        "properties": {
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RiderReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dismissedFtp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FtpWatts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "report",
+          "model",
+          "dismissedFtp"
+        ],
+        "additionalProperties": false
+      },
+      "RiderReport": {
+        "type": "object",
+        "properties": {
+          "riderType": {
+            "$ref": "#/components/schemas/RiderType"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/ProfileConfidence"
+          },
+          "headline": {
+            "$ref": "#/components/schemas/Headline"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Paragraph"
+          },
+          "strengths": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Paragraph"
+            }
+          },
+          "development": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Paragraph"
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Paragraph"
+            }
+          },
+          "caveats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Paragraph"
+            }
+          },
+          "oldest": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "newest": {
+            "$ref": "#/components/schemas/Day"
+          },
+          "rideCount": {
+            "$ref": "#/components/schemas/Count"
+          }
+        },
+        "required": [
+          "riderType",
+          "confidence",
+          "headline",
+          "summary",
+          "strengths",
+          "development",
+          "evidence",
+          "caveats",
+          "oldest",
+          "newest",
+          "rideCount"
+        ],
+        "additionalProperties": false
+      },
+      "RiderType": {
+        "type": "string",
+        "enum": [
+          "climber",
+          "puncheur",
+          "sprinter",
+          "timeTrialist",
+          "endurance",
+          "allRounder",
+          "developing"
+        ]
+      },
+      "Seconds": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 86400,
+        "x-brand": "Seconds"
+      },
+      "SessionId": {
+        "type": "string",
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        "x-brand": "SessionId"
+      },
+      "SessionKind": {
+        "type": "string",
+        "enum": [
+          "rest",
+          "recovery",
+          "endurance",
+          "tempo",
+          "threshold",
+          "vo2max",
+          "openerActivation",
+          "longRide",
+          "groupRide",
+          "race",
+          "strength"
+        ]
+      },
+      "SessionNotFoundEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "SessionNotFound"
+            ]
+          },
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "sessionId"
+        ],
+        "additionalProperties": false
+      },
+      "SessionStatus": {
+        "type": "string",
+        "enum": [
+          "provisional",
+          "concrete",
+          "published",
+          "skipped",
+          "changedInIntervals",
+          "removedInIntervals"
+        ]
+      },
+      "ThreadMessage": {
+        "type": "object",
+        "properties": {
+          "messageId": {
+            "$ref": "#/components/schemas/MessageId"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "athlete",
+              "coach"
+            ]
+          },
+          "text": {
+            "$ref": "#/components/schemas/MessageText"
+          },
+          "at": {
+            "type": "string"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Intent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "intentStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "proposed",
+                  "accepted",
+                  "dismissed",
+                  "applied",
+                  "refused"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Refusal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelName"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "messageId",
+          "role",
+          "text",
+          "at",
+          "intent",
+          "intentStatus",
+          "refusal",
+          "model"
+        ],
+        "additionalProperties": false
+      },
+      "Title": {
+        "type": "string",
+        "pattern": "^\\S[\\s\\S]*\\S$|^\\S$|^$",
+        "minLength": 1,
+        "maxLength": 120,
+        "x-brand": "Title"
       },
       "TodayDecisionState": {
         "type": "object",
@@ -2967,7 +3360,7 @@
           "athleteId": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/AthleteId"
               },
               {
                 "type": "null"
@@ -2977,7 +3370,7 @@
           "day": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Day"
               },
               {
                 "type": "null"
@@ -2985,7 +3378,14 @@
             ]
           },
           "attempt": {
-            "type": "integer"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Attempt"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "status": {
             "type": "string",
@@ -3029,7 +3429,7 @@
           "model": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/ModelName"
               },
               {
                 "type": "null"
@@ -3049,7 +3449,7 @@
           "refusal": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/Refusal"
               },
               {
                 "type": "null"
@@ -3071,143 +3471,62 @@
         ],
         "additionalProperties": false
       },
-      "ConversationThreadState": {
+      "UnauthorizedEncoded": {
         "type": "object",
         "properties": {
-          "messages": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "Unauthorized"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "Weekday": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 7,
+        "x-brand": "Weekday"
+      },
+      "WeekNumber": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 104,
+        "x-brand": "WeekNumber"
+      },
+      "Workout": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "$ref": "#/components/schemas/Title"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SessionKind"
+          },
+          "steps": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ThreadMessage"
-            }
-          }
-        },
-        "required": [
-          "messages"
-        ],
-        "additionalProperties": false
-      },
-      "ThreadMessage": {
-        "type": "object",
-        "properties": {
-          "messageId": {
-            "type": "string"
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "athlete",
-              "coach"
-            ]
-          },
-          "text": {
-            "type": "string"
-          },
-          "at": {
-            "type": "string"
-          },
-          "intent": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Intent"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "intentStatus": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "proposed",
-                  "accepted",
-                  "dismissed",
-                  "applied",
-                  "refused"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "refusal": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "messageId",
-          "role",
-          "text",
-          "at",
-          "intent",
-          "intentStatus",
-          "refusal",
-          "model"
-        ],
-        "additionalProperties": false
-      },
-      "ConsultationViewState": {
-        "type": "object",
-        "properties": {
-          "stage": {
-            "type": "string",
-            "enum": [
-              "new",
-              "open",
-              "accepted",
-              "created",
-              "refused"
-            ]
-          },
-          "turns": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConsultationTurn"
+              "$ref": "#/components/schemas/WorkoutStep"
             }
           },
-          "draft": {
+          "intensityCeiling": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PlanDraft"
+                "$ref": "#/components/schemas/FtpFraction"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "planId": {
+          "rationale": {
             "anyOf": [
               {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "refusal": {
-            "anyOf": [
-              {
-                "type": "string"
+                "$ref": "#/components/schemas/Paragraph"
               },
               {
                 "type": "null"
@@ -3216,61 +3535,38 @@
           }
         },
         "required": [
-          "stage",
-          "turns",
-          "draft",
-          "planId",
-          "refusal"
+          "name",
+          "kind",
+          "steps",
+          "intensityCeiling",
+          "rationale"
         ],
         "additionalProperties": false
       },
-      "ConsultationTurn": {
+      "WorkoutStep": {
         "type": "object",
         "properties": {
-          "role": {
-            "type": "string",
-            "enum": [
-              "coach",
-              "athlete"
-            ]
+          "name": {
+            "$ref": "#/components/schemas/Title"
           },
-          "text": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "role",
-          "text"
-        ],
-        "additionalProperties": false
-      },
-      "RiderProfileCardState": {
-        "type": "object",
-        "properties": {
-          "report": {
-            "anyOf": [
+          "durationSeconds": {
+            "allOf": [
               {
-                "$ref": "#/components/schemas/RiderReport"
-              },
-              {
-                "type": "null"
+                "$ref": "#/components/schemas/Seconds"
               }
-            ]
+            ],
+            "exclusiveMinimum": 0
           },
-          "model": {
+          "startIntensity": {
+            "$ref": "#/components/schemas/FtpFraction"
+          },
+          "endIntensity": {
+            "$ref": "#/components/schemas/FtpFraction"
+          },
+          "cadenceRpm": {
             "anyOf": [
               {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "dismissedFtp": {
-            "anyOf": [
-              {
-                "type": "integer"
+                "$ref": "#/components/schemas/CadenceRpm"
               },
               {
                 "type": "null"
@@ -3279,97 +3575,13 @@
           }
         },
         "required": [
-          "report",
-          "model",
-          "dismissedFtp"
+          "name",
+          "durationSeconds",
+          "startIntensity",
+          "endIntensity",
+          "cadenceRpm"
         ],
         "additionalProperties": false
-      },
-      "SessionKind": {
-        "type": "string",
-        "enum": [
-          "rest",
-          "recovery",
-          "endurance",
-          "tempo",
-          "threshold",
-          "vo2max",
-          "openerActivation",
-          "longRide",
-          "groupRide",
-          "race",
-          "strength"
-        ]
-      },
-      "GoalKind": {
-        "type": "string",
-        "enum": [
-          "climbing",
-          "ftp",
-          "durability",
-          "endurance",
-          "vo2max",
-          "event",
-          "strength"
-        ]
-      },
-      "PhaseFocus": {
-        "type": "string",
-        "enum": [
-          "prepare",
-          "base",
-          "build",
-          "peak",
-          "taper",
-          "consolidate",
-          "recover"
-        ]
-      },
-      "ReadinessLevel": {
-        "type": "string",
-        "enum": [
-          "rest",
-          "easy",
-          "normal",
-          "strong"
-        ]
-      },
-      "InterpretedOn": {
-        "type": "string",
-        "enum": [
-          "ios"
-        ]
-      },
-      "SessionStatus": {
-        "type": "string",
-        "enum": [
-          "provisional",
-          "concrete",
-          "published",
-          "skipped",
-          "changedInIntervals",
-          "removedInIntervals"
-        ]
-      },
-      "RiderType": {
-        "type": "string",
-        "enum": [
-          "climber",
-          "puncheur",
-          "sprinter",
-          "timeTrialist",
-          "endurance",
-          "allRounder",
-          "developing"
-        ]
-      },
-      "ProfileConfidence": {
-        "type": "string",
-        "enum": [
-          "limited",
-          "moderate",
-          "high"
-        ]
       }
     },
     "securitySchemes": {}

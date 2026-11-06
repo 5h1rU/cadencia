@@ -555,7 +555,7 @@ public struct PlannedSession: Codable, Equatable, Sendable, Identifiable {
     /// not part of a backend plan (a daily workout without a plan), which uses the day-based id.
     public var externalID: String?
     /// The backend's id of this session in its plan, which `MoveSession` addresses.
-    public var backendID: String?
+    public var backendID: CadenciaAPI.SessionId?
 
     public init(id: UUID = UUID(), day: Day, kind: SessionKind, title: String, targetMinutes: Int,
                 targetLoad: Int? = nil, status: Status = .provisional, workout: Workout? = nil,
@@ -672,7 +672,7 @@ public struct TrainingPlan: Codable, Equatable, Sendable, Identifiable {
     /// Optional so existing saved plans still decode. No body measurements belong here.
     public var consultation: PlanConsultation.Details?
     /// The backend's id of this plan (`<athleteId>:<key>`), which commands about it address.
-    public var backendID: String?
+    public var backendID: CadenciaAPI.PlanId?
     /// What the athlete asked of particular days (`RecordDayRequirement`), as the plan recorded it.
     public var requirements: [CoachIntent.WorkoutRequest]?
 

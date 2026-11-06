@@ -19,7 +19,7 @@ final class BackendTransport: HTTPTransport, @unchecked Sendable {
         if transportErrors > 0 { transportErrors -= 1; throw URLError(.networkConnectionLost) }
         if !failures.isEmpty { return failures.removeFirst() }
         if request.method == .post {
-            return HTTPResponse(status: 200, body: Data(#"{"reply":null,"stream":"Plan/i100:p1","version":3}"#.utf8))
+            return HTTPResponse(status: 200, body: Data(#"{"reply":null,"stream":"Plan/\#(TestIDs.plan)","version":3}"#.utf8))
         }
         let view = request.url.pathComponents.dropFirst(2).first ?? ""
         if var queue = views[view], !queue.isEmpty {
@@ -81,8 +81,8 @@ final class BackendContractTests: XCTestCase {
     let note = CoachNote(headline: "Easy endurance", body: "Ready.", session: "One hour in Z2.")
     let readiness = Readiness(level: .normal, score: 62, signals: [], missingData: [], summary: "Typical HRV and sleep.")
 
-    func evidence(_ fingerprint: String) -> CadenciaAPI.EvidenceSnapshot {
-        CoachEvidence.snapshot(fingerprint: fingerprint, readiness: readiness, availability: nil, events: [], from: tuesday)
+    func evidence(_ fingerprint: CadenciaAPI.Fingerprint) throws -> CadenciaAPI.EvidenceSnapshot {
+        try CoachEvidence.snapshot(fingerprint: fingerprint, readiness: readiness, availability: nil, events: [], from: tuesday)
     }
 
     func report() -> CyclistProfile.Report {
@@ -96,47 +96,49 @@ final class BackendContractTests: XCTestCase {
     func sendContractCommands() async throws -> [(String, [String: Any])] {
         let transport = BackendTransport()
         transport.views = [
-            "ConsultationView": [#"{"stage":"created","turns":[],"draft":null,"planId":"i100:p1","refusal":null}"#],
+            "ConsultationView": [#"{"stage":"created","turns":[],"draft":null,"planId":"\#(TestIDs.plan)","refusal":null}"#],
             "TodayDecision": [#"{"athleteId":"i100","day":"2026-11-10","attempt":1,"status":"accepted","workout":null,"note":null,"evidence":null,"model":null,"interpretedOn":null,"refusal":null}"#],
             "ConversationThread": [#"{"messages":[]}"#],
         ]
         let api = CadenciaAPI(baseURL: URL(string: "https://cadencia.example")!, transport: transport, sessionToken: "token")
-        let backend = CoachBackend(api: api, athleteId: "i100", pause: { _ in })
-        let consultation = "i100:c1", conversation = BackendID.conversation(athlete: "i100", day: tuesday)
+        let backend = CoachBackend(api: api, athleteId: TestIDs.athlete, pause: { _ in })
+        let consultation = TestIDs.consultation, plan = TestIDs.plan
+        let conversation = BackendID.conversation(athlete: TestIDs.athlete, day: tuesday)
+        let m = TestIDs.message
         var labels: [String] = []
         func label(_ name: String) { labels.append(name) }
 
         _ = try await api.startConsultation(consultation, commandId: "start-c1"); label("startConsultation")
         _ = try await backend.recordQuestion("What should your riding feel like?", model: "gpt-5.5", in: consultation); label("recordCoachQuestion")
         _ = try await backend.answer("Six weeks of base, three rides a week.", in: consultation); label("answerQuestion")
-        _ = try await backend.recordDraft(try CadenciaAPI.PlanDraft(draft(), athleteId: "i100", today: today), model: "gpt-5.5", in: consultation)
+        _ = try await backend.recordDraft(try CadenciaAPI.PlanDraft(draft(), athleteId: TestIDs.athlete, today: today), model: "gpt-5.5", in: consultation)
         label("recordDraft")
-        _ = try await backend.acceptDraft(planId: "i100:p1", in: consultation); label("acceptDraft")
-        _ = try await backend.recordDecision(on: tuesday, planId: "i100:p1", workout: threshold, note: note, evidence: evidence("fp-1"), model: "gpt-5.5")
+        _ = try await backend.acceptDraft(planId: plan, in: consultation); label("acceptDraft")
+        _ = try await backend.recordDecision(on: tuesday, planId: plan, workout: threshold, note: note, evidence: evidence(TestIDs.fingerprint("1")), model: "gpt-5.5")
         label("recordDailyDecisionRefused")
-        _ = try await backend.recordDecision(on: tuesday, planId: "i100:p1", workout: easy, note: note, evidence: evidence("fp-1"), model: "gpt-5.5")
+        _ = try await backend.recordDecision(on: tuesday, planId: plan, workout: easy, note: note, evidence: evidence(TestIDs.fingerprint("1")), model: "gpt-5.5")
         label("recordDailyDecisionAccepted")
-        try await backend.sendMessage("Thursday I only have 40 minutes.", messageId: "m1", on: tuesday); label("sendMessage")
-        let limit = CadenciaAPI.Intent(CoachIntent(constraints: [.init(day: thursday, maxMinutes: 40)], reply: "I'll shorten Thursday to 40 minutes."),
-                                       planId: "i100:p1", today: tuesday)
-        _ = try await backend.recordReply("I'll shorten Thursday to 40 minutes.", messageId: "m2", inReplyTo: "m1", intent: limit,
+        try await backend.sendMessage("Thursday I only have 40 minutes.", messageId: m(1), on: tuesday); label("sendMessage")
+        let limit = try CadenciaAPI.Intent(CoachIntent(constraints: [.init(day: thursday, maxMinutes: 40)], reply: "I'll shorten Thursday to 40 minutes."),
+                                           planId: plan, today: tuesday)
+        _ = try await backend.recordReply("I'll shorten Thursday to 40 minutes.", messageId: m(2), inReplyTo: m(1), intent: limit,
                                           model: "gpt-5.5", on: tuesday); label("recordCoachReplyWithIntent")
-        _ = try await backend.acceptIntent(messageId: "m2", in: conversation); label("acceptIntent")
-        try await backend.sendMessage("Thanks!", messageId: "m3", on: tuesday); label("sendMessageThanks")
-        _ = try await backend.recordReply("You're welcome.", messageId: "m4", inReplyTo: "m3", intent: nil, model: "gpt-5.5", on: tuesday)
+        _ = try await backend.acceptIntent(messageId: m(2), in: conversation); label("acceptIntent")
+        try await backend.sendMessage("Thanks!", messageId: m(3), on: tuesday); label("sendMessageThanks")
+        _ = try await backend.recordReply("You're welcome.", messageId: m(4), inReplyTo: m(3), intent: nil, model: "gpt-5.5", on: tuesday)
         label("recordCoachReplyWithoutIntent")
-        try await backend.sendMessage("Saturday I'm away.", messageId: "m5", on: tuesday); label("sendMessageAway")
-        let away = CadenciaAPI.Intent(CoachIntent(constraints: [.init(day: Day(year: 2026, month: 11, day: 14), unavailable: true)],
-                                                  reply: "Saturday off, then."), planId: "i100:p1", today: tuesday)
-        _ = try await backend.recordReply("Saturday off, then.", messageId: "m6", inReplyTo: "m5", intent: away, model: "gpt-5.5", on: tuesday)
+        try await backend.sendMessage("Saturday I'm away.", messageId: m(5), on: tuesday); label("sendMessageAway")
+        let away = try CadenciaAPI.Intent(CoachIntent(constraints: [.init(day: Day(year: 2026, month: 11, day: 14), unavailable: true)],
+                                                      reply: "Saturday off, then."), planId: plan, today: tuesday)
+        _ = try await backend.recordReply("Saturday off, then.", messageId: m(6), inReplyTo: m(5), intent: away, model: "gpt-5.5", on: tuesday)
         label("recordCoachReplyAway")
-        _ = try await backend.dismissIntent(messageId: "m6", in: conversation); label("dismissIntent")
+        _ = try await backend.dismissIntent(messageId: m(6), in: conversation); label("dismissIntent")
         _ = try await backend.recordProfileAttempt(automatic: true); label("recordProfileAttempt")
         _ = try await backend.recordProfile(report()); label("recordProfile")
-        _ = try await backend.recordDayRequirement("Thursday I only have 40 minutes.", maxMinutes: nil, on: thursday, plan: "i100:p1")
+        _ = try await backend.recordDayRequirement("Thursday I only have 40 minutes.", maxMinutes: nil, on: thursday, plan: plan)
         label("recordDayRequirement")
-        _ = try await backend.moveSession(thursday.iso, to: thursday.adding(days: 1), plan: "i100:p1"); label("moveSession")
-        _ = try await backend.retirePlan("i100:p1"); label("retirePlan")
+        _ = try await backend.moveSession(CadenciaAPI.SessionId(thursday.iso), to: thursday.adding(days: 1), plan: plan); label("moveSession")
+        _ = try await backend.retirePlan(plan); label("retirePlan")
 
         let commands = transport.commands
         XCTAssertEqual(commands.count, labels.count)
@@ -186,13 +188,14 @@ final class BackendContractTests: XCTestCase {
         XCTAssertTrue(try input("recordDayRequirement")["maxMinutes"] is NSNull)
         XCTAssertEqual(try input("startConsultation").count, 0)
         XCTAssertEqual(try input("retirePlan").count, 0)
-        // An optional field with no value is left out, as Effect expects.
-        let steps = (decision["workout"] as? [String: Any])?["steps"] as? [[String: Any]]
-        XCTAssertNil(steps?.first?["cadenceRpm"])
+        let workout = decision["workout"] as? [String: Any]
+        XCTAssertTrue((workout?["steps"] as? [[String: Any]])?.first?["cadenceRpm"] is NSNull)
+        XCTAssertTrue(workout?["intensityCeiling"] is NSNull)
+        XCTAssertTrue(try input("recordDailyDecisionRefused")["workout"].flatMap { $0 as? [String: Any] }?["rationale"] is NSNull)
     }
 
     func testDraftBecomesThePlanSessionsWithTheirPurpose() throws {
-        let wire = try CadenciaAPI.PlanDraft(draft(), athleteId: "i100", today: today)
+        let wire = try CadenciaAPI.PlanDraft(draft(), athleteId: TestIDs.athlete, today: today)
         XCTAssertEqual(wire.athleteId, "i100")
         XCTAssertEqual(wire.goal, .endurance)
         XCTAssertEqual(wire.longRideWeekday, 1)
@@ -205,16 +208,50 @@ final class BackendContractTests: XCTestCase {
         XCTAssertNil(wire.event)
     }
 
-    func testCoachIntentBecomesDayLimitsOnlyWhenItChangesThePlan() {
+    func testCoachIntentBecomesDayLimitsOnlyWhenItChangesThePlan() throws {
         let request = CoachIntent(constraints: [.init(day: thursday, maxMinutes: 40), .init(day: today.adding(days: -1), maxMinutes: 10)],
                                   reply: "Shorter Thursday", workoutRequest: .init(day: Day(year: 2026, month: 11, day: 13), instructions: "Intervals"))
-        let intent = CadenciaAPI.Intent(request, planId: "i100:p1", today: today)
+        let intent = try CadenciaAPI.Intent(request, planId: TestIDs.plan, today: today)
         XCTAssertEqual(intent?.limits.map(\.day), ["2026-11-12", "2026-11-13"])
         XCTAssertEqual(intent?.limits.first?.maxMinutes, 40)
         XCTAssertEqual(intent?.limits.last?.maxMinutes, nil)
-        XCTAssertNil(CadenciaAPI.Intent(CoachIntent(reply: "Hi"), planId: "i100:p1", today: today))
-        XCTAssertNil(CadenciaAPI.Intent(CoachIntent(constraints: [.init(day: thursday, unavailable: true)], needsClarification: ["Which?"]),
-                                        planId: "i100:p1", today: today))
+        XCTAssertNil(try CadenciaAPI.Intent(CoachIntent(reply: "Hi"), planId: TestIDs.plan, today: today))
+        XCTAssertNil(try CadenciaAPI.Intent(CoachIntent(constraints: [.init(day: thursday, unavailable: true)], needsClarification: ["Which?"]),
+                                            planId: TestIDs.plan, today: today))
+        // The summary is a headline: the coach's long reply is shortened to fit it.
+        let long = CoachIntent(constraints: [.init(day: thursday, maxMinutes: 40)], reply: String(repeating: "Shorter Thursday. ", count: 20))
+        let summary = try XCTUnwrap(try CadenciaAPI.Intent(long, planId: TestIDs.plan, today: today)?.summary.rawValue)
+        XCTAssertEqual(summary.utf16.count, CadenciaAPI.Headline.maxLength)
+        XCTAssertTrue(summary.hasSuffix("…"))
+    }
+
+    func testBrandsRefuseWhatTheDomainRefuses() throws {
+        XCTAssertNil(CadenciaAPI.PlanId(rawValue: "i100:p1800000000abc"))
+        XCTAssertNil(CadenciaAPI.PlanId(rawValue: "i100:5F0C6A1E-2B3D-4C5E-8F60-7A8B9C0D1E2F"), "UUIDs are lowercase")
+        XCTAssertNil(CadenciaAPI.AthleteId(rawValue: "i0100"))
+        XCTAssertNil(CadenciaAPI.Fingerprint(rawValue: "invalid-brief"))
+        XCTAssertNil(CadenciaAPI.Day(rawValue: "2026-11-10\n"))
+        XCTAssertNil(CadenciaAPI.Day(rawValue: "٢٠٢٦-١١-١٠"), "only ASCII digits, as in JavaScript")
+        XCTAssertNil(CadenciaAPI.Title(rawValue: " Padded"))
+        XCTAssertNil(CadenciaAPI.Title(rawValue: ""))
+        XCTAssertNil(CadenciaAPI.Title(rawValue: "Two lines\n"))
+        XCTAssertNotNil(CadenciaAPI.Title(rawValue: "A"))
+        XCTAssertNil(CadenciaAPI.Title(rawValue: String(repeating: "a", count: 121)))
+        XCTAssertNil(CadenciaAPI.Minutes(rawValue: 1441))
+        XCTAssertNil(CadenciaAPI.Seconds(rawValue: .nan))
+        XCTAssertNil(CadenciaAPI.ModelName(rawValue: "gpt 5"))
+        let eight = 8 // `Weekday(8)` would be a test literal
+        XCTAssertThrowsError(try CadenciaAPI.Weekday(eight)) { XCTAssertEqual($0 as? CadenciaAPI.InvalidValue, .init(brand: "Weekday", value: "8")) }
+        XCTAssertEqual(try CadenciaAPI.Title(text: "  Base block \n"), "Base block")
+        XCTAssertThrowsError(try CadenciaAPI.Title(text: "   "))
+        XCTAssertNil(try CadenciaAPI.Paragraph.fitting("  "))
+        // On the wire a brand is its raw value, and decoding checks it.
+        XCTAssertEqual(String(decoding: try JSONEncoder().encode(TestIDs.plan), as: UTF8.self), "\"\(TestIDs.plan)\"")
+        XCTAssertThrowsError(try JSONDecoder().decode(CadenciaAPI.Minutes.self, from: Data("-1".utf8)))
+        XCTAssertEqual(try JSONDecoder().decode(CadenciaAPI.Minutes.self, from: Data("40".utf8)), 40)
+        // A workout the domain would refuse is not sent.
+        let tooLong = Workout(name: "Long", kind: .endurance, steps: [steady(25 * 60, 0.6)])
+        XCTAssertThrowsError(try CadenciaAPI.Workout(tooLong))
     }
 
     func testEvidenceReadsEachDayFromIntervals() throws {
@@ -229,8 +266,8 @@ final class BackendContractTests: XCTestCase {
         let events = [try event(1, "HOLIDAY", "2026-11-13", end: "2026-11-14"),
                       try event(2, "WORKOUT", "2026-11-15", tags: ["intensity-hard"]),
                       try event(3, "RACE_A", "2026-11-22")]
-        let snapshot = CoachEvidence.snapshot(fingerprint: "fp", readiness: readiness, availability: availability, events: events, from: tuesday)
-        let byDay = Dictionary(uniqueKeysWithValues: snapshot.days.map { ($0.day, $0) })
+        let snapshot = try CoachEvidence.snapshot(fingerprint: TestIDs.fingerprint("f"), readiness: readiness, availability: availability, events: events, from: tuesday)
+        let byDay = Dictionary(uniqueKeysWithValues: snapshot.days.map { ($0.day.rawValue, $0) })
         XCTAssertEqual(snapshot.days.count, 8)
         XCTAssertEqual(byDay["2026-11-10"]?.maxMinutes, 45) // Tuesday is ISO day 2
         XCTAssertEqual(byDay["2026-11-12"]?.unavailable, true) // Thursday, ISO 4
@@ -246,10 +283,10 @@ final class BackendContractTests: XCTestCase {
 
     func testCurrentPlanBecomesTheAppsPlan() throws {
         let view = try JSONDecoder().decode(CadenciaAPI.CurrentPlanState.self, from: BackendFixtures.view("plan"))
-        let context = PlanContext(planId: "i100:p1", availability: Availability(hoursPerWeek: 4, minutesByWeekday: [3: 60, 5: 60, 1: 120], longRideWeekday: 1),
+        let context = PlanContext(planId: TestIDs.plan, availability: Availability(hoursPerWeek: 4, minutesByWeekday: [3: 60, 5: 60, 1: 120], longRideWeekday: 1),
                                   details: draft().details)
         let plan = try XCTUnwrap(TrainingPlan(view, context: context))
-        XCTAssertEqual(plan.backendID, "i100:p1")
+        XCTAssertEqual(plan.backendID, TestIDs.plan)
         XCTAssertTrue(plan.isActive)
         XCTAssertEqual(plan.title, "Base block")
         XCTAssertEqual(plan.consultation, draft().details)
@@ -257,14 +294,15 @@ final class BackendContractTests: XCTestCase {
         let tuesday = try XCTUnwrap(plan.sessions.first { $0.day == self.tuesday })
         XCTAssertEqual(tuesday.status, .generated)
         XCTAssertEqual(tuesday.workout?.name, "Easy endurance")
-        XCTAssertEqual(tuesday.externalID, "cadencia-i100-p1-2026-11-10")
-        XCTAssertEqual(PlanMirror.externalID(for: tuesday), "cadencia-i100-p1-2026-11-10")
+        let externalID = "cadencia-\(TestIDs.plan.rawValue.replacingOccurrences(of: ":", with: "-"))-2026-11-10"
+        XCTAssertEqual(tuesday.externalID, externalID)
+        XCTAssertEqual(PlanMirror.externalID(for: tuesday), externalID)
         XCTAssertEqual(plan.sessions.first { $0.day == self.thursday }?.status, .provisional)
         XCTAssertEqual(plan.sessions.first { $0.day == self.thursday }?.targetMinutes, 40)
         // Read twice, the plan is the same plan to the views and the ride engine.
         XCTAssertEqual(TrainingPlan(view, context: context), plan)
         // Another plan's context is not applied.
-        XCTAssertNil(TrainingPlan(view, context: PlanContext(planId: "i100:p0", details: draft().details))?.consultation)
+        XCTAssertNil(TrainingPlan(view, context: PlanContext(planId: TestIDs.otherPlan, details: draft().details))?.consultation)
     }
 
     func testRetiredPlanAndChangesNeedingNoAI() throws {
@@ -281,7 +319,7 @@ final class BackendContractTests: XCTestCase {
     func testDecisionsCarryTheVerdict() throws {
         let refused = try JSONDecoder().decode(CadenciaAPI.TodayDecisionState.self, from: BackendFixtures.view("decisionRefused"))
         XCTAssertEqual(refused.status, .refused)
-        XCTAssertTrue(refused.refusal?.contains("HardensPlannedSession") == true)
+        XCTAssertEqual(refused.refusal?.reason, .hardensPlan)
         let accepted = try JSONDecoder().decode(CadenciaAPI.TodayDecisionState.self, from: BackendFixtures.view("decisionAccepted"))
         XCTAssertEqual(accepted.status, .accepted)
         XCTAssertEqual(accepted.attempt, 2)
@@ -291,12 +329,12 @@ final class BackendContractTests: XCTestCase {
         XCTAssertEqual(workout.totalDuration, 3600)
         XCTAssertEqual(workout.id, Workout(accepted.workout!, identity: "i100:2026-11-10#2").id)
         XCTAssertEqual(CoachNote(try XCTUnwrap(accepted.note)), note)
-        XCTAssertEqual(accepted.evidence?.fingerprint, "fp-1")
+        XCTAssertEqual(accepted.evidence?.fingerprint, TestIDs.fingerprint("1"))
     }
 
     func testThreadShowsEachIntentAndWhereItStands() throws {
         let thread = try JSONDecoder().decode(CadenciaAPI.ConversationThreadState.self, from: BackendFixtures.view("thread"))
-        XCTAssertEqual(thread.messages.map(\.messageId), ["m1", "m2", "m3", "m4", "m5", "m6"])
+        XCTAssertEqual(thread.messages.map(\.messageId), (1...6).map(TestIDs.message))
         XCTAssertEqual(thread.messages[1].role, .coach)
         XCTAssertEqual(thread.messages[1].intent?.limits.first?.maxMinutes, 40)
         XCTAssertEqual(thread.messages[1].intentStatus, .applied)
@@ -308,7 +346,7 @@ final class BackendContractTests: XCTestCase {
     func testConsultationAndProfileCard() throws {
         let consultation = try JSONDecoder().decode(CadenciaAPI.ConsultationViewState.self, from: BackendFixtures.view("consultation"))
         XCTAssertEqual(consultation.stage, .created)
-        XCTAssertEqual(consultation.planId, "i100:p1")
+        XCTAssertEqual(consultation.planId, TestIDs.plan)
         XCTAssertEqual(consultation.turns.map(\.role), [.coach, .athlete])
         XCTAssertEqual(consultation.draft?.title, "Base block")
         let card = try JSONDecoder().decode(CadenciaAPI.RiderProfileCardState.self, from: BackendFixtures.view("profile"))
@@ -353,7 +391,7 @@ final class CadenciaAPITests: XCTestCase {
         let transport = BackendTransport()
         let api = CadenciaAPI(baseURL: base, transport: transport, sessionToken: "t")
         let receipt = CadenciaAPI.Receipt(stream: "DailyDecision/i100:2026-11-10", version: 4)
-        let state = try await api.getTodayDecision("i100:2026-11-10", after: receipt)
+        let state = try await api.getTodayDecision(BackendID.decision(athlete: TestIDs.athlete, day: Day(year: 2026, month: 11, day: 10)), after: receipt)
         XCTAssertNil(state)
         let url = try XCTUnwrap(transport.requests.first?.url)
         XCTAssertEqual(url.path, "/v1/TodayDecision/i100:2026-11-10")
@@ -367,7 +405,7 @@ final class CadenciaAPITests: XCTestCase {
             let transport = BackendTransport()
             transport.failures = [.init(status: status, body: Data(body.utf8))]
             do {
-                _ = try await CadenciaAPI(baseURL: base, transport: transport).retirePlan("i100:p1")
+                _ = try await CadenciaAPI(baseURL: base, transport: transport).retirePlan(TestIDs.plan)
                 return nil
             } catch { return error as? CadenciaAPIError }
         }
@@ -383,24 +421,26 @@ final class CadenciaAPITests: XCTestCase {
 final class CoachBackendTests: XCTestCase {
     func backend(_ transport: BackendTransport) -> CoachBackend {
         CoachBackend(api: CadenciaAPI(baseURL: URL(string: "https://cadencia.example")!, transport: transport, sessionToken: "t"),
-                     athleteId: "i100", pollInterval: .milliseconds(1), answerTimeout: .milliseconds(5), pause: { _ in })
+                     athleteId: TestIDs.athlete, pollInterval: .milliseconds(1), answerTimeout: .milliseconds(5), pause: { _ in })
     }
 
     let day = Day(year: 2026, month: 11, day: 10)
     func decision(_ status: String, attempt: Int = 1, refusal: String? = nil) -> String {
-        let reason = refusal.map { "\"\($0)\"" } ?? "null"
+        let reason = refusal.map { #"{"reason":"\#($0)","detail":null}"# } ?? "null"
         return #"{"athleteId":"i100","day":"2026-11-10","attempt":\#(attempt),"status":"\#(status)","workout":null,"note":null,"evidence":null,"model":"gpt-5.5","interpretedOn":"ios","refusal":\#(reason)}"#
     }
-    let evidence = CadenciaAPI.EvidenceSnapshot(fingerprint: "fp", readiness: .init(level: .normal, score: 60, summary: ""), days: [], eventDays: [])
+    let evidence = CadenciaAPI.EvidenceSnapshot(fingerprint: TestIDs.fingerprint("f"), readiness: .init(level: .normal, score: 60, summary: "Typical."),
+                                                days: [], eventDays: [])
     let workout = Workout(name: "Easy", kind: .endurance, steps: [WorkoutStep(name: "Z2", duration: 3600, intensity: 0.65)])
+    let note = CoachNote(headline: "Easy", body: "Ready.", session: "Z2.")
 
     func testDecisionWaitsForThePlansVerdict() async throws {
         let transport = BackendTransport()
-        transport.views["TodayDecision"] = [decision("pending"), decision("pending"), decision("refused", refusal: "HardensPlannedSession")]
-        let verdict = try await backend(transport).recordDecision(on: day, planId: "i100:p1", workout: workout,
-                                                                  note: .init(headline: "", body: "", session: ""), evidence: evidence, model: "gpt-5.5")
+        transport.views["TodayDecision"] = [decision("pending"), decision("pending"), decision("refused", refusal: "hardensPlan")]
+        let verdict = try await backend(transport).recordDecision(on: day, planId: TestIDs.plan, workout: workout,
+                                                                  note: note, evidence: evidence, model: "gpt-5.5")
         XCTAssertEqual(verdict.status, .refused)
-        XCTAssertEqual(verdict.refusal, "HardensPlannedSession")
+        XCTAssertEqual(verdict.refusal?.reason, .hardensPlan)
         let reads = transport.requests.filter { $0.method == .get }
         XCTAssertEqual(reads.count, 3)
         XCTAssertNotNil(reads[0].url.query, "the first read waits for the write")
@@ -412,15 +452,15 @@ final class CoachBackendTests: XCTestCase {
     func testAnUnansweredDecisionComesBackPending() async throws {
         let transport = BackendTransport()
         transport.views["TodayDecision"] = [decision("pending")]
-        let verdict = try await backend(transport).recordDecision(on: day, planId: "i100:p1", workout: workout,
-                                                                  note: .init(headline: "", body: "", session: ""), evidence: evidence, model: "m")
+        let verdict = try await backend(transport).recordDecision(on: day, planId: TestIDs.plan, workout: workout,
+                                                                  note: note, evidence: evidence, model: "m")
         XCTAssertEqual(verdict.status, .pending)
     }
 
     func testADroppedConnectionIsRetriedWithTheSameCommandID() async throws {
         let transport = BackendTransport()
         transport.transportErrors = 1
-        try await backend(transport).sendMessage("Hi", messageId: "m1", on: day)
+        try await backend(transport).sendMessage("Hi", messageId: TestIDs.message(1), on: day)
         XCTAssertEqual(transport.commands.count, 2)
         let ids = try transport.commands.map { try XCTUnwrap(JSONSerialization.jsonObject(with: $0.body!) as? [String: Any])["commandId"] as? String }
         XCTAssertNotNil(ids[0])
@@ -437,12 +477,14 @@ final class CoachBackendTests: XCTestCase {
         XCTAssertTrue(again)
     }
 
-    func testNewIdsBelongToTheAthleteAndHaveNoColonInTheKey() {
-        let id = BackendID.new(athlete: "i100", prefix: "c", now: Date(timeIntervalSince1970: 1_800_000_000))
-        XCTAssertTrue(id.hasPrefix("i100:c1800000000"))
-        XCTAssertEqual(id.filter { $0 == ":" }.count, 1)
-        XCTAssertEqual(BackendID.owner(of: id), "i100")
-        XCTAssertEqual(BackendID.conversation(athlete: "i100", day: Day(year: 2026, month: 3, day: 9)), "i100:2026-03")
+    func testNewIdsBelongToTheAthlete() {
+        let plan = BackendID.newPlan(athlete: TestIDs.athlete), consultation = BackendID.newConsultation(athlete: TestIDs.athlete)
+        XCTAssertTrue(plan.rawValue.hasPrefix("i100:"))
+        XCTAssertTrue(consultation.rawValue.hasPrefix("i100:"))
+        XCTAssertNotEqual(plan.rawValue, BackendID.newPlan(athlete: TestIDs.athlete).rawValue)
+        XCTAssertNotEqual(BackendID.newMessage(), BackendID.newMessage())
+        XCTAssertEqual(BackendID.conversation(athlete: TestIDs.athlete, day: Day(year: 2026, month: 3, day: 9)), "i100:2026-03")
+        XCTAssertEqual(BackendID.decision(athlete: TestIDs.athlete, day: Day(year: 2026, month: 3, day: 9)), "i100:2026-03-09")
         XCTAssertEqual(StableID.uuid("a"), StableID.uuid("a"))
         XCTAssertNotEqual(StableID.uuid("a"), StableID.uuid("b"))
     }
@@ -451,28 +493,29 @@ final class CoachBackendTests: XCTestCase {
 final class PlanAnswerTests: XCTestCase {
     func backend(_ transport: BackendTransport) -> CoachBackend {
         CoachBackend(api: CadenciaAPI(baseURL: URL(string: "https://cadencia.example")!, transport: transport, sessionToken: "t"),
-                     athleteId: "i100", pollInterval: .milliseconds(1), answerTimeout: .milliseconds(5), pause: { _ in })
+                     athleteId: TestIDs.athlete, pollInterval: .milliseconds(1), answerTimeout: .milliseconds(5), pause: { _ in })
     }
 
     func testARefusedDraftReopensTheConsultationWithTheReason() async throws {
         let transport = BackendTransport()
         transport.views["ConsultationView"] = [
-            #"{"stage":"accepted","turns":[],"draft":null,"planId":"i100:p1","refusal":null}"#,
-            #"{"stage":"open","turns":[],"draft":null,"planId":null,"refusal":"InvalidPlan: reason=\"A plan needs at least one session.\""}"#,
+            #"{"stage":"accepted","turns":[],"draft":null,"planId":"\#(TestIDs.plan)","refusal":null}"#,
+            #"{"stage":"open","turns":[],"draft":null,"planId":null,"refusal":{"reason":"invalidPlan","detail":"A plan needs at least one session."}}"#,
         ]
-        let answer = try await backend(transport).acceptDraft(planId: "i100:p1", in: "i100:c1")
+        let answer = try await backend(transport).acceptDraft(planId: TestIDs.plan, in: TestIDs.consultation)
         XCTAssertEqual(answer?.stage, .open)
-        XCTAssertTrue(answer?.refusal?.hasPrefix("InvalidPlan") == true)
+        XCTAssertEqual(answer?.refusal?.reason, .invalidPlan)
+        XCTAssertEqual(answer?.refusal?.detail, "A plan needs at least one session.")
     }
 
     func testANewPlanIsReadOnceTheViewShowsIt() async throws {
         let transport = BackendTransport()
-        func plan(_ id: String) -> String {
-            #"{"planId":"\#(id)","status":"active","title":"","goal":null,"startDay":null,"endDay":null,"phases":[],"longRideWeekday":null,"event":null,"sessions":[],"requirements":[]}"#
+        func plan(_ id: CadenciaAPI.PlanId) -> String {
+            #"{"planId":"\#(id)","status":"active","title":null,"goal":null,"startDay":null,"endDay":null,"phases":[],"longRideWeekday":null,"event":null,"sessions":[],"requirements":[]}"#
         }
-        transport.views["CurrentPlan"] = [plan("i100:p0"), plan("i100:p0"), plan("i100:p1")]
-        let shown = try await backend(transport).plan(showing: "i100:p1")
-        XCTAssertEqual(shown?.planId, "i100:p1")
+        transport.views["CurrentPlan"] = [plan(TestIDs.otherPlan), plan(TestIDs.otherPlan), plan(TestIDs.plan)]
+        let shown = try await backend(transport).plan(showing: TestIDs.plan)
+        XCTAssertEqual(shown?.planId, TestIDs.plan)
         XCTAssertEqual(transport.requests.count, 3)
     }
 }

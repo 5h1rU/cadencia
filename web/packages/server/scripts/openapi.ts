@@ -8,9 +8,19 @@
  * generator that is not Effect: it keeps the calls iOS makes (every command
  * and each view's `get`), names the shared shapes, writes numbers as JSON
  * numbers, and gives each operation a short id. Nothing about the wire changes.
+ *
+ * It also names the domain's brands (`PlanId`, `Day`, `Minutes`, `Title`, …),
+ * which Effect keeps only in TypeScript's types: each becomes a component
+ * marked `x-brand`, with the pattern Effect leaves out of JSON Schema (it
+ * exports only `u`-flagged patterns), and every field of that brand refers to
+ * it. Swift gets one validating type per brand from that.
  */
 import * as OpenApi from "effect/http-api/OpenApi";
-import { writeFileSync } from "node:fs";
+import * as Schema from "effect/Schema";
+import type * as SchemaAST from "effect/SchemaAST";
+import { readdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { ClientApi } from "../src/ClientHttpApi.ts";
 
 type Json = null | boolean | number | string | Array<Json> | { [key: string]: Json };
@@ -44,10 +54,10 @@ const plain = (node: Json): Json => {
     }
     out.anyOf = members;
   }
-  // Integer bounds are Effect's safe-integer range; Swift's Int holds it.
+  // Effect bounds every integer by the safe-integer range; Swift's Int holds it. Other bounds are the domain's.
   if (out.type === "integer") {
-    delete out.minimum;
-    delete out.maximum;
+    if (out.minimum === Number.MIN_SAFE_INTEGER) delete out.minimum;
+    if (out.maximum === Number.MAX_SAFE_INTEGER) delete out.maximum;
   }
   return out;
 };
@@ -64,6 +74,140 @@ const nonNull = (node: Json | undefined): Json | undefined =>
 const at = (node: Json | undefined, ...path: Array<string>): Json | undefined =>
   path.reduce<Json | undefined>((n, key) => (key === "?" ? nonNull(n) : isObj(n) ? n[key] : undefined), node);
 
+// MARK: Brands
+
+interface Brand {
+  readonly name: string;
+  readonly ast: SchemaAST.AST;
+  /** The brand's own checks; its last one is created only for it, so it identifies the brand wherever it is used. */
+  readonly checks: ReadonlyArray<SchemaAST.Check<unknown>>;
+  readonly schema: Obj;
+}
+
+const sourceFiles = (dir: string): Array<string> =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? sourceFiles(join(dir, entry.name)) : entry.name.endsWith(".ts") ? [join(dir, entry.name)] : [],
+  );
+
+/** The `isPattern` checks of a schema, which Effect writes to JSON Schema only when the RegExp has the `u` flag. */
+const patterns = (checks: ReadonlyArray<SchemaAST.Check<unknown>>): Array<string> =>
+  checks.flatMap((check): Array<string> => {
+    if (check._tag === "FilterGroup") return patterns(check.checks);
+    const representation = check.annotations?.representation as { id?: string; payload?: { source?: string } } | undefined;
+    return representation?.id === "effect/schema/isPattern" && representation.payload?.source ? [representation.payload.source] : [];
+  });
+
+/** Every brand the domain packages export, with its JSON Schema. */
+const domainBrands = async (): Promise<Array<Brand>> => {
+  const brands = new Map<string, Brand>();
+  for (const pkg of ["identity", "kernel", "athlete", "planning", "coach"]) {
+    for (const file of sourceFiles(join(import.meta.dirname, "../..", pkg, "src"))) {
+      for (const value of Object.values(await import(pathToFileURL(file).href))) {
+        if (!Schema.isSchema(value) || !("schema" in value) || typeof (value as { identifier?: unknown }).identifier !== "string") continue;
+        const name = (value as unknown as { identifier: string }).identifier;
+        const checks = value.ast.checks ?? [];
+        if (brands.has(name) || checks.length === 0) continue;
+        const schema = JSON.parse(JSON.stringify(Schema.toJsonSchemaDocument(value).schema)) as Obj;
+        const missing = patterns(checks).filter((p) => p !== schema.pattern);
+        if (missing.length > 0 && schema.pattern === undefined) schema.pattern = missing.shift()!;
+        if (missing.length > 0) schema.allOf = [...(Array.isArray(schema.allOf) ? schema.allOf : []), ...missing.map((pattern) => ({ pattern }))];
+        brands.set(name, { name, ast: value.ast, checks, schema: { ...schema, "x-brand": name } });
+      }
+    }
+  }
+  return [...brands.values()];
+};
+
+/**
+ * Walks a schema's AST next to the JSON Schema Effect wrote for it and replaces
+ * each branded node with a reference to its brand. A node that adds checks of
+ * its own (`Seconds` greater than 0) refers to the brand and keeps the keywords
+ * it adds.
+ */
+const brandReferences = (brands: ReadonlyArray<Brand>, used: Set<string>) => {
+  const brandOf = (ast: SchemaAST.AST): Brand | undefined => {
+    const checks = ast.checks ?? [];
+    return brands
+      .filter((b) => checks.includes(b.checks[b.checks.length - 1]!))
+      .sort((a, b) => b.checks.length - a.checks.length)[0];
+  };
+  const walk = (ast: SchemaAST.AST, json: Json): Json => {
+    if (!isObj(json) || typeof json.$ref === "string") return json;
+    const brand = brandOf(ast);
+    if (brand) {
+      used.add(brand.name);
+      const ref: Obj = { $ref: `#/components/schemas/${brand.name}` };
+      const added = Object.entries(json).filter(([k, v]) => k !== "type" && canonical(v) !== canonical(brand.schema[k] ?? null));
+      return added.length === 0 ? ref : { allOf: [ref], ...Object.fromEntries(added) };
+    }
+    switch (ast._tag) {
+      case "Suspend":
+        return walk(ast.thunk(), json);
+      case "Objects": {
+        if (!isObj(json.properties)) return json;
+        const properties: Obj = { ...json.properties };
+        for (const p of ast.propertySignatures) {
+          const key = String(p.name);
+          if (key in properties) properties[key] = walk(p.type, properties[key]!);
+        }
+        return { ...json, properties };
+      }
+      case "Arrays": {
+        const rest = ast.rest[0];
+        return rest && json.items !== undefined ? { ...json, items: walk(rest, json.items) } : json;
+      }
+      case "Union": {
+        if (!Array.isArray(json.anyOf)) return json;
+        const types = ast.types.filter((t) => t._tag !== "Null");
+        const members = json.anyOf.filter((m) => !(isObj(m) && m.type === "null"));
+        if (types.length !== members.length) return json;
+        let i = 0;
+        return { ...json, anyOf: json.anyOf.map((m) => (isObj(m) && m.type === "null" ? m : walk(types[i++]!, m))) };
+      }
+      default:
+        return json;
+    }
+  };
+  return walk;
+};
+
+/** The document with every branded field referring to its brand, and the brands as components. */
+const withBrands = async (doc: Obj): Promise<Obj> => {
+  const brands = await domainBrands();
+  const used = new Set<string>();
+  const walk = brandReferences(brands, used);
+  const paths: Obj = { ...(doc.paths as Obj) };
+  for (const group of Object.values(ClientApi.groups)) {
+    for (const endpoint of Object.values(group.endpoints)) {
+      const path = endpoint.path.replace(/:(\w+)/g, "{$1}");
+      const method = endpoint.method.toLowerCase();
+      const item = paths[path];
+      if (!isObj(item) || !isObj(item[method])) continue;
+      const op: Obj = { ...item[method] };
+      const payload = endpoint.payload.get("application/json")?.schemas[0];
+      const body = at(op, "requestBody", "content", "application/json", "schema");
+      if (payload && body) op.requestBody = { ...(op.requestBody as Obj), content: { "application/json": { schema: walk(payload.ast, body) } } };
+      const success = [...endpoint.success][0];
+      const response = at(op, "responses", "200");
+      const responseSchema = at(response, "content", "application/json", "schema");
+      if (success && isObj(response) && responseSchema) {
+        op.responses = { ...(op.responses as Obj), "200": { ...response, content: { "application/json": { schema: walk(success.ast, responseSchema) } } } };
+      }
+      const params = endpoint.params?.ast;
+      if (params && params._tag === "Objects" && Array.isArray(op.parameters)) {
+        op.parameters = op.parameters.map((parameter) => {
+          const signature = isObj(parameter) ? params.propertySignatures.find((p) => p.name === parameter.name) : undefined;
+          return signature && isObj(parameter) && parameter.schema ? { ...parameter, schema: walk(signature.type, parameter.schema) } : parameter;
+        });
+      }
+      paths[path] = { ...item, [method]: op };
+    }
+  }
+  const schemas: Obj = isObj(doc.components) && isObj(doc.components.schemas) ? { ...doc.components.schemas } : {};
+  for (const brand of brands) if (used.has(brand.name)) schemas[brand.name] = brand.schema;
+  return { ...doc, paths, components: { ...(isObj(doc.components) ? doc.components : {}), schemas } };
+};
+
 const main = async () => {
   const args = process.argv.slice(2);
   const fromIndex = args.indexOf("--from");
@@ -74,7 +218,7 @@ const main = async () => {
   const source: Json = origin
     ? ((await (await fetch(new URL("/v1/openapi.json", origin))).json()) as Json)
     : (JSON.parse(JSON.stringify(OpenApi.fromApi(ClientApi))) as Json);
-  const doc = plain(source) as Obj;
+  const doc = plain(await withBrands(source as Obj)) as Obj;
   const paths = doc.paths as Obj;
 
   // Keep what iOS calls, with short operation ids.
@@ -112,6 +256,7 @@ const main = async () => {
     ["GoalEvent", at(state("CurrentPlan"), "properties", "event", "?")],
     ["DayRequirement", at(state("CurrentPlan"), "properties", "requirements", "items")],
     ["TodayDecisionState", state("TodayDecision")],
+    ["Refusal", at(state("TodayDecision"), "properties", "refusal", "?")],
     ["ConversationThreadState", state("ConversationThread")],
     ["ThreadMessage", at(state("ConversationThread"), "properties", "messages", "items")],
     ["ConsultationViewState", state("ConsultationView")],
@@ -156,7 +301,12 @@ const main = async () => {
     Object.values(node).forEach(visit);
   };
   visit(referredPaths);
-  const used = Object.fromEntries(Object.entries(schemas).filter(([name]) => reached.has(name)));
+  // Sorted by name, so the document doesn't change when a type moves between packages.
+  const used = Object.fromEntries(
+    Object.entries(schemas)
+      .filter(([name]) => reached.has(name))
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
 
   const result = {
     ...doc,

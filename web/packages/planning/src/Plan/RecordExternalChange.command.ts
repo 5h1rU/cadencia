@@ -1,13 +1,14 @@
+import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
-import { PlanId } from "./Plan.id.ts";
+import { ExternalId, SessionId } from "./Session.id.ts";
 
 export class SessionChangedInIntervals extends Domain.Event("SessionChangedInIntervals", {
-  sessionId: Schema.String,
+  sessionId: SessionId,
 }) {}
 
 export class SessionRemovedInIntervals extends Domain.Event("SessionRemovedInIntervals", {
-  sessionId: Schema.String,
+  sessionId: SessionId,
 }) {}
 
 /**
@@ -16,6 +17,6 @@ export class SessionRemovedInIntervals extends Domain.Event("SessionRemovedInInt
  */
 export class RecordExternalChange extends Domain.Command("RecordExternalChange", {
   target: PlanId,
-  input: { externalId: Schema.String, change: Schema.Literals(["changed", "removed"]) },
+  input: { externalId: ExternalId, change: Schema.Literals(["changed", "removed"]) },
   events: [SessionChangedInIntervals, SessionRemovedInIntervals],
 }) {}

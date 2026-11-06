@@ -1,18 +1,29 @@
-import { Day } from "@cadencia/kernel/Day";
+import { Day } from "@cadencia/kernel/Calendar/Day";
+import { Paragraph } from "@cadencia/kernel/Text";
 import * as Schema from "effect/Schema";
+import { Headline } from "../CoachText.ts";
+import { Count } from "../Counts.ts";
 
-/** The AI's reading of the rider's demonstrated tendencies. Matches `CyclistProfile.Report` in Cadencia iOS. */
+/** The kind of rider the evidence shows. Raw values match `CyclistProfile.RiderType` in Cadencia iOS. */
+export const RiderType = Schema.Literals(["climber", "puncheur", "sprinter", "timeTrialist", "endurance", "allRounder", "developing"]);
+export type RiderType = typeof RiderType.Type;
+
+/** How much the evidence supports the profile. */
+export const Confidence = Schema.Literals(["limited", "moderate", "high"]);
+export type Confidence = typeof Confidence.Type;
+
+/** The AI's reading of the rider's demonstrated tendencies. */
 export const RiderReport = Schema.Struct({
-  riderType: Schema.Literals(["climber", "puncheur", "sprinter", "timeTrialist", "endurance", "allRounder", "developing"]),
-  confidence: Schema.Literals(["limited", "moderate", "high"]),
-  headline: Schema.String,
-  summary: Schema.String,
-  strengths: Schema.Array(Schema.String),
-  development: Schema.Array(Schema.String),
-  evidence: Schema.Array(Schema.String),
-  caveats: Schema.Array(Schema.String),
+  riderType: RiderType,
+  confidence: Confidence,
+  headline: Headline,
+  summary: Paragraph,
+  strengths: Schema.Array(Paragraph),
+  development: Schema.Array(Paragraph),
+  evidence: Schema.Array(Paragraph),
+  caveats: Schema.Array(Paragraph),
   oldest: Day,
   newest: Day,
-  rideCount: Schema.Int,
-});
+  rideCount: Count,
+}).pipe(Schema.check(Schema.makeFilter((r) => (r.oldest <= r.newest ? undefined : "the oldest ride comes before the newest"))));
 export type RiderReport = typeof RiderReport.Type;

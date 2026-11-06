@@ -83,7 +83,7 @@ struct AppState: Codable, Equatable {
 
     /// The consultation the athlete has open, by its backend id, and its view.
     struct ConsultationCache: Codable, Equatable {
-        var id: String
+        var id: CadenciaAPI.ConsultationId
         var startedOn: Day
         var view: ViewCache<CadenciaAPI.ConsultationViewState>
     }
@@ -203,7 +203,7 @@ struct AppState: Codable, Equatable {
             let message = messages[index]
             guard message.role == .coach, message.intentStatus == .applied,
                   let at = BackendDate.parse(message.at), at > day.adding(days: -7).date() else { return nil }
-            return messages[..<index].last { $0.role == .athlete }?.text
+            return messages[..<index].last { $0.role == .athlete }?.text.rawValue
         }.suffix(5).map { $0 }
     }
 

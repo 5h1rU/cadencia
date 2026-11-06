@@ -35,11 +35,13 @@ enum PreviewData {
         [(5, 820), (60, 420), (300, 300), (720, 262), (1200, 255), (3600, 236)].map { PowerCurvePoint(seconds: $0.0, watts: $0.1) }
     }
 
+    static let previewPlanID = BackendID.newPlan(athlete: CadenciaAPI.AthleteId(rawValue: "i12345")!)
+
     static var plan: TrainingPlan {
         let event = TrainingEvent(name: "Gran Fondo Andes", day: today.adding(days: 47), distanceKm: 140, priority: .a, objective: "finish strong", isRace: false)
         var plan = PlanBuilder().build(.init(goal: .event, startDay: today.startOfWeek(), endDay: event.day, event: event, availability: .typical, currentCTL: 62))
         plan.isActive = true
-        plan.backendID = "i12345:preview"
+        plan.backendID = previewPlanID
         return plan
     }
 
@@ -71,11 +73,12 @@ enum PreviewData {
                         model: "gpt-6-astra", decidedAt: Date(), aiFingerprint: "preview")
         let at = ISO8601DateFormatter().string(from: Date())
         s.coachThread = .init(CadenciaAPI.ConversationThreadState(messages: [
-            .init(messageId: "m1", role: .athlete, text: "El sábado tengo una salida larga de 120 km, y el jueves solo tengo 45 minutos.", at: at),
-            .init(messageId: "m2", role: .coach, text: "Entendido: salida larga el sábado y jueves corto.", at: at,
-                  intent: .init(planId: "i12345:preview", summary: "Jueves corto",
-                                limits: [.init(day: today.adding(days: 3).iso, maxMinutes: 45, unavailable: false)]),
-                  intentStatus: .proposed, model: "gpt-6-astra"),
+            .init(messageId: BackendID.newMessage(), role: .athlete,
+                  text: try! .init(text: "El sábado tengo una salida larga de 120 km, y el jueves solo tengo 45 minutos."), at: at),
+            .init(messageId: BackendID.newMessage(), role: .coach, text: try! .init(text: "Entendido: salida larga el sábado y jueves corto."), at: at,
+                  intent: .init(planId: previewPlanID, summary: try! .init(text: "Jueves corto"),
+                                limits: [.init(day: .init(today.adding(days: 3)), maxMinutes: try! .init(45), unavailable: false)]),
+                  intentStatus: .proposed, model: try! .init("gpt-6-astra")),
         ]))
         s.lastSyncAt = Date().addingTimeInterval(-600)
         return s

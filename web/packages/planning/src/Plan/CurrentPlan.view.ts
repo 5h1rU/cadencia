@@ -1,24 +1,33 @@
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { Day } from "@cadencia/kernel/Day";
-import { NotYours } from "@cadencia/kernel/NotYours.rejection";
-import { mustOwn } from "@cadencia/kernel/owns";
-import { Session } from "@cadencia/kernel/Session.middleware";
+import { AthleteId, ownerOf } from "@cadencia/identity/Athlete.id";
+import { NotYours } from "@cadencia/identity/NotYours.rejection";
+import { mustOwn } from "@cadencia/identity/owns";
+import { Session } from "@cadencia/identity/Session.middleware";
+import { Day } from "@cadencia/kernel/Calendar/Day";
+import { Weekday } from "@cadencia/kernel/Calendar/Week";
+import { PlanId } from "@cadencia/kernel/Plan.id";
+import { Title } from "@cadencia/kernel/Text";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { Plan } from "./Plan.aggregate.ts";
-import { athleteOfPlan } from "./Plan.id.ts";
-import { DayRequirement, GoalEvent, GoalKind, Phase, type PlannedSession, PlannedSession as Session_ } from "./PlanShape.ts";
+import {
+  DayRequirement,
+  GoalEvent,
+  GoalKind,
+  Phase,
+  type PlannedSession,
+  PlannedSession as Session_,
+} from "./PlanShape.ts";
 
 const CurrentPlanState = Schema.Struct({
-  planId: Schema.NullOr(Schema.String),
+  planId: Schema.NullOr(PlanId),
   status: Schema.Literals(["none", "active", "retired"]),
-  title: Schema.String,
+  title: Schema.NullOr(Title),
   goal: Schema.NullOr(GoalKind),
   startDay: Schema.NullOr(Day),
   endDay: Schema.NullOr(Day),
   phases: Schema.Array(Phase),
-  longRideWeekday: Schema.NullOr(Schema.Int),
+  longRideWeekday: Schema.NullOr(Weekday),
   event: Schema.NullOr(GoalEvent),
   sessions: Schema.Array(Session_),
   requirements: Schema.Array(DayRequirement),
@@ -51,12 +60,12 @@ export class CurrentPlan extends Domain.View("CurrentPlan", {
   key: AthleteId,
   middleware: [Session],
   rejects: [NotYours],
-  keyOf: { Plan: ({ source }) => athleteOfPlan(source.id) },
+  keyOf: { Plan: ({ source }) => ownerOf(source.id) },
   state: CurrentPlanState,
   initial: {
     planId: null,
     status: "none",
-    title: "",
+    title: null,
     goal: null,
     startDay: null,
     endDay: null,

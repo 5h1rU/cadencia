@@ -1,7 +1,15 @@
-import { addDays, type Day } from "@cadencia/kernel/Day";
-import { conditionsOn, type EvidenceSnapshot } from "@cadencia/kernel/Evidence";
-import { isEasy, isHard } from "@cadencia/kernel/SessionKind";
-import { peakIntensity, totalMinutes, totalSeconds, type Workout, type WorkoutStep } from "@cadencia/kernel/Workout";
+import { conditionsOn, type EvidenceSnapshot } from "@cadencia/athlete/Evidence";
+import { addDays, type Day } from "@cadencia/kernel/Calendar/Day";
+import type { SessionKind } from "@cadencia/kernel/Training/SessionKind";
+import { type FtpFraction, Minutes } from "@cadencia/kernel/Training/Units";
+import {
+  peakIntensity,
+  totalMinutes,
+  totalSeconds,
+  type Workout,
+  type WorkoutStep,
+} from "@cadencia/kernel/Training/Workout";
+import type { PurposeProblem } from "./ConcretizeSession.command.ts";
 import type { DayRequirement, GoalEvent, PlannedSession } from "./PlanShape.ts";
 
 /**
@@ -15,24 +23,33 @@ export const EASY_RIDING_INTENSITY = 0.75;
 export const MAX_CONTINUOUS_ACTIVATION_SECONDS = 3 * 60;
 export const MAX_ACTIVATION_FRACTION = 0.2;
 
+/** Kinds that load the athlete with sustained intensity. */
+const isHard = (kind: SessionKind): boolean =>
+  kind === "tempo" || kind === "threshold" || kind === "vo2max" || kind === "race";
+
+/** Kinds whose purpose is easy riding: a proposal for one of these days may not add intensity. */
+const isEasy = (kind: SessionKind): boolean => kind === "recovery" || kind === "endurance" || kind === "longRide";
+
 export type Problem =
-  | { readonly _tag: "AvailabilityExceeded"; readonly allowedMinutes: number; readonly proposedMinutes: number }
-  | { readonly _tag: "IntensityAfterHardTraining"; readonly peakIntensity: number }
-  | { readonly _tag: "HardensPlannedSession"; readonly peakIntensity: number }
-  | { readonly _tag: "PurposeMismatch"; readonly reason: string };
+  | { readonly _tag: "AvailabilityExceeded"; readonly allowedMinutes: Minutes; readonly proposedMinutes: Minutes }
+  | { readonly _tag: "IntensityAfterHardTraining"; readonly peakIntensity: FtpFraction }
+  | { readonly _tag: "HardensPlannedSession"; readonly peakIntensity: FtpFraction }
+  | { readonly _tag: "PurposeMismatch"; readonly problem: PurposeProblem };
 
 /** Minutes of riding the day allows: the plan, Intervals availability and the athlete's own limit. */
 export const allowedMinutes = (
   session: PlannedSession,
   evidence: EvidenceSnapshot,
   requirement: DayRequirement | undefined,
-): number => {
+): Minutes => {
   const conditions = conditionsOn(evidence, session.day);
-  if (conditions?.unavailable) return 0;
-  return Math.min(
-    session.targetMinutes,
-    conditions?.maxMinutes ?? Number.POSITIVE_INFINITY,
-    requirement?.maxMinutes ?? Number.POSITIVE_INFINITY,
+  if (conditions?.unavailable) return Minutes.make(0);
+  return Minutes.make(
+    Math.min(
+      session.targetMinutes,
+      conditions?.maxMinutes ?? Number.POSITIVE_INFINITY,
+      requirement?.maxMinutes ?? Number.POSITIVE_INFINITY,
+    ),
   );
 };
 
@@ -47,17 +64,18 @@ export const problemWith = (input: {
   const { session, workout, evidence, requirement, goalEvent } = input;
   const day = session.day;
   const minutes = totalMinutes(workout);
+  const proposed = Minutes.make(Math.min(1440, Math.ceil(minutes - 0.1)));
   const peak = peakIntensity(workout);
 
   if (workout.kind === "rest" && workout.steps.length > 0) {
-    return { _tag: "PurposeMismatch", reason: "A rest day must have no riding blocks." };
+    return { _tag: "PurposeMismatch", problem: "restWithRiding" };
   }
   const allowed = allowedMinutes(session, evidence, requirement);
   if (workout.kind !== "rest" && allowed === 0) {
-    return { _tag: "AvailabilityExceeded", allowedMinutes: 0, proposedMinutes: minutes };
+    return { _tag: "AvailabilityExceeded", allowedMinutes: allowed, proposedMinutes: proposed };
   }
   if (minutes > allowed + 0.1) {
-    return { _tag: "AvailabilityExceeded", allowedMinutes: allowed, proposedMinutes: minutes };
+    return { _tag: "AvailabilityExceeded", allowedMinutes: allowed, proposedMinutes: proposed };
   }
   const intense = isHard(workout.kind) || peak > EASY_RIDING_INTENSITY;
   if (conditionsOn(evidence, day)?.hardOtherTraining && intense) {
@@ -69,14 +87,9 @@ export const problemWith = (input: {
   if (workout.kind === "openerActivation") {
     const tomorrow = addDays(day, 1);
     const eventTomorrow = evidence.eventDays.includes(tomorrow) || goalEvent?.day === tomorrow;
-    if (!eventTomorrow) {
-      return {
-        _tag: "PurposeMismatch",
-        reason: "An opener requires a confirmed event the following day. Choose the actual training purpose otherwise.",
-      };
-    }
-    const reason = openerProblem(workout);
-    if (reason) return { _tag: "PurposeMismatch", reason };
+    if (!eventTomorrow) return { _tag: "PurposeMismatch", problem: "openerWithoutEvent" };
+    const problem = openerProblem(workout);
+    if (problem) return { _tag: "PurposeMismatch", problem };
   }
   return undefined;
 };
@@ -118,42 +131,32 @@ const slicesOf = (step: WorkoutStep): Array<Slice> => {
 };
 
 /** Why an opener's shape doesn't fit its purpose, if it doesn't. */
-export const openerProblem = (workout: Workout): string | undefined => {
+export const openerProblem = (workout: Workout): PurposeProblem | undefined => {
   const slices = workout.steps.flatMap(slicesOf);
   const total = totalSeconds(workout);
   const sum = (kinds: ReadonlyArray<SliceKind>) =>
     slices.filter((s) => kinds.includes(s.kind)).reduce((acc, s) => acc + s.seconds, 0);
   const activation = sum(["activation"]);
-  if (activation <= 0) {
-    return "An opener needs brief near-threshold or above-threshold activation. Label an easy-only alternative endurance or recovery and explain why.";
-  }
-  if (sum(["activation", "other"]) >= total / 2) {
-    return "An opener must be mostly easy riding, not a sustained tempo or threshold session with brief efforts added.";
-  }
-  if (slices[0]?.kind === "activation") return "Include an easy warm-up before the first activation.";
-  if (activation > total * MAX_ACTIVATION_FRACTION + 0.001) {
-    return "Activation occupies too much of the opener. Reduce intensity exposure and preserve mostly easy riding.";
-  }
+  if (activation <= 0) return "openerWithoutActivation";
+  if (sum(["activation", "other"]) >= total / 2) return "openerMostlyIntense";
+  if (slices[0]?.kind === "activation") return "openerWithoutWarmUp";
+  if (activation > total * MAX_ACTIVATION_FRACTION + 0.001) return "openerTooMuchActivation";
   let effort = 0;
   let recovery = 0;
   for (const slice of slices) {
     if (slice.kind === "activation") {
       if (effort > 0 && recovery > 0) {
-        if (recovery + 0.001 < effort) {
-          return "Give each activation at least its own duration in easy recovery before the next effort.";
-        }
+        if (recovery + 0.001 < effort) return "openerRecoveryTooShort";
         effort = 0;
         recovery = 0;
       }
       effort += slice.seconds;
-      if (effort > MAX_CONTINUOUS_ACTIVATION_SECONDS + 0.001) {
-        return "An opener activation is too long. Use brief efforts, not sustained training intervals.";
-      }
+      if (effort > MAX_CONTINUOUS_ACTIVATION_SECONDS + 0.001) return "openerEffortTooLong";
     } else if (slice.kind === "easy" && effort > 0) {
       recovery += slice.seconds;
     }
   }
-  if (recovery + 0.001 < effort) return "Finish the final activation with full easy recovery and a cool-down.";
+  if (recovery + 0.001 < effort) return "openerWithoutFinalRecovery";
   return undefined;
 };
 

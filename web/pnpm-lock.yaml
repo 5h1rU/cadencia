@@ -36,9 +36,15 @@ importers:
       '@alchemy.run/domain':
         specifier: 2.0.0-beta.85
         version: 2.0.0-beta.85(alchemy@2.0.0-beta.85(@effect/platform-node@4.1.2(effect@4.1.2)(redis@6.3.1))(effect@4.1.2)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))(ws@8.22.1))(effect@4.1.2)(foldkit@0.170.0(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))
+      '@cadencia/athlete':
+        specifier: workspace:*
+        version: link:../athlete
       '@cadencia/coach':
         specifier: workspace:*
         version: link:../coach
+      '@cadencia/identity':
+        specifier: workspace:*
+        version: link:../identity
       '@cadencia/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -74,11 +80,36 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))
 
+  packages/athlete:
+    dependencies:
+      '@cadencia/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      effect:
+        specifier: ^4.1.2
+        version: 4.1.2
+    devDependencies:
+      '@effect/vitest':
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1)))
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.1.0
+        version: 5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))
+
   packages/coach:
     dependencies:
       '@alchemy.run/domain':
         specifier: 2.0.0-beta.85
         version: 2.0.0-beta.85(alchemy@2.0.0-beta.85(@effect/platform-node@4.1.2(effect@4.1.2)(redis@6.3.1))(effect@4.1.2)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))(ws@8.22.1))(effect@4.1.2)(foldkit@0.170.0(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))
+      '@cadencia/athlete':
+        specifier: workspace:*
+        version: link:../athlete
+      '@cadencia/identity':
+        specifier: workspace:*
+        version: link:../identity
       '@cadencia/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -99,7 +130,7 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))
 
-  packages/kernel:
+  packages/identity:
     dependencies:
       '@alchemy.run/domain':
         specifier: 2.0.0-beta.85
@@ -121,11 +152,36 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))
 
+  packages/kernel:
+    dependencies:
+      '@cadencia/identity':
+        specifier: workspace:*
+        version: link:../identity
+      effect:
+        specifier: ^4.1.2
+        version: 4.1.2
+    devDependencies:
+      '@effect/vitest':
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1)))
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.1.0
+        version: 5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))
+
   packages/planning:
     dependencies:
       '@alchemy.run/domain':
         specifier: 2.0.0-beta.85
         version: 2.0.0-beta.85(alchemy@2.0.0-beta.85(@effect/platform-node@4.1.2(effect@4.1.2)(redis@6.3.1))(effect@4.1.2)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))(ws@8.22.1))(effect@4.1.2)(foldkit@0.170.0(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))
+      '@cadencia/athlete':
+        specifier: workspace:*
+        version: link:../athlete
+      '@cadencia/identity':
+        specifier: workspace:*
+        version: link:../identity
       '@cadencia/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -154,9 +210,15 @@ importers:
       '@alchemy.run/domain':
         specifier: 2.0.0-beta.85
         version: 2.0.0-beta.85(alchemy@2.0.0-beta.85(@effect/platform-node@4.1.2(effect@4.1.2)(redis@6.3.1))(effect@4.1.2)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))(ws@8.22.1))(effect@4.1.2)(foldkit@0.170.0(@effect/platform-browser@4.1.2(effect@4.1.2))(effect@4.1.2))
+      '@cadencia/athlete':
+        specifier: workspace:*
+        version: link:../athlete
       '@cadencia/coach':
         specifier: workspace:*
         version: link:../coach
+      '@cadencia/identity':
+        specifier: workspace:*
+        version: link:../identity
       '@cadencia/kernel':
         specifier: workspace:*
         version: link:../kernel

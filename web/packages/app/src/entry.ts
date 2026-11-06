@@ -1,8 +1,8 @@
-import * as Domain from "@alchemy.run/domain";
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
-import { AthleteId } from "@cadencia/kernel/Athlete.id";
-import { Day } from "@cadencia/kernel/Day";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { Day } from "@cadencia/kernel/Calendar/Day";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
+import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as Layer from "effect/Layer";

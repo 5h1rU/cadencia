@@ -13,12 +13,3 @@ export const mustOwn = Effect.fn(function* (owner: AthleteId | null) {
   if (actor._tag === "System" || owner === null) return;
   if (actor.athleteId !== owner) return yield* new NotYours();
 });
-
-/** The athlete an id belongs to: every athlete-scoped id starts with `<athleteId>:`. */
-export const ownerOf = (id: string): string => id.slice(0, id.indexOf(":"));
-
-/** A command's input without its tag, to copy into an event. */
-export const inputOf = <A extends { readonly _tag: string }>(command: A): Omit<A, "_tag"> => {
-  const { _tag: _, ...input } = command;
-  return input;
-};

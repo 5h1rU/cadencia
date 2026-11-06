@@ -1,4 +1,4 @@
-import type { AthleteId } from "@cadencia/kernel/Athlete.id";
+import type { AthleteId } from "@cadencia/identity/Athlete.id";
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as Alchemy from "alchemy";
 import type { RuntimeContext } from "alchemy/RuntimeContext";
@@ -14,6 +14,7 @@ import * as Result from "effect/Result";
 export interface Connection {
   readonly athleteId: AthleteId;
   readonly token: Redacted.Redacted<string>;
+  /** The permissions the athlete granted, as Intervals names them (`CALENDAR:WRITE`). */
   readonly scopes: ReadonlyArray<string>;
 }
 
