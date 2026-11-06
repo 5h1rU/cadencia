@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/kernel" },
+    { "path": "./packages/planning" },
+    { "path": "./packages/coach" },
+    { "path": "./packages/server" },
+    { "path": "./packages/app" },
+    { "path": "./tsconfig.stack.json" }
+  ]
+}

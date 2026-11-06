@@ -1,0 +1,27 @@
+{
+  "name": "@cadencia/server",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "exports": { "./*": "./src/*.ts" },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@alchemy.run/cloudflare": "2.0.0-beta.85",
+    "@alchemy.run/domain": "2.0.0-beta.85",
+    "@cadencia/coach": "workspace:*",
+    "@cadencia/kernel": "workspace:*",
+    "@cadencia/planning": "workspace:*",
+    "@cloudflare/workers-types": "5.20261106.1",
+    "alchemy": "2.0.0-beta.85",
+    "effect": "^4.1.2"
+  },
+  "devDependencies": {
+    "@effect/vitest": "^4.1.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

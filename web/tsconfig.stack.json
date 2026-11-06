@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": ["alchemy.run.ts"],
+  "compilerOptions": { "rootDir": ".", "types": ["@cloudflare/workers-types"] }
+}
