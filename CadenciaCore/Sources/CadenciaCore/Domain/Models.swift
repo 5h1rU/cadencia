@@ -556,6 +556,17 @@ public struct PlannedSession: Codable, Equatable, Sendable, Identifiable {
     public var externalID: String?
     /// The backend's id of this session in its plan, which `MoveSession` addresses.
     public var backendID: CadenciaAPI.SessionId?
+    /// Why the backend could not publish this session to the Intervals calendar, as the plan last reported it;
+    /// nil when it was published or there was no problem. Optional so older saved plans still decode.
+    public var calendarProblem: CalendarProblem?
+
+    /// Why the Intervals calendar did not take a session.
+    public enum CalendarProblem: String, Codable, Sendable {
+        /// Cadencia is no longer connected to the athlete's Intervals.icu account.
+        case notConnected
+        /// Intervals.icu refused the session, and trying again won't help until something changes.
+        case refused
+    }
 
     public init(id: UUID = UUID(), day: Day, kind: SessionKind, title: String, targetMinutes: Int,
                 targetLoad: Int? = nil, status: Status = .provisional, workout: Workout? = nil,
@@ -675,6 +686,8 @@ public struct TrainingPlan: Codable, Equatable, Sendable, Identifiable {
     public var backendID: CadenciaAPI.PlanId?
     /// What the athlete asked of particular days (`RecordDayRequirement`), as the plan recorded it.
     public var requirements: [CoachIntent.WorkoutRequest]?
+    /// What the plan aims for, as the backend's plan holds it. Optional so existing saved plans still decode.
+    public var objective: String?
 
     public init(id: UUID = UUID(), goal: GoalKind, secondaryGoal: GoalKind? = nil, title: String, startDay: Day, endDay: Day,
                 event: TrainingEvent? = nil, availability: Availability, phases: [TrainingPhase],

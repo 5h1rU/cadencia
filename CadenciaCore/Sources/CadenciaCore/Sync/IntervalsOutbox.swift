@@ -63,16 +63,13 @@ public struct IntervalsOutboxFlush: Equatable, Sendable {
     public var heightCm: Double?
     public var measurementPreference: String?
     public var availability: [IntervalsAvailabilityDay]?
-    /// Writes held back because the token lacks the scope; the athlete has to reconnect.
-    public var missingScopes: Set<IntervalsScope> = []
     public var failure: String?
 
     public init() {}
 }
 
 public extension IntervalsClient {
-    /// Sends everything queued, by area, so one failing write never blocks the others. Writes whose scope
-    /// the token lacks stay queued and are reported in `missingScopes`.
+    /// Sends everything queued, by area, so one failing write never blocks the others.
     func flush(_ outbox: IntervalsOutbox, ftp: Int?, athlete: AthleteProfile?, today: Day) async -> IntervalsOutboxFlush {
         var result = IntervalsOutboxFlush()
         func fail(_ area: String, _ error: Error) {
@@ -80,30 +77,23 @@ public extension IntervalsClient {
         }
 
         if !outbox.wellness.isEmpty {
-            if credential.grants(.wellnessWrite) {
-                // Today's weight goes on its own with `localDate`, which also updates the athlete's current
-                // weight in Intervals settings. The rest go in batches.
-                let single = outbox.wellness.filter { $0.day == today && $0.weightKg != nil }
-                let batched = outbox.wellness.filter { !($0.day == today && $0.weightKg != nil) }
-                for update in single {
-                    do { try await updateWellness(update, localDate: today); result.wellness.append(update) }
-                    catch { fail("wellness", error) }
-                }
-                var start = 0
-                while start < batched.count {
-                    let chunk = Array(batched[start..<min(start + 50, batched.count)])
-                    do { try await updateWellness(chunk); result.wellness += chunk }
-                    catch { fail("wellness", error); break }
-                    start += 50
-                }
-            } else { result.missingScopes.insert(.wellnessWrite) }
+            // Today's weight goes on its own with `localDate`, which also updates the athlete's current
+            // weight in Intervals settings. The rest go in batches.
+            let single = outbox.wellness.filter { $0.day == today && $0.weightKg != nil }
+            let batched = outbox.wellness.filter { !($0.day == today && $0.weightKg != nil) }
+            for update in single {
+                do { try await updateWellness(update, localDate: today); result.wellness.append(update) }
+                catch { fail("wellness", error) }
+            }
+            var start = 0
+            while start < batched.count {
+                let chunk = Array(batched[start..<min(start + 50, batched.count)])
+                do { try await updateWellness(chunk); result.wellness += chunk }
+                catch { fail("wellness", error); break }
+                start += 50
+            }
         }
 
-        let settingsPending = ftp != nil || outbox.heightCm != nil || outbox.measurementPreference != nil || outbox.availability != nil
-        if settingsPending && !credential.grants(.settingsWrite) {
-            result.missingScopes.insert(.settingsWrite)
-            return result
-        }
         if let ftp {
             if IntervalsAthleteFields.holds(ftp: ftp, athlete: athlete) {
                 result.ftp = ftp

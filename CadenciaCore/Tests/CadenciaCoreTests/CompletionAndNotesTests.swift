@@ -56,7 +56,7 @@ final class CompletionAndNotesTests: XCTestCase {
             .init(status: 200, body: Data(#"[{"id":1,"content":"My own note"},{"id":2,"type":"ACTIVITY"}]"#.utf8)),
             .init(status: 200, body: Data(#"{"id":42}"#.utf8))
         ])
-        let c = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let c = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let note = try await c.saveDebriefNote(activityID: "i9", report: report)
         XCTAssertEqual(note.id, 42)
         XCTAssertEqual(t.requests.map(\.method), [.get, .post])
@@ -68,7 +68,7 @@ final class CompletionAndNotesTests: XCTestCase {
     func testLostPostResponseIsReconciledBeforeRetrying() async throws {
         let saved = IntervalsActivityNote(id: 42, content: report.noteContent)
         let t = FakeTransport(responses: [.init(status: 200, body: try JSONEncoder().encode([saved]))])
-        let c = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let c = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let note = try await c.saveDebriefNote(activityID: "i9", report: report)
         XCTAssertEqual(note, saved)
         XCTAssertEqual(t.requests.count, 1, "accepted Notes must never be blindly posted again")
@@ -76,7 +76,7 @@ final class CompletionAndNotesTests: XCTestCase {
 
     func testFailedNoteReadDoesNotPostAndDeletedNotesAreIgnored() async throws {
         let t = FakeTransport(responses: [.init(status: 503, body: Data())])
-        let c = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let c = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         do {
             _ = try await c.saveDebriefNote(activityID: "i9", report: report)
             XCTFail("expected a failed reconciliation")
@@ -92,7 +92,7 @@ final class CompletionAndNotesTests: XCTestCase {
             .init(status: 200, body: try JSONEncoder().encode(page)),
             .init(status: 200, body: try JSONEncoder().encode([saved]))
         ])
-        let c = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let c = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let note = try await c.saveDebriefNote(activityID: "i9", report: report)
         XCTAssertEqual(note, saved)
         XCTAssertTrue(t.requests.last!.url.query!.contains("sinceId=100"))

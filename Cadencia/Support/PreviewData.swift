@@ -178,7 +178,7 @@ enum PreviewData {
                 throw HTTPError.invalidResponse
             }
         }
-        return AppModel(state: s, credential: .apiKey("preview"), store: store,
+        return AppModel(state: s, credential: IntervalsCredential(accessToken: "preview"), store: store,
                         keychain: keychain, transport: OfflineTransport())
     }
     #endif
@@ -208,7 +208,7 @@ enum PreviewData {
                 return HTTPResponse(status: 200, body: try JSONEncoder().encode([note]))
             }
         }
-        return AppModel(state: s, credential: .apiKey("preview"), store: store, keychain: KeychainStore(service: "preview"),
+        return AppModel(state: s, credential: IntervalsCredential(accessToken: "preview"), store: store, keychain: KeychainStore(service: "preview"),
                         transport: NotesTransport(note: r.debriefNote!))
     }
 
@@ -224,6 +224,6 @@ enum PreviewData {
             s.ledger.enqueue(rideID: ride.id, athleteID: ride.athleteID)
             s.ledger.markConfirmed(ride.id, activityID: ride.analysis?.id ?? "i4521", at: ride.endedAt ?? ride.startedAt)
         }
-        return AppModel(state: s, credential: signedIn ? .apiKey("preview") : nil, store: store, keychain: KeychainStore(service: "preview"), transport: URLSession.shared)
+        return AppModel(state: s, credential: signedIn ? IntervalsCredential(accessToken: "preview") : nil, store: store, keychain: KeychainStore(service: "preview"), transport: URLSession.shared)
     }
 }

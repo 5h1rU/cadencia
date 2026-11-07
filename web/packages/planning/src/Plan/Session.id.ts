@@ -20,7 +20,3 @@ export type ExternalId = typeof ExternalId.Type;
 /** The `external_id` of a plan session in Intervals.icu. */
 export const externalIdFor = (planId: PlanId, sessionId: SessionId): ExternalId =>
   ExternalId.make(`cadencia-${planId.replace(":", "-")}-${sessionId}`);
-
-/** The event a session became in the Intervals.icu calendar. */
-export const IntervalsEventId = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(1)), Schema.brand("IntervalsEventId"));
-export type IntervalsEventId = typeof IntervalsEventId.Type;

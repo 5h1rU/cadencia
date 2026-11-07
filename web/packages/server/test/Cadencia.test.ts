@@ -1,10 +1,11 @@
 import { EvidenceSnapshot } from "@cadencia/athlete/Evidence";
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
-import { CoachDeviceApi } from "@cadencia/coach/CoachDeviceApi.api";
+import { IosCoachApi } from "@cadencia/coach/IosCoachApi.api";
 import { CoachNote } from "@cadencia/coach/CoachShape";
 import { ModelName } from "@cadencia/coach/CoachText";
 import { consultationIdFor } from "@cadencia/coach/Consultation/Consultation.id";
 import { PlanDraft } from "@cadencia/coach/Consultation/PlanDraft";
+import { conversationIdFor, monthOf } from "@cadencia/coach/Conversation/Conversation.id";
 import { dailyDecisionIdFor } from "@cadencia/coach/DailyDecision/DailyDecision.id";
 import { Planner, requestFor } from "@cadencia/coach/Planner.external";
 import { athlete } from "@cadencia/identity/Actor";
@@ -16,7 +17,7 @@ import { Workout, WorkoutStep } from "@cadencia/kernel/Training/Workout";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
 import { Calendar } from "@cadencia/planning/Plan/Calendar.external";
 import { PlannedSession } from "@cadencia/planning/Plan/PlanShape";
-import { IntervalsEventId } from "@cadencia/planning/Plan/Session.id";
+import { IntervalsEventId } from "../src/Intervals/IntervalsHttp.ts";
 import * as Domain from "@alchemy.run/domain";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
@@ -39,7 +40,7 @@ const FakeCalendar = Calendar.toLayer(
     publishSession: ({ session }) =>
       Effect.sync(() => {
         published.push(`${session.day} ${session.kind} ${session.status}`);
-        return { eventId: IntervalsEventId.make(published.length) };
+        return { published: true };
       }),
     withdrawSession: () => Effect.succeed({ withdrawn: true }),
   }),
@@ -54,13 +55,14 @@ const World = SessionLive.pipe(
   Layer.provide(Layer.mergeAll(FakeCalendar, Domain.InMemory)),
 );
 
+/** Each test gets a fresh World, and a fresh record of what the calendar was asked to show. */
 const inCadencia = <A, E>(effect: Effect.Effect<A, E, Scope.Scope | Layer.Success<typeof World>>) =>
-  effect.pipe(Effect.scoped, Effect.provide(World));
+  Effect.sync(() => published.splice(0)).pipe(Effect.andThen(effect), Effect.scoped, Effect.provide(World));
 
 const anaId = AthleteId.make("i100");
 const ana = athlete("i100");
 const bob = athlete("i200");
-const device = (who = ana) => overCoach(CoachDeviceApi.clientInProcess).pipe(Effect.provide(signedInAs(who)));
+const device = (who = ana) => overCoach(IosCoachApi.clientInProcess).pipe(Effect.provide(signedInAs(who)));
 const coach = (who = ana) => overCoach(AthleteCoachApi.clientInProcess).pipe(Effect.provide(signedInAs(who)));
 const planning = (who = ana) => overPlanning(AthletePlanningApi.clientInProcess).pipe(Effect.provide(signedInAs(who)));
 
@@ -71,7 +73,6 @@ const decision = dailyDecisionIdFor(anaId, monday);
 const model = ModelName.make("gpt-5.5");
 
 const draft = Schema.decodeUnknownSync(PlanDraft)({
-  athleteId: "i100",
   title: "Base block",
   goal: "endurance",
   objective: "Build an aerobic base",
@@ -118,18 +119,18 @@ describe("Cadencia: iOS runs the AI, the backend records it and the plan decides
 
         // The consultation's policy runs twice for the same DraftAccepted.
         const creation = requestFor({ stream: `Consultation/${consultation}`, seq: 4 });
-        expect((yield* planner.createPlan({ requestId: creation, planId, draft })).answer).toEqual(accepted);
-        expect((yield* planner.createPlan({ requestId: creation, planId, draft })).answer).toEqual(accepted);
+        expect((yield* planner.createPlan({ requestId: creation, athleteId: anaId, planId, draft })).answer).toEqual(accepted);
+        expect((yield* planner.createPlan({ requestId: creation, athleteId: anaId, planId, draft })).answer).toEqual(accepted);
         // A different request for the same plan is a second plan, which Planning refuses.
         const another = requestFor({ stream: `Consultation/${consultation}`, seq: 9 });
-        expect((yield* planner.createPlan({ requestId: another, planId, draft })).answer).toMatchObject({
+        expect((yield* planner.createPlan({ requestId: another, athleteId: anaId, planId, draft })).answer).toMatchObject({
           _tag: "Refused",
           refusal: { reason: "planAlreadyExists" },
         });
 
         // The decision's policy runs twice for the same attempt: one concretized session.
         const concretize = requestFor({ stream: `DailyDecision/${decision}`, seq: 1 });
-        const ask = { requestId: concretize, planId, day: monday, workout: easy, evidence };
+        const ask = { requestId: concretize, athleteId: anaId, planId, day: monday, workout: easy, evidence };
         expect((yield* planner.concretizeSession(ask)).answer).toEqual(accepted);
         expect((yield* planner.concretizeSession(ask)).answer).toEqual(accepted);
         const web = yield* planning();
@@ -150,7 +151,7 @@ describe("Cadencia: iOS runs the AI, the backend records it and the plan decides
         const web = yield* planning();
         const plan = yield* until(web.CurrentPlan.watch(anaId), (p) => p.sessions.every((s) => s.status === "published"));
         expect(plan).toMatchObject({ _tag: "Some", value: { status: "active", title: "Base block" } });
-        expect(published).toContain("2026-11-09 endurance provisional");
+        expect(published).toEqual(["2026-11-09 endurance provisional"]);
       }),
     ),
   );
@@ -197,6 +198,43 @@ describe("Cadencia: iOS runs the AI, the backend records it and the plan decides
           .RecordDailyDecision(decision, { planId, workout: easy, note, evidence, model, interpretedOn: "ios" })
           .pipe(Effect.flip);
         expect(write._tag).toBe("NotYours");
+      }),
+    ),
+  );
+
+  it.live("an athlete's own device can't name someone else's plan", () =>
+    inCadencia(
+      Effect.gen(function* () {
+        const bobsPlan = planIdFor(AthleteId.make("i200"), EntityKey.make("0b6f5a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b"));
+        const ios = yield* device();
+        const decide = yield* ios
+          .RecordDailyDecision(decision, { planId: bobsPlan, workout: easy, note, evidence, model, interpretedOn: "ios" })
+          .pipe(Effect.flip);
+        expect(decide._tag).toBe("NotYours");
+        yield* ios.StartConsultation(consultation, {});
+        yield* ios.RecordDraft(consultation, { draft, model, interpretedOn: "ios" });
+        const accept = yield* ios.AcceptDraft(consultation, { planId: bobsPlan }).pipe(Effect.flip);
+        expect(accept._tag).toBe("NotYours");
+        const bobs = yield* planning(bob);
+        expect((yield* bobs.CurrentPlan.get(AthleteId.make("i200")))?.status ?? "none").toBe("none");
+      }),
+    ),
+  );
+
+  it.live("an athlete can't read someone else's coach", () =>
+    inCadencia(
+      Effect.gen(function* () {
+        const ios = yield* device();
+        yield* ios.StartConsultation(consultation, {});
+        const stranger = yield* coach(bob);
+        const refusals = yield* Effect.all([
+          Effect.flip(stranger.TodayDecision.get(decision)),
+          Effect.flip(stranger.ConversationThread.get(conversationIdFor(anaId, monthOf(monday)))),
+          Effect.flip(stranger.ConsultationView.get(consultation)),
+          Effect.flip(stranger.RiderProfileCard.get(anaId)),
+          Effect.flip(stranger.CoachTimeline.get(anaId)),
+        ]);
+        expect(refusals.map((e) => e._tag)).toEqual(["NotYours", "NotYours", "NotYours", "NotYours", "NotYours"]);
       }),
     ),
   );

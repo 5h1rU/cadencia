@@ -14,7 +14,7 @@ import * as Schema from "effect/Schema";
 import { PlanCreated } from "../src/Plan/CreatePlan.command.ts";
 import { Plan } from "../src/Plan/Plan.aggregate.ts";
 import type { PlannedSession } from "../src/Plan/PlanShape.ts";
-import { ExternalId, externalIdFor, IntervalsEventId, SessionId } from "../src/Plan/Session.id.ts";
+import { ExternalId, externalIdFor, SessionId } from "../src/Plan/Session.id.ts";
 
 /** Every fixture is decoded, so a fixture that breaks a rule fails here, not in a story. */
 export const day = Schema.decodeUnknownSync(Day);
@@ -23,7 +23,6 @@ export const title = Schema.decodeUnknownSync(Title);
 export const paragraph = Schema.decodeUnknownSync(Paragraph);
 export const intensity = Schema.decodeUnknownSync(FtpFraction);
 export const weekday = Schema.decodeUnknownSync(Weekday);
-export const eventId = Schema.decodeUnknownSync(IntervalsEventId);
 export const externalId = Schema.decodeUnknownSync(ExternalId);
 export const sessionId = Schema.decodeUnknownSync(SessionId);
 
@@ -56,11 +55,15 @@ export const longRide = session(saturday, "longRide", 180, "Long ride");
 
 export const basePhase = Schema.decodeUnknownSync(Phase)({ focus: "base", startWeek: 1, endWeek: 6, summary: "Aerobic base" });
 
-export const planCreated = (sessions: ReadonlyArray<PlannedSession> = [endurance, threshold, longRide]) =>
+export const planCreated = (
+  sessions: ReadonlyArray<PlannedSession> = [endurance, threshold, longRide],
+  objective: Paragraph | null = null,
+) =>
   new PlanCreated({
     athleteId: anaId,
     title: title("Base block"),
     goal: "endurance",
+    objective,
     startDay: monday,
     endDay: day("2026-12-20"),
     phases: [basePhase],

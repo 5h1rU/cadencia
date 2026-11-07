@@ -1,5 +1,6 @@
 import { type Actor, Actor as ActorSchema } from "@cadencia/identity/Actor";
 import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
+import { SignedToken } from "@cadencia/web-api/AuthGroup";
 import { Session, SESSION_COOKIE, Unauthorized } from "@cadencia/identity/Session.middleware";
 import * as Alchemy from "alchemy";
 import * as Clock from "effect/Clock";
@@ -52,13 +53,6 @@ type TokenPurpose = typeof TokenPurpose.Type;
 /** What a signed token says: who, for what, and until when. */
 const Claims = Schema.fromJsonString(Schema.Struct({ actor: ActorSchema, purpose: TokenPurpose, expires: EpochMillis }));
 
-/** A token Cadencia signed: base64url claims, a dot, and their base64url HMAC. */
-export const SignedToken = Schema.String.pipe(
-  Schema.check(Schema.isPattern(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/)),
-  Schema.brand("SignedToken"),
-);
-export type SignedToken = typeof SignedToken.Type;
-
 const sign = Effect.fn(function* (actor: Actor, purpose: TokenPurpose, lifetimeMs: number) {
   const expires = EpochMillis.make((yield* Clock.currentTimeMillis) + lifetimeMs);
   const json = yield* Schema.encodeEffect(Claims)({ actor, purpose, expires }).pipe(Effect.orDie);
@@ -95,6 +89,9 @@ export const signSession = (actor: Actor) => sign(actor, "session", SESSION_DAYS
  */
 export const signHandoff = (actor: Actor) => sign(actor, "handoff", 60_000);
 export const verifyHandoff = (token: string) => verify(token, "handoff");
+
+/** The actor a session token names, if it is a session Cadencia signed that hasn't expired. */
+export const verifySession = (token: string) => verify(token, "session");
 
 const tokenOf = (headers: Headers.Headers): Option.Option<string> =>
   Option.orElse(
@@ -141,16 +138,5 @@ const cookieOptions = { httpOnly: true, secure: true, sameSite: "lax", path: "/"
 export const withSessionCookie = (token: string) =>
   HttpServerResponse.setCookieUnsafe(SESSION_COOKIE, token, { ...cookieOptions, maxAge: `${SESSION_DAYS} days` });
 
-/** `GET /api/session` says who is signed in; `DELETE` signs out. */
-export const sessionRoute = Effect.gen(function* () {
-  const request = yield* HttpServerRequest;
-  if (request.method === "DELETE") {
-    return HttpServerResponse.empty({ status: 204 }).pipe(
-      HttpServerResponse.setCookieUnsafe(SESSION_COOKIE, "", { ...cookieOptions, maxAge: 0 }),
-    );
-  }
-  if (request.method !== "GET") return HttpServerResponse.empty({ status: 405 });
-  const actor = yield* actorOf(request.headers);
-  if (Option.isNone(actor) || actor.value._tag !== "Athlete") return HttpServerResponse.empty({ status: 401 });
-  return yield* HttpServerResponse.json({ athleteId: actor.value.athleteId });
-});
+/** Clear the session cookie: sign out. */
+export const withoutSessionCookie = HttpServerResponse.setCookieUnsafe(SESSION_COOKIE, "", { ...cookieOptions, maxAge: 0 });

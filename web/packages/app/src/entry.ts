@@ -1,25 +1,25 @@
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
-import { AthleteId } from "@cadencia/identity/Athlete.id";
-import { Day } from "@cadencia/kernel/Calendar/Day";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
+import { WebApi } from "@cadencia/web-api/WebApi";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import * as HttpApiClient from "effect/http-api/HttpApiClient";
 import * as Layer from "effect/Layer";
 import * as Socket from "effect/socket/Socket";
-import { Runtime } from "foldkit";
-import { Flags, init, Model, subscriptions, update, view } from "./Cadencia.ts";
+import { Http, Runtime } from "foldkit";
+import { Flags, init, localDayOf, Model, subscriptions, update, view } from "./Cadencia.ts";
 
-/** Who is signed in: the session cookie is HttpOnly, so ask the server. */
-const signedIn = Effect.tryPromise(async () => {
-  const response = await fetch("/api/session", { credentials: "same-origin" });
-  if (!response.ok) return null;
-  const body = (await response.json()) as { readonly athleteId: string };
-  return AthleteId.make(body.athleteId);
-}).pipe(Effect.orElseSucceed(() => null));
+/** Who is signed in: the session cookie is HttpOnly, so ask the WebApi. Anything unexpected is signed out. */
+const signedIn = HttpApiClient.make(WebApi, { baseUrl: location.origin }).pipe(
+  Effect.flatMap(({ session }) => session.current()),
+  Effect.map(({ athleteId }) => athleteId),
+  Effect.orElseSucceed(() => null),
+  Effect.provide(Http.layer),
+);
 
-/** Today in the athlete's own time zone, as `YYYY-MM-DD`. */
-const today = Effect.sync(() => Day.make(new Date().toLocaleDateString("sv-SE")));
+/** Today in the athlete's own time zone; the app moves it on at local midnight. */
+const today = Effect.sync(() => localDayOf(new Date()));
 
 /**
  * Both Apis for the life of the app, on this origin, so the browser sends the

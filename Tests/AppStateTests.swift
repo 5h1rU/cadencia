@@ -25,7 +25,8 @@ final class CoachStateTests: XCTestCase {
                 return .init(sessionId: .init(rawValue: d)!, day: .init(rawValue: d)!, kind: .endurance, title: "Endurance", targetMinutes: 60,
                              purpose: "Base", status: .published, externalId: .init(rawValue: Self.externalID(planId, d))!)
             },
-            requirements: [.init(day: .init(day.adding(days: 2)), instructions: "Only 40 minutes", maxMinutes: 40)])
+            requirements: [.init(day: .init(day.adding(days: 2)), instructions: "Only 40 minutes", maxMinutes: 40)],
+            calendarProblems: [])
     }
 
     /// The `external_id` the backend gives a plan's session in Intervals.
@@ -81,6 +82,35 @@ final class CoachStateTests: XCTestCase {
         XCTAssertNil(state.plan?.consultation)
         state.adoptBackendPlan(nil)
         XCTAssertNil(state.plan)
+    }
+
+    func testThePlansObjectiveAndCalendarProblemsAreCachedAndOlderPlansStillDecode() throws {
+        var plan = view()
+        plan.objective = "Ride the autumn sportive feeling strong"
+        plan.calendarProblems = [.init(sessionId: .init(rawValue: day.adding(days: 3).iso)!, problem: .refused),
+                                 .init(sessionId: "2099-01-01", problem: .notConnected)] // a session the plan no longer has
+        var state = AppState()
+        state.adoptBackendPlan(plan)
+        XCTAssertEqual(state.plan?.objective, "Ride the autumn sportive feeling strong")
+        XCTAssertEqual(state.plan?.sessions.compactMap(\.calendarProblem), [.refused])
+        XCTAssertEqual(state.plan?.sessions.first { $0.day == day.adding(days: 3) }?.calendarProblem, .refused)
+
+        // A plan saved before the backend had these fields still decodes, without them.
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(state)) as? [String: Any])
+        var saved = try XCTUnwrap(json["plan"] as? [String: Any])
+        saved["objective"] = nil
+        saved["sessions"] = try XCTUnwrap(saved["sessions"] as? [[String: Any]]).map { session in
+            var session = session
+            session["calendarProblem"] = nil
+            return session
+        }
+        json["plan"] = saved
+        let restored = try decoder.decode(AppState.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(restored.plan?.objective)
+        XCTAssertEqual(restored.plan?.sessions.compactMap(\.calendarProblem), [])
+        XCTAssertEqual(restored.plan?.sessions.count, 7)
     }
 
     func testCachesSurviveARestartAndAStaleCacheNeverResetsTheState() throws {

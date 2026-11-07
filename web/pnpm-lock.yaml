@@ -51,6 +51,9 @@ importers:
       '@cadencia/planning':
         specifier: workspace:*
         version: link:../planning
+      '@cadencia/web-api':
+        specifier: workspace:*
+        version: link:../web-api
       '@effect/platform-browser':
         specifier: ^4.1.2
         version: 4.1.2(effect@4.1.2)
@@ -225,12 +228,40 @@ importers:
       '@cadencia/planning':
         specifier: workspace:*
         version: link:../planning
+      '@cadencia/web-api':
+        specifier: workspace:*
+        version: link:../web-api
       '@cloudflare/workers-types':
         specifier: 5.20261106.1
         version: 5.20261106.1
       alchemy:
         specifier: 2.0.0-beta.85
         version: 2.0.0-beta.85(@effect/platform-node@4.1.2(effect@4.1.2)(redis@6.3.1))(effect@4.1.2)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))(ws@8.22.1)
+      effect:
+        specifier: ^4.1.2
+        version: 4.1.2
+    devDependencies:
+      '@effect/vitest':
+        specifier: ^4.1.2
+        version: 4.1.2(effect@4.1.2)(vitest@5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1)))
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.1.0
+        version: 5.1.0(@types/node@26.6.6)(vite@8.3.6(@types/node@26.6.6)(yaml@2.9.1))
+
+  packages/web-api:
+    dependencies:
+      '@cadencia/athlete':
+        specifier: workspace:*
+        version: link:../athlete
+      '@cadencia/identity':
+        specifier: workspace:*
+        version: link:../identity
+      '@cadencia/kernel':
+        specifier: workspace:*
+        version: link:../kernel
       effect:
         specifier: ^4.1.2
         version: 4.1.2

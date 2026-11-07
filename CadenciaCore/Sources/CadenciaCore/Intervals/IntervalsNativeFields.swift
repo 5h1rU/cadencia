@@ -3,36 +3,6 @@ import Foundation
 // Intervals.icu is the source of truth for everything it has a native field for. This file maps Cadencia's
 // values onto those fields and back. Field names follow https://intervals.icu/api/v1/docs.
 
-// MARK: - OAuth scopes
-
-/// Intervals OAuth scopes are `AREA:READ` or `AREA:WRITE`; WRITE implies READ. The athlete can untick
-/// scopes on the consent screen, so every write checks what was actually granted.
-public enum IntervalsScope: String, CaseIterable, Sendable {
-    case activityWrite = "ACTIVITY:WRITE"
-    case wellnessWrite = "WELLNESS:WRITE"
-    case calendarWrite = "CALENDAR:WRITE"
-    case settingsWrite = "SETTINGS:WRITE"
-    case chatsWrite = "CHATS:WRITE"
-
-    var area: Substring { rawValue.split(separator: ":")[0] }
-}
-
-public extension IntervalsCredential {
-    /// API keys can do everything the athlete can. OAuth tokens only what was granted.
-    func grants(_ scope: IntervalsScope) -> Bool {
-        switch self {
-        case .apiKey: return true
-        case .oauth(_, let scopes): return scopes.contains { $0.uppercased() == scope.rawValue }
-        }
-    }
-
-    /// Scopes Cadencia asks for but this token lacks. Non-empty means the athlete must reconnect, which
-    /// is how tokens issued before Cadencia wrote wellness and settings get the new scopes.
-    var missingScopes: [IntervalsScope] {
-        IntervalsOAuth.defaultScopes.compactMap(IntervalsScope.init(rawValue:)).filter { !grants($0) }
-    }
-}
-
 // MARK: - Wellness
 
 /// Intervals' subjective wellness fields are 1…4 where 1 is good and 4 is bad (soreness 1 = not sore,

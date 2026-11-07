@@ -25,15 +25,13 @@ export type CoachNote = typeof CoachNote.Type;
 export const RefusalReason = Schema.Literals([
   "planNotActive",
   "dayNotPlanned",
-  "dayOutsidePlan",
-  "dayTaken",
-  "sessionNotFound",
   "availabilityExceeded",
   "intensityAfterHardTraining",
   "hardensPlan",
   "purposeMismatch",
   "invalidPlan",
   "planAlreadyExists",
+  "implausibleToday",
   "notYours",
 ]);
 export type RefusalReason = typeof RefusalReason.Type;

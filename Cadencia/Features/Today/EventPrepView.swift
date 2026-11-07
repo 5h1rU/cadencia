@@ -67,6 +67,12 @@ struct SessionRow: View {
                 metadata
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                if let problem = calendarProblem {
+                    Label { Text(problem) } icon: { Image(systemName: "exclamationmark.triangle") }
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -127,6 +133,16 @@ struct SessionRow: View {
             text = text + Text(verbatim: " · ") + Text("\(load) TSS")
         }
         return text
+    }
+
+    /// Why the plan's session is not on the Intervals calendar, while it is still to be ridden.
+    private var calendarProblem: LocalizedStringKey? {
+        guard session.status != .completed, session.status != .skipped else { return nil }
+        switch session.calendarProblem {
+        case .notConnected?: return "Not on your Intervals calendar. Sign in to Cadencia again in Settings to reconnect."
+        case .refused?: return "Intervals.icu refused this session, so it isn't on your calendar."
+        case nil: return nil
+        }
     }
 
     @ViewBuilder private var statusIcon: some View {

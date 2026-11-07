@@ -8,7 +8,7 @@
     "/v1/RecordDailyDecision": {
       "post": {
         "tags": [
-          "CoachDeviceApi"
+          "IosCoachApi"
         ],
         "operationId": "RecordDailyDecision",
         "parameters": [],
@@ -20,6 +20,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -40,16 +60,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DecisionAlreadyAcceptedEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -122,7 +132,7 @@
     "/v1/SendMessage": {
       "post": {
         "tags": [
-          "CoachDeviceApi"
+          "IosCoachApi"
         ],
         "operationId": "SendMessage",
         "parameters": [],
@@ -138,22 +148,32 @@
               }
             }
           },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
           "403": {
             "description": "NotYours",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotYoursEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -210,7 +230,7 @@
     "/v1/RecordCoachReply": {
       "post": {
         "tags": [
-          "CoachDeviceApi"
+          "IosCoachApi"
         ],
         "operationId": "RecordCoachReply",
         "parameters": [],
@@ -226,22 +246,32 @@
               }
             }
           },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
           "403": {
             "description": "NotYours",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotYoursEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -321,7 +351,7 @@
     "/v1/StartConsultation": {
       "post": {
         "tags": [
-          "CoachDeviceApi"
+          "IosCoachApi"
         ],
         "operationId": "StartConsultation",
         "parameters": [],
@@ -333,6 +363,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -353,16 +403,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ConsultationAlreadyStartedEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -408,7 +448,7 @@
     "/v1/RecordCoachQuestion": {
       "post": {
         "tags": [
-          "CoachDeviceApi"
+          "IosCoachApi"
         ],
         "operationId": "RecordCoachQuestion",
         "parameters": [],
@@ -420,6 +460,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -440,16 +500,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ConsultationNotOpenEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -510,7 +560,7 @@
     "/v1/AnswerQuestion": {
       "post": {
         "tags": [
-          "CoachDeviceApi"
+          "IosCoachApi"
         ],
         "operationId": "AnswerQuestion",
         "parameters": [],
@@ -522,6 +572,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -542,16 +612,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ConsultationNotOpenEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -604,7 +664,7 @@
     "/v1/RecordDraft": {
       "post": {
         "tags": [
-          "CoachDeviceApi"
+          "IosCoachApi"
         ],
         "operationId": "RecordDraft",
         "parameters": [],
@@ -616,6 +676,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -636,16 +716,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ConsultationNotOpenEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -706,7 +776,7 @@
     "/v1/AcceptDraft": {
       "post": {
         "tags": [
-          "CoachDeviceApi"
+          "IosCoachApi"
         ],
         "operationId": "AcceptDraft",
         "parameters": [],
@@ -718,6 +788,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -745,16 +835,6 @@
                       "$ref": "#/components/schemas/NoDraftEncoded"
                     }
                   ]
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -807,7 +887,7 @@
     "/v1/RecordProfileAttempt": {
       "post": {
         "tags": [
-          "CoachDeviceApi"
+          "IosCoachApi"
         ],
         "operationId": "RecordProfileAttempt",
         "parameters": [],
@@ -819,6 +899,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -839,16 +939,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AutomaticAttemptUsedEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -901,7 +991,7 @@
     "/v1/RecordProfile": {
       "post": {
         "tags": [
-          "CoachDeviceApi"
+          "IosCoachApi"
         ],
         "operationId": "RecordProfile",
         "parameters": [],
@@ -917,22 +1007,32 @@
               }
             }
           },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
           "403": {
             "description": "NotYours",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotYoursEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -993,7 +1093,7 @@
     "/v1/AcceptIntent": {
       "post": {
         "tags": [
-          "AthleteCoachApi"
+          "IosCoachApi"
         ],
         "operationId": "AcceptIntent",
         "parameters": [],
@@ -1009,6 +1109,26 @@
               }
             }
           },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
           "403": {
             "description": "NotYours",
             "content": {
@@ -1020,21 +1140,18 @@
             }
           },
           "409": {
-            "description": "NoOpenIntent",
+            "description": "NoOpenIntent | IntentExpired",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NoOpenIntentEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/NoOpenIntentEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/IntentExpiredEncoded"
+                    }
+                  ]
                 }
               }
             }
@@ -1064,10 +1181,14 @@
                     "properties": {
                       "messageId": {
                         "$ref": "#/components/schemas/MessageId"
+                      },
+                      "today": {
+                        "$ref": "#/components/schemas/Day"
                       }
                     },
                     "required": [
-                      "messageId"
+                      "messageId",
+                      "today"
                     ],
                     "additionalProperties": false
                   }
@@ -1087,7 +1208,7 @@
     "/v1/DismissIntent": {
       "post": {
         "tags": [
-          "AthleteCoachApi"
+          "IosCoachApi"
         ],
         "operationId": "DismissIntent",
         "parameters": [],
@@ -1099,6 +1220,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -1119,16 +1260,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NoOpenIntentEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -1181,7 +1312,7 @@
     "/v1/DismissFtpProposal": {
       "post": {
         "tags": [
-          "AthleteCoachApi"
+          "IosCoachApi"
         ],
         "operationId": "DismissFtpProposal",
         "parameters": [],
@@ -1197,22 +1328,32 @@
               }
             }
           },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
           "403": {
             "description": "NotYours",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotYoursEncoded"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -1265,7 +1406,7 @@
     "/v1/TodayDecision/{key}": {
       "get": {
         "tags": [
-          "AthleteCoachApi"
+          "IosCoachApi"
         ],
         "operationId": "getTodayDecision",
         "parameters": [
@@ -1326,6 +1467,26 @@
               }
             }
           },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
           "403": {
             "description": "NotYours",
             "content": {
@@ -1337,18 +1498,11 @@
             }
           },
           "422": {
-            "description": "ConsistencyTimeout | Unauthorized",
+            "description": "ConsistencyTimeout",
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/UnauthorizedEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
                 }
               }
             }
@@ -1359,7 +1513,7 @@
     "/v1/ConversationThread/{key}": {
       "get": {
         "tags": [
-          "AthleteCoachApi"
+          "IosCoachApi"
         ],
         "operationId": "getConversationThread",
         "parameters": [
@@ -1420,6 +1574,26 @@
               }
             }
           },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
           "403": {
             "description": "NotYours",
             "content": {
@@ -1431,18 +1605,11 @@
             }
           },
           "422": {
-            "description": "ConsistencyTimeout | Unauthorized",
+            "description": "ConsistencyTimeout",
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/UnauthorizedEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
                 }
               }
             }
@@ -1453,7 +1620,7 @@
     "/v1/ConsultationView/{key}": {
       "get": {
         "tags": [
-          "AthleteCoachApi"
+          "IosCoachApi"
         ],
         "operationId": "getConsultationView",
         "parameters": [
@@ -1514,6 +1681,26 @@
               }
             }
           },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
           "403": {
             "description": "NotYours",
             "content": {
@@ -1525,18 +1712,11 @@
             }
           },
           "422": {
-            "description": "ConsistencyTimeout | Unauthorized",
+            "description": "ConsistencyTimeout",
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/UnauthorizedEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
                 }
               }
             }
@@ -1547,7 +1727,7 @@
     "/v1/RiderProfileCard/{key}": {
       "get": {
         "tags": [
-          "AthleteCoachApi"
+          "IosCoachApi"
         ],
         "operationId": "getRiderProfileCard",
         "parameters": [
@@ -1608,6 +1788,26 @@
               }
             }
           },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
           "403": {
             "description": "NotYours",
             "content": {
@@ -1619,18 +1819,11 @@
             }
           },
           "422": {
-            "description": "ConsistencyTimeout | Unauthorized",
+            "description": "ConsistencyTimeout",
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/UnauthorizedEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
                 }
               }
             }
@@ -1641,7 +1834,7 @@
     "/v1/MoveSession": {
       "post": {
         "tags": [
-          "AthletePlanningApi"
+          "IosPlanningApi"
         ],
         "operationId": "MoveSession",
         "parameters": [],
@@ -1653,6 +1846,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -1678,13 +1891,16 @@
             }
           },
           "409": {
-            "description": "PlanNotActive | DayTaken",
+            "description": "PlanNotActive | SessionNotMovable | DayTaken",
             "content": {
               "application/json": {
                 "schema": {
                   "anyOf": [
                     {
                       "$ref": "#/components/schemas/PlanNotActiveEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionNotMovableEncoded"
                     },
                     {
                       "$ref": "#/components/schemas/DayTakenEncoded"
@@ -1695,18 +1911,11 @@
             }
           },
           "422": {
-            "description": "DayOutsidePlan | Unauthorized",
+            "description": "DayOutsidePlan",
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/DayOutsidePlanEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/UnauthorizedEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/DayOutsidePlanEncoded"
                 }
               }
             }
@@ -1763,7 +1972,7 @@
     "/v1/RecordDayRequirement": {
       "post": {
         "tags": [
-          "AthletePlanningApi"
+          "IosPlanningApi"
         ],
         "operationId": "RecordDayRequirement",
         "parameters": [],
@@ -1775,6 +1984,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -1800,18 +2029,11 @@
             }
           },
           "422": {
-            "description": "DayOutsidePlan | Unauthorized",
+            "description": "DayOutsidePlan",
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/DayOutsidePlanEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/UnauthorizedEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/DayOutsidePlanEncoded"
                 }
               }
             }
@@ -1855,7 +2077,7 @@
     "/v1/RetirePlan": {
       "post": {
         "tags": [
-          "AthletePlanningApi"
+          "IosPlanningApi"
         ],
         "operationId": "RetirePlan",
         "parameters": [],
@@ -1867,6 +2089,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
                 }
               }
             }
@@ -1892,11 +2134,11 @@
             }
           },
           "422": {
-            "description": "Unauthorized",
+            "description": "ImplausibleToday",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                  "$ref": "#/components/schemas/ImplausibleTodayEncoded"
                 }
               }
             }
@@ -1922,9 +2164,16 @@
                     ]
                   },
                   "input": {
-                    "not": {
-                      "type": "null"
-                    }
+                    "type": "object",
+                    "properties": {
+                      "today": {
+                        "$ref": "#/components/schemas/Day"
+                      }
+                    },
+                    "required": [
+                      "today"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [
@@ -1942,7 +2191,7 @@
     "/v1/CurrentPlan/{key}": {
       "get": {
         "tags": [
-          "AthletePlanningApi"
+          "IosPlanningApi"
         ],
         "operationId": "getCurrentPlan",
         "parameters": [
@@ -2003,6 +2252,26 @@
               }
             }
           },
+          "400": {
+            "description": "BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/effect_HttpApiError_BadRequestEncoded"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
           "403": {
             "description": "NotYours",
             "content": {
@@ -2014,18 +2283,11 @@
             }
           },
           "422": {
-            "description": "ConsistencyTimeout | Unauthorized",
+            "description": "ConsistencyTimeout",
             "content": {
               "application/json": {
                 "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
-                    },
-                    {
-                      "$ref": "#/components/schemas/UnauthorizedEncoded"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ConsistencyTimeoutEncoded"
                 }
               }
             }
@@ -2308,6 +2570,16 @@
               }
             ]
           },
+          "objective": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Paragraph"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "startDay": {
             "anyOf": [
               {
@@ -2365,6 +2637,29 @@
             "items": {
               "$ref": "#/components/schemas/DayRequirement"
             }
+          },
+          "calendarProblems": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sessionId": {
+                  "$ref": "#/components/schemas/SessionId"
+                },
+                "problem": {
+                  "type": "string",
+                  "enum": [
+                    "notConnected",
+                    "refused"
+                  ]
+                }
+              },
+              "required": [
+                "sessionId",
+                "problem"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -2372,13 +2667,15 @@
           "status",
           "title",
           "goal",
+          "objective",
           "startDay",
           "endDay",
           "phases",
           "longRideWeekday",
           "event",
           "sessions",
-          "requirements"
+          "requirements",
+          "calendarProblems"
         ],
         "additionalProperties": false
       },
@@ -2601,6 +2898,21 @@
         ],
         "additionalProperties": false
       },
+      "effect_HttpApiError_BadRequestEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "BadRequest"
+            ]
+          }
+        },
+        "required": [
+          "_tag"
+        ],
+        "additionalProperties": false
+      },
       "EvidenceSnapshot": {
         "type": "object",
         "properties": {
@@ -2707,6 +3019,25 @@
         "maxLength": 200,
         "x-brand": "Headline"
       },
+      "ImplausibleTodayEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "ImplausibleToday"
+            ]
+          },
+          "today": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "today"
+        ],
+        "additionalProperties": false
+      },
       "Intent": {
         "type": "object",
         "properties": {
@@ -2728,6 +3059,25 @@
           "planId",
           "summary",
           "limits"
+        ],
+        "additionalProperties": false
+      },
+      "IntentExpiredEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "IntentExpired"
+            ]
+          },
+          "messageId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "messageId"
         ],
         "additionalProperties": false
       },
@@ -2837,9 +3187,6 @@
       "PlanDraft": {
         "type": "object",
         "properties": {
-          "athleteId": {
-            "$ref": "#/components/schemas/AthleteId"
-          },
           "title": {
             "$ref": "#/components/schemas/Title"
           },
@@ -2885,7 +3232,6 @@
           }
         },
         "required": [
-          "athleteId",
           "title",
           "goal",
           "objective",
@@ -3065,15 +3411,13 @@
             "enum": [
               "planNotActive",
               "dayNotPlanned",
-              "dayOutsidePlan",
-              "dayTaken",
-              "sessionNotFound",
               "availabilityExceeded",
               "intensityAfterHardTraining",
               "hardensPlan",
               "purposeMismatch",
               "invalidPlan",
               "planAlreadyExists",
+              "implausibleToday",
               "notYours"
             ]
           },
@@ -3254,6 +3598,29 @@
         "required": [
           "_tag",
           "sessionId"
+        ],
+        "additionalProperties": false
+      },
+      "SessionNotMovableEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "SessionNotMovable"
+            ]
+          },
+          "sessionId": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          }
+        },
+        "required": [
+          "_tag",
+          "sessionId",
+          "status"
         ],
         "additionalProperties": false
       },
@@ -3455,6 +3822,56 @@
                 "type": "null"
               }
             ]
+          },
+          "planHolds": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "attempt": {
+                    "$ref": "#/components/schemas/Attempt"
+                  },
+                  "workout": {
+                    "$ref": "#/components/schemas/Workout"
+                  },
+                  "note": {
+                    "$ref": "#/components/schemas/CoachNote"
+                  }
+                },
+                "required": [
+                  "attempt",
+                  "workout",
+                  "note"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "awaiting": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "attempt": {
+                  "$ref": "#/components/schemas/Attempt"
+                },
+                "workout": {
+                  "$ref": "#/components/schemas/Workout"
+                },
+                "note": {
+                  "$ref": "#/components/schemas/CoachNote"
+                }
+              },
+              "required": [
+                "attempt",
+                "workout",
+                "note"
+              ],
+              "additionalProperties": false
+            }
           }
         },
         "required": [
@@ -3467,7 +3884,9 @@
           "evidence",
           "model",
           "interpretedOn",
-          "refusal"
+          "refusal",
+          "planHolds",
+          "awaiting"
         ],
         "additionalProperties": false
       },
@@ -3589,13 +4008,10 @@
   "security": [],
   "tags": [
     {
-      "name": "CoachDeviceApi"
+      "name": "IosCoachApi"
     },
     {
-      "name": "AthleteCoachApi"
-    },
-    {
-      "name": "AthletePlanningApi"
+      "name": "IosPlanningApi"
     }
   ]
 }

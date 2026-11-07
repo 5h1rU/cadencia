@@ -1,12 +1,12 @@
-import { IntervalsEventId } from "@cadencia/planning/Plan/Session.id";
-import { Calendar } from "@cadencia/planning/Plan/Calendar.external";
+import { Calendar, CalendarRefused, CalendarUnavailable } from "@cadencia/planning/Plan/Calendar.external";
+import { totalSeconds } from "@cadencia/kernel/Training/Workout";
 import type { PlannedSession } from "@cadencia/planning/Plan/PlanShape";
 import type { RuntimeContext } from "alchemy/RuntimeContext";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { Connections } from "../Connections.ts";
-import { athletePath, callIntervals } from "./IntervalsHttp.ts";
+import { athletePath, callIntervals, IntervalsEventId, type IntervalsError } from "./IntervalsHttp.ts";
 import { workoutText } from "./WorkoutText.ts";
 
 /**
@@ -25,9 +25,7 @@ export const calendarEntry = (session: PlannedSession) => ({
   external_id: session.externalId,
   uid: session.externalId,
   tags: [`cadencia:${session.kind}`],
-  moving_time: Math.round(
-    session.workout ? session.workout.steps.reduce((s, step) => s + step.durationSeconds, 0) : session.targetMinutes * 60,
-  ),
+  moving_time: Math.round(session.workout ? totalSeconds(session.workout) : session.targetMinutes * 60),
   description: session.workout ? workoutText(session.workout) : session.purpose,
 });
 
@@ -35,9 +33,20 @@ export const calendarEntry = (session: PlannedSession) => ({
 const Upserted = Schema.Array(Schema.Struct({ id: IntervalsEventId }));
 
 /**
+ * Intervals' answer in the calendar's terms: an outage or rate limit may pass
+ * (unavailable); a revoked or missing authorization means the athlete isn't
+ * connected; any other refusal won't change by trying again.
+ */
+const calendarError = (error: IntervalsError): CalendarUnavailable | CalendarRefused =>
+  error.status === 0 || error.status === 429 || error.status >= 500
+    ? new CalendarUnavailable()
+    : new CalendarRefused({ problem: error.status === 401 || error.status === 403 ? "notConnected" : "refused" });
+
+/**
  * The Calendar external system over Intervals.icu. Upserts by `external_id`
  * (with OAuth, Intervals updates this app's event with the same id instead of
- * duplicating it) and deletes by `external_id`.
+ * duplicating it) and deletes by `external_id`. An athlete who disconnected
+ * Intervals has no token any more: the calendar refuses them as not connected.
  */
 export const IntervalsCalendar = Calendar.toLayer(
   Effect.gen(function* () {
@@ -46,7 +55,7 @@ export const IntervalsCalendar = Calendar.toLayer(
       inHandler(connections.find(athleteId)).pipe(
         Effect.flatMap(
           Option.match({
-            onNone: () => Effect.die(new Error(`No Intervals connection for ${athleteId}`)),
+            onNone: () => Effect.fail(new CalendarRefused({ problem: "notConnected" })),
             onSome: (c) => Effect.succeed(c.token),
           }),
         ),
@@ -58,16 +67,15 @@ export const IntervalsCalendar = Calendar.toLayer(
           const result = yield* callIntervals(token, "POST", athletePath(athleteId, "/events/bulk"), {
             query: { upsert: "true" },
             body: [calendarEntry(session)],
-          }).pipe(Effect.orDie);
-          const events = Schema.decodeUnknownOption(Upserted)(result);
-          return { eventId: Option.match(events, { onNone: () => null, onSome: (e) => e[0]?.id ?? null }) };
+          }).pipe(Effect.mapError(calendarError));
+          return { published: Option.isSome(Schema.decodeUnknownOption(Upserted)(result)) };
         }),
       withdrawSession: ({ athleteId, externalId }) =>
         Effect.gen(function* () {
           const token = yield* tokenFor(athleteId);
           yield* callIntervals(token, "PUT", athletePath(athleteId, "/events/bulk-delete"), {
             body: [{ external_id: externalId }],
-          }).pipe(Effect.orDie);
+          }).pipe(Effect.mapError(calendarError));
           return { withdrawn: true };
         }),
     };

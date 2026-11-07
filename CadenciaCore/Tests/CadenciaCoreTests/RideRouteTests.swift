@@ -89,7 +89,7 @@ final class RideRouteTests: XCTestCase {
 
     func testRecordedGPXReadUsesOfficialEndpointAndNoSensorStreams() async throws {
         let transport = FakeTransport(responses: [HTTPResponse(status: 200, body: source)])
-        let client = IntervalsClient(transport: transport, credential: .apiKey("test"))
+        let client = IntervalsClient(transport: transport, credential: IntervalsCredential(accessToken: "test"))
         let data = try await client.activityGPX(id: "i100")
         XCTAssertEqual(data, source)
         XCTAssertEqual(transport.requests[0].method, .get)

@@ -5,12 +5,24 @@ import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
 import { DayOutsidePlan } from "./DayOutsidePlan.rejection.ts";
 import { PlanNotActive } from "./PlanNotActive.rejection.ts";
-import { PlannedSession } from "./PlanShape.ts";
+import { PlannedSession, SessionStatus } from "./PlanShape.ts";
 import { SessionId } from "./Session.id.ts";
-import { SessionNotFound } from "./SessionNotFound.rejection.ts";
+
+/** No session with that id in the plan. */
+export class SessionNotFound extends Domain.Rejection("SessionNotFound", { sessionId: SessionId }, { httpApiStatus: 404 }) {}
 
 /** Another session already takes that day. */
 export class DayTaken extends Domain.Rejection("DayTaken", { day: Day }, { httpApiStatus: 409 }) {}
+
+/**
+ * The session can't move: the athlete took it over in Intervals, which wins,
+ * or it was skipped for an unavailable day.
+ */
+export class SessionNotMovable extends Domain.Rejection(
+  "SessionNotMovable",
+  { sessionId: SessionId, status: SessionStatus },
+  { httpApiStatus: 409 },
+) {}
 
 export class SessionMoved extends Domain.Event("SessionMoved", {
   session: PlannedSession,
@@ -23,5 +35,5 @@ export class MoveSession extends Domain.Command("MoveSession", {
   middleware: [Session],
   input: { sessionId: SessionId, toDay: Day },
   events: [SessionMoved],
-  rejects: [PlanNotActive, SessionNotFound, DayOutsidePlan, DayTaken, NotYours],
+  rejects: [PlanNotActive, SessionNotFound, SessionNotMovable, DayOutsidePlan, DayTaken, NotYours],
 }) {}

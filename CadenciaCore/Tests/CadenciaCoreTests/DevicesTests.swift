@@ -320,7 +320,7 @@ final class RideDebriefTests: XCTestCase {
     func testActivityDetailDecodesIntervalsFieldsAndAnalyzedFlag() async throws {
         let json = #"{"id":"i9","name":"Umbral","analyzed":"2026-10-29T18:10:00","moving_time":540,"icu_training_load":21,"icu_intensity":84.2,"icu_average_watts":150,"icu_weighted_avg_watts":168,"average_heartrate":135,"max_heartrate":164,"average_cadence":88.4,"icu_ftp":200,"icu_pm_ftp":212,"icu_joules":81000,"icu_joules_above_ftp":0,"icu_zone_times":[{"id":"Z1","secs":60},{"id":"Z2","secs":240},{"id":"Z4","secs":240}],"icu_hr_zone_times":[300,0,240],"icu_hrr":{"start_bpm":164,"end_bpm":131,"hrr":33},"decoupling":3.4,"icu_efficiency_factor":1.24,"icu_variability_index":1.12,"icu_ctl":41.2,"icu_atl":48.9,"icu_intervals":[{"id":1,"label":"Threshold","type":"WORK","start_time":300,"end_time":540,"moving_time":240,"average_watts":200,"weighted_average_watts":200,"intensity":100,"average_heartrate":160,"max_heartrate":164,"average_cadence":92.0,"decoupling":1.1,"zone":4}]}"#
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(json.utf8))])
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let d = try await client.activityDetail(id: "i9")
         XCTAssertEqual(t.requests[0].url.absoluteString, "https://intervals.icu/api/v1/activity/i9?intervals=true")
         XCTAssertTrue(d.analyzed)
@@ -332,7 +332,7 @@ final class RideDebriefTests: XCTestCase {
         XCTAssertEqual(d.intervals.first?.seconds, 240)
         XCTAssertEqual(d.intervals.first?.averageCadence, 92)
 
-        let pending = try await IntervalsClient(transport: FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"id":"i9"}"#.utf8))]), credential: .apiKey("k")).activityDetail(id: "i9")
+        let pending = try await IntervalsClient(transport: FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"id":"i9"}"#.utf8))]), credential: IntervalsCredential(accessToken: "k")).activityDetail(id: "i9")
         XCTAssertFalse(pending.analyzed, "no analyzed timestamp yet → still processing")
     }
 

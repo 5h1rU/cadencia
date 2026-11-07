@@ -7,42 +7,12 @@
     " " : {
 
     },
-    "Cadencia now saves how you feel, your weight, height, FTP, units and weekly availability in Intervals.icu. Reconnect once to allow it; until then these changes wait on this phone." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cadencia ahora guarda en Intervals.icu cómo te sientes, tu peso, tu altura, tu FTP, las unidades y tu disponibilidad semanal. Vuelve a conectar una vez para permitirlo; hasta entonces, estos cambios esperan en este teléfono."
-          }
-        }
-      }
-    },
     "Indoor FTP is used when Intervals has one. Estimates use Intervals' eFTP when it has one, else the 42-day power curve, and only become the working FTP when you accept them. An accepted FTP is saved to Intervals." : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Se usa el FTP de interior cuando Intervals tiene uno. Las estimaciones usan el eFTP de Intervals cuando existe y, si no, la curva de potencia de 42 días, y solo pasan a ser tu FTP de trabajo cuando las aceptas. El FTP que aceptas se guarda en Intervals."
-          }
-        }
-      }
-    },
-    "Reconnect" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconectar"
-          }
-        }
-      }
-    },
-    "Reconnect Intervals.icu" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconectar Intervals.icu"
           }
         }
       }
@@ -73,6 +43,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "–"
+          }
+        }
+      }
+    },
+    "Cadencia keeps your plan and the coach's notes on its server in the EU. The coach's AI runs on this phone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadencia guarda tu plan y las notas del entrenador en su servidor en la UE. La IA del entrenador funciona en este teléfono."
+          }
+        }
+      }
+    },
+    "Currently: API key · %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora: clave de API · %@"
+          }
+        }
+      }
+    },
+    "Intervals.icu no longer accepts Cadencia. Sign in again in Settings." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intervals.icu ya no acepta a Cadencia. Vuelve a iniciar sesión en Ajustes."
+          }
+        }
+      }
+    },
+    "Intervals.icu no longer accepts Cadencia. Sign in again in Settings. Your saved debrief is still available." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intervals.icu ya no acepta a Cadencia. Vuelve a iniciar sesión en Ajustes. Tu análisis guardado sigue disponible."
+          }
+        }
+      }
+    },
+    "Sign in again if Intervals.icu stops accepting Cadencia." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a iniciar sesión si Intervals.icu deja de aceptar a Cadencia."
+          }
+        }
+      }
+    },
+    "You sign in with Intervals.icu through Cadencia's server, which keeps your plan, your conversation with the coach and its decisions in the EU. This phone keeps its Intervals.icu access in the Keychain and sends it only to intervals.icu." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicias sesión con Intervals.icu a través del servidor de Cadencia, que guarda tu plan, tu conversación con el entrenador y sus decisiones en la UE. Este teléfono guarda su acceso a Intervals.icu en el llavero y solo lo envía a intervals.icu."
+          }
+        }
+      }
+    },
+    "Your Cadencia sign-in has expired. Sign in again to use your plan and the coach; rides keep uploading meanwhile." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu sesión de Cadencia caducó. Vuelve a iniciar sesión para usar tu plan y el entrenador; mientras tanto, las salidas se siguen subiendo."
           }
         }
       }
@@ -1338,16 +1378,6 @@
         }
       }
     },
-    "Cadencia stores your credential only in this phone's Keychain and talks to Intervals.icu directly." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cadencia guarda tu credencial solo en el llavero de este teléfono y habla directamente con Intervals.icu."
-          }
-        }
-      }
-    },
     "Cadencia's coach is an AI that reads your recovery, load, power and plan every day and decides your session. Sign in with ChatGPT to use your plan, or add an OpenAI API key." : {
       "localizations" : {
         "es" : {
@@ -1974,16 +2004,6 @@
         }
       }
     },
-    "Connect" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conectar"
-          }
-        }
-      }
-    },
     "Connect ChatGPT (or an API key) in Settings → Coach first." : {
       "localizations" : {
         "es" : {
@@ -2004,16 +2024,6 @@
         }
       }
     },
-    "Connect Intervals.icu" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conectar Intervals.icu"
-          }
-        }
-      }
-    },
     "Connect Intervals.icu in Settings to build your cyclist profile." : {
       "localizations" : {
         "es" : {
@@ -2030,16 +2040,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Conecta Intervals.icu para cargar la ruta GPS registrada."
-          }
-        }
-      }
-    },
-    "Connect with an API key" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conectar con clave API"
           }
         }
       }
@@ -2280,16 +2280,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "CTL"
-          }
-        }
-      }
-    },
-    "Currently: API key · %@" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ahora: clave de API · %@"
           }
         }
       }
@@ -4114,16 +4104,6 @@
         }
       }
     },
-    "In Intervals.icu open Settings, scroll to Developer Settings and copy the API key. The key gives full access to your account; it never leaves this phone except to call intervals.icu." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "En Intervals.icu abre Ajustes, baja hasta Developer Settings y copia la clave API. La clave da acceso total a tu cuenta; nunca sale de este teléfono salvo para llamar a intervals.icu."
-          }
-        }
-      }
-    },
     "In Intervals.icu Settings, connect Garmin and enable Upload planned workouts. Then sync your Edge with Garmin Connect." : {
       "localizations" : {
         "es" : {
@@ -4194,16 +4174,6 @@
         }
       }
     },
-    "Intervals did not return an authorization code." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Intervals no devolvió un código de autorización."
-          }
-        }
-      }
-    },
     "Intervals FTP" : {
       "localizations" : {
         "es" : {
@@ -4220,16 +4190,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "FTP indoor en Intervals"
-          }
-        }
-      }
-    },
-    "Intervals rejected the credential. Reconnect in Settings." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Intervals rechazó la credencial. Reconecta en Ajustes."
           }
         }
       }
@@ -4251,26 +4211,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Intervals.icu · Rodadas recientes"
-          }
-        }
-      }
-    },
-    "Intervals.icu API key" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clave API de Intervals.icu"
-          }
-        }
-      }
-    },
-    "Intervals.icu did not accept that credential." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Intervals.icu no aceptó esa credencial."
           }
         }
       }
@@ -4742,16 +4682,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Escríbele al coach"
-          }
-        }
-      }
-    },
-    "Method" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Método"
           }
         }
       }
@@ -5311,26 +5241,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "NP"
-          }
-        }
-      }
-    },
-    "OAuth" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OAuth"
-          }
-        }
-      }
-    },
-    "OAuth is not configured for this build. Use an API key." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OAuth no está configurado en esta versión. Usa una clave API."
           }
         }
       }
@@ -6177,16 +6087,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Listo"
-          }
-        }
-      }
-    },
-    "Reconnect Intervals.icu in Settings to allow access to activity Notes. Your saved debrief is still available." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vuelve a conectar Intervals.icu en Ajustes para permitir el acceso a las notas de la actividad. Tu análisis guardado sigue disponible."
           }
         }
       }
@@ -8043,16 +7943,6 @@
         }
       }
     },
-    "The sign-in response did not match this request." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La respuesta de inicio de sesión no coincide con esta solicitud."
-          }
-        }
-      }
-    },
     "The sign-in response did not match this request. Try again." : {
       "localizations" : {
         "es" : {
@@ -8609,16 +8499,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Usar %lld W"
-          }
-        }
-      }
-    },
-    "Use an API key instead" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usar una clave API"
           }
         }
       }
@@ -9535,16 +9415,6 @@
         }
       }
     },
-    "Your credential lives only in this phone's Keychain." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu credencial vive solo en el llavero de este teléfono."
-          }
-        }
-      }
-    },
     "Your cyclist profile" : {
       "localizations" : {
         "es" : {
@@ -9851,6 +9721,56 @@
         }
       }
     },
+    "This session can't be moved any more: it was changed in Intervals.icu or skipped." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta sesión ya no se puede mover: se cambió en Intervals.icu o se saltó."
+          }
+        }
+      }
+    },
+    "The days this change was for have passed, so your plan can't apply it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los días de este cambio ya pasaron, así que tu plan no puede aplicarlo."
+          }
+        }
+      }
+    },
+    "Your device's date doesn't match today's. Check the date and time in your device settings." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La fecha de tu dispositivo no coincide con la de hoy. Revisa la fecha y la hora en los ajustes del dispositivo."
+          }
+        }
+      }
+    },
+    "Not on your Intervals calendar. Sign in to Cadencia again in Settings to reconnect." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No está en tu calendario de Intervals. Vuelve a iniciar sesión en Cadencia en Ajustes para reconectar."
+          }
+        }
+      }
+    },
+    "Intervals.icu refused this session, so it isn't on your calendar." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intervals.icu rechazó esta sesión, así que no está en tu calendario."
+          }
+        }
+      }
+    },
     "Cadencia refused the change (%@)." : {
       "localizations" : {
         "es" : {
@@ -9981,16 +9901,6 @@
         }
       }
     },
-    "This build has no Cadencia server configured." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esta versión no tiene configurado un servidor de Cadencia."
-          }
-        }
-      }
-    },
     "%@: your request for the session" : {
       "localizations" : {
         "es" : {
@@ -10051,16 +9961,6 @@
         }
       }
     },
-    "Signed in" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sesión iniciada"
-          }
-        }
-      }
-    },
     "Sign in" : {
       "localizations" : {
         "es" : {
@@ -10071,32 +9971,12 @@
         }
       }
     },
-    "Sign out of Cadencia" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrar sesión en Cadencia"
-          }
-        }
-      }
-    },
     "Sign in with Intervals.icu" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Iniciar sesión con Intervals.icu"
-          }
-        }
-      }
-    },
-    "Your plan, your conversation with the coach and its decisions are kept on Cadencia's server in the EU. Sign in with the same Intervals.icu account this app uses. The coach's AI still runs on this phone with your own plan or key." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu plan, tu conversación con el entrenador y sus decisiones se guardan en el servidor de Cadencia en la UE. Inicia sesión con la misma cuenta de Intervals.icu que usa esta app. La IA del entrenador sigue funcionando en este teléfono con tu propio plan o clave."
           }
         }
       }

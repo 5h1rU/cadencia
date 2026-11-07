@@ -8,7 +8,7 @@ export class PlanVerdictRecorded extends Domain.Event("PlanVerdictRecorded", {
   answer: PlanAnswer,
 }) {}
 
-/** Record whether Planning accepted an attempt. Sent by `DecisionToPlan`; it never rejects. */
+/** Record whether Planning accepted an attempt, once per attempt. Sent by `DecisionToPlan`; it never rejects. */
 export class RecordPlanVerdict extends Domain.Command("RecordPlanVerdict", {
   target: DailyDecisionId,
   input: { attempt: Attempt, answer: PlanAnswer },

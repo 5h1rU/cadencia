@@ -20,6 +20,8 @@ export class RiderProfileCard extends Domain.View("RiderProfileCard", {
     model: Schema.NullOr(ModelName),
     dismissedFtp: Schema.NullOr(FtpWatts),
   }),
+  // Bump when the state or how it folds changes, so the view is rebuilt from its events.
+  version: 1,
   initial: { report: null, model: null, dismissedFtp: null },
   evolve: {
     ProfileRecorded: (v, e) => ({ ...v, report: e.report, model: e.model }),

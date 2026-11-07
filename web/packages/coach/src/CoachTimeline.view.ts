@@ -47,6 +47,8 @@ export class CoachTimeline extends Domain.View("CoachTimeline", {
     RiderProfile: ({ source }) => source.id,
   },
   state: Schema.Struct({ entries: Count }),
+  // Bump when the state or how it folds changes, so the view is rebuilt from its events.
+  version: 1,
   initial: { entries: Count.make(0) },
   evolve: {
     DailyDecisionRecorded: (v) => ({ entries: Count.make(v.entries + 1) }),

@@ -1,10 +1,13 @@
 import type { AthleteId } from "@cadencia/identity/Athlete.id";
-import { IntervalsEventId } from "@cadencia/planning/Plan/Session.id";
 import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
 
 export const INTERVALS = "https://intervals.icu";
+
+/** An event of the Intervals.icu calendar. Planning names sessions by their external id; only this adapter sees these. */
+export const IntervalsEventId = Schema.Int.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(1)), Schema.brand("IntervalsEventId"));
+export type IntervalsEventId = typeof IntervalsEventId.Type;
 
 /** An HTTP status code; 0 when Intervals could not be reached at all. */
 export const HttpStatus = Schema.Int.pipe(Schema.check(Schema.isBetween({ minimum: 0, maximum: 599 })), Schema.brand("HttpStatus"));

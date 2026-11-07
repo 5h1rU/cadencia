@@ -1,4 +1,5 @@
 import { ownerOf } from "@cadencia/identity/Athlete.id";
+import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { mustOwn } from "@cadencia/identity/owns";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
@@ -54,6 +55,8 @@ export class Consultation extends Domain.Aggregate("Consultation", {
     AcceptDraft: Effect.fn(function* (state, cmd, { id }) {
       yield* openOnly(state, id);
       if (state.draft === null) return yield* new NoDraft();
+      // The new plan is the athlete's own; the plan id names its athlete.
+      if (ownerOf(cmd.planId) !== ownerOf(id)) return yield* new NotYours();
       return [new DraftAccepted({ planId: cmd.planId, draft: state.draft })];
     }),
     RecordPlanCreation: (state, cmd) =>

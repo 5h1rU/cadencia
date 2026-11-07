@@ -1,4 +1,3 @@
-import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Weekday } from "@cadencia/kernel/Calendar/Week";
 import { Paragraph, Title } from "@cadencia/kernel/Text";
@@ -8,9 +7,11 @@ import { SessionKind } from "@cadencia/kernel/Training/SessionKind";
 import { Kilometers, Minutes } from "@cadencia/kernel/Training/Units";
 import * as Schema from "effect/Schema";
 
-/** The plan the coach drafted from a consultation, in the coach's language. Planning turns it into a plan. */
+/**
+ * The plan the coach drafted from a consultation, in the coach's language.
+ * Planning turns it into a plan. It belongs to the consultation's athlete.
+ */
 export const PlanDraft = Schema.Struct({
-  athleteId: AthleteId,
   title: Title,
   goal: GoalKind,
   objective: Paragraph,

@@ -66,7 +66,7 @@ final class ChatGPTSignIn: NSObject, ASWebAuthenticationPresentationContextProvi
             }
 
             // The scheme is never hit (OpenAI redirects to the loopback listener); it only satisfies the API.
-            let session = ASWebAuthenticationSession(url: authorizationURL, callbackURLScheme: AppConfig.intervalsOAuthCallbackScheme) { url, error in
+            let session = ASWebAuthenticationSession(url: authorizationURL, callbackURLScheme: CadenciaAPI.callbackScheme) { url, error in
                 if let url { finish(.success(url)); return }
                 if let e = error as? ASWebAuthenticationSessionError, e.code == .canceledLogin { finish(.failure(Failure.cancelled)); return }
                 finish(.failure(error ?? Failure.cancelled))

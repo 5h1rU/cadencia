@@ -1,27 +1,14 @@
 import Foundation
 import CadenciaCore
 
-/// Build-time configuration. Nothing secret lives here: the OAuth client is a public client (PKCE),
-/// and LLM keys are entered by the user and stored in the Keychain.
+/// Build-time configuration. Nothing secret lives here: Cadencia's server holds the Intervals.icu OAuth
+/// client, and LLM keys are entered by the user and stored in the Keychain.
 enum AppConfig {
-    /// Client id issued by Intervals.icu when the Cadencia app is registered
-    /// (Settings → Developer → Apps). Empty until that registration exists; the API key path works regardless.
-    static let intervalsOAuthClientID = ""
-    static let intervalsOAuthRedirectURI = "cadencia://oauth"
-    static let intervalsOAuthCallbackScheme = "cadencia"
-
-    static var intervalsOAuth: IntervalsOAuth? {
-        guard !intervalsOAuthClientID.isEmpty else { return nil }
-        return IntervalsOAuth(clientID: intervalsOAuthClientID, redirectURI: intervalsOAuthRedirectURI)
-    }
-
-    /// Cadencia's backend (`web/`), which keeps the plan and the coach's memory. Nil until it is deployed;
-    /// set it to the Worker's origin (for example `https://cadencia.example.workers.dev`).
-    static let backendURL: URL? = nil
+    /// Cadencia's backend (`web/`): the web app's Worker, which forwards `/auth/*` and `/v1/*` to the API and
+    /// is the origin Intervals.icu returns to after the athlete signs in.
+    static let backendURL = URL(string: "https://cadencia-cadenciaapp-prod-6ki44jvdsgk3fzku.yo-617.workers.dev")!
 
     static let defaultLLMEndpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
     /// Only until the account's model list has loaded once; Settings then switches to a listed model.
     static let defaultLLMModel = LLMCoach.defaultModel
-
-    static let intervalsSettingsURL = URL(string: "https://intervals.icu/settings")!
 }

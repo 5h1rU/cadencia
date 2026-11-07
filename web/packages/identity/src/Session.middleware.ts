@@ -4,7 +4,7 @@ import * as Schema from "effect/Schema";
 import { CurrentActor } from "./CurrentActor.context.ts";
 
 /** The request has no valid session. */
-export class Unauthorized extends Schema.TaggedError<Unauthorized>()("Unauthorized", {}) {}
+export class Unauthorized extends Schema.TaggedError<Unauthorized>()("Unauthorized", {}, { httpApiStatus: 401 }) {}
 
 /** The cookie that carries an athlete's session in a browser. */
 export const SESSION_COOKIE = "cadencia_session";

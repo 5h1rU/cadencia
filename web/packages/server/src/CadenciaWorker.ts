@@ -1,22 +1,28 @@
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
-import { Day } from "@cadencia/kernel/Calendar/Day";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import * as DomainCloudflare from "@alchemy.run/cloudflare/Domain";
-import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import { HttpServerRequest } from "effect/http/HttpServerRequest";
-import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Layer from "effect/Layer";
+import { Stage } from "alchemy/Stage";
 import { clientHttp } from "./ClientHttpApi.ts";
-import { Connections, D1Connections } from "./Connections.ts";
+import { D1Connections } from "./Connections.ts";
 import { CoachHosted, overCoach, overPlanning, PlanningHosted } from "./Hosting.ts";
-import { athleteReadsRoute } from "./Intervals/AthleteReads.ts";
-import { syncAll } from "./Intervals/ChangeSync.ts";
 import { IntervalsCalendar } from "./Intervals/IntervalsCalendar.ts";
-import { callbackRoute, exchangeRoute, startRoute } from "./Intervals/IntervalsOAuth.ts";
 import { PlanningPlanner } from "./Planner.ts";
-import { SessionKey, SessionKeyLive, SessionLive, sessionRoute } from "./Session.ts";
+import { SessionKeyLive, SessionLive } from "./Session.ts";
+import { webHttp } from "./WebHttp.ts";
+
+/**
+ * The Workers' names in prod. Intervals.icu has the app's origin registered as
+ * the OAuth callback and the privacy policy's address, so prod keeps the names
+ * it was first deployed under whatever Alchemy's state holds.
+ */
+export const PROD_WORKER_NAMES = {
+  api: "cadencia-cadenciaworker-prod-fr37k62cb36d666m",
+  app: "cadencia-cadenciaapp-prod-6ki44jvdsgk3fzku",
+} as const;
 
 /**
  * Both models on Durable Objects in the EU, the Coach's Planner answered by
@@ -35,55 +41,41 @@ const CadenciaLive = SessionLive.pipe(
     Layer.mergeAll(
       DomainCloudflare.layerDurableObjects({ jurisdiction: "eu" }),
       Cloudflare.D1.QueryDatabaseBinding,
+      // Workers Traces: the Domain spans of commands, policies and external calls, and failed
+      // policy runs that happen outside any request.
+      Cloudflare.Telemetry(),
     ),
   ),
 );
 
 export default class CadenciaWorker extends Cloudflare.Worker<CadenciaWorker>()(
   "CadenciaWorker",
-  { main: import.meta.url },
   Effect.gen(function* () {
-    // The OAuth app registered in Intervals.icu for the web; its callback is
-    // `<public origin>/auth/intervals/callback`.
-    const intervalsClientId = yield* Config.String("INTERVALS_CLIENT_ID");
-    const intervalsClientSecret = yield* Config.Redacted("INTERVALS_CLIENT_SECRET");
+    // prod keeps the name it was first deployed under, so its URL doesn't depend on Alchemy's state.
+    const stage = yield* Stage;
+    return {
+      main: import.meta.url,
+      ...(stage === "prod" ? { name: PROD_WORKER_NAMES.api } : {}),
+      // Cloudflare.Telemetry needs a compatibility date with `tracing.startActiveSpan`.
+      compatibility: { date: "2026-08-25" },
+    };
+  }),
+  Effect.gen(function* () {
     const planningApi = yield* overPlanning(AthletePlanningApi);
     const coachApi = yield* overCoach(AthleteCoachApi);
-    const sessionKey = yield* SessionKey;
-    const connections = yield* Connections;
-    const http = yield* clientHttp;
-
-    // Every 30 minutes, notice what athletes changed in their Intervals calendar.
-    yield* Cloudflare.Workers.cron("*/30 * * * *", () =>
-      syncAll(Day.make(new Date().toISOString().slice(0, 10))),
-    );
+    const ios = yield* clientHttp;
+    const web = yield* webHttp;
 
     return {
+      // The domain's own Apis for the web app; the domain over HTTP for iOS; and the Worker's
+      // HttpApi (session, signing in, Intervals reads, Intervals' webhooks) for everything else.
       fetch: Effect.gen(function* () {
-        const request = yield* HttpServerRequest;
-        const url = new URL(request.url, "http://localhost");
-        const path = url.pathname;
-        // The request's URL carries only the path; the public origin is the app's host,
-        // which the app Worker keeps when it forwards the request.
-        const host = request.headers["host"] ?? url.host;
-        const origin = `${host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https"}://${host}`;
-        const oauth = {
-          clientId: intervalsClientId,
-          clientSecret: intervalsClientSecret,
-          redirectUri: `${origin}/auth/intervals/callback`,
-        };
-        const signedIn = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-          effect.pipe(Effect.provideService(SessionKey, sessionKey), Effect.provideService(Connections, connections));
-        if (path === "/api/session") return yield* signedIn(sessionRoute);
-        if (path === "/auth/intervals/start") return yield* startRoute(oauth);
-        if (path === "/auth/intervals/callback") return yield* signedIn(callbackRoute(oauth));
-        if (path === "/auth/exchange") return yield* signedIn(exchangeRoute);
-        if (path.startsWith("/api/intervals/")) return yield* signedIn(athleteReadsRoute);
-        if (path.startsWith("/api/planning")) return yield* planningApi.fetch;
-        if (path.startsWith("/api/coach")) return yield* coachApi.fetch;
-        if (path.startsWith("/v1/")) return yield* http;
-        return HttpServerResponse.text("Not Found", { status: 404 });
+        const { pathname } = new URL((yield* HttpServerRequest).url, "http://localhost");
+        if (pathname.startsWith("/api/planning")) return yield* planningApi.fetch;
+        if (pathname.startsWith("/api/coach")) return yield* coachApi.fetch;
+        if (pathname.startsWith("/v1/")) return yield* ios;
+        return yield* web;
       }),
     };
-  }).pipe(Effect.provide(CadenciaLive), Effect.provide(Cloudflare.Workers.CronEventSourceLive)),
+  }).pipe(Effect.provide(CadenciaLive)),
 ) {}

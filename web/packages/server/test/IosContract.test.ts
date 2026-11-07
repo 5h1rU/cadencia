@@ -1,7 +1,6 @@
 import { athlete } from "@cadencia/identity/Actor";
 import { Calendar } from "@cadencia/planning/Plan/Calendar.external";
-import { IntervalsEventId } from "@cadencia/planning/Plan/Session.id";
-import * as Domain from "@alchemy.run/domain";
+import * as InMemory from "@alchemy.run/domain/InMemory";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -39,17 +38,27 @@ const consultationId = (recorded.commands.startConsultation?.body as { target?: 
 
 const FakeCalendar = Calendar.toLayer(
   Effect.succeed({
-    publishSession: () => Effect.succeed({ eventId: IntervalsEventId.make(1) }),
+    publishSession: () => Effect.succeed({ published: true }),
     withdrawSession: () => Effect.succeed({ withdrawn: true }),
   }),
 );
+
+/**
+ * The in-memory platform, its clock on the scenario's Tuesday from when the
+ * test starts: the "today" iOS sends in the fixtures must be plausible
+ * whenever the test runs.
+ */
+const ScenarioPlatform = Layer.suspend(() => {
+  const offset = Date.parse("2026-11-10T07:00:00Z") - Date.now();
+  return InMemory.make({ now: () => Date.now() + offset }).layer;
+});
 
 const World = SessionLive.pipe(
   Layer.provideMerge(SessionKeyTest),
   Layer.provideMerge(CoachHosted),
   Layer.provideMerge(PlanningPlanner),
   Layer.provideMerge(PlanningHosted),
-  Layer.provide(Layer.mergeAll(FakeCalendar, Domain.InMemory)),
+  Layer.provide(Layer.mergeAll(FakeCalendar, ScenarioPlatform)),
 );
 
 // The HTTP API never serves files; the Worker gives it the same no-op file system.
@@ -57,7 +66,8 @@ const Platform = Layer.mergeAll(FileSystem.layerNoop({}), Path.layer);
 
 const inCadencia = <A, E>(
   effect: Effect.Effect<A, E, Scope.Scope | Layer.Success<typeof World> | Layer.Success<typeof Platform>>,
-) => effect.pipe(Effect.scoped, Effect.provide(World), Effect.provide(Platform));
+) =>
+  effect.pipe(Effect.scoped, Effect.provide(World), Effect.provide(Platform));
 
 /** Times are when the test ran; the fixture keeps one fixed instant. */
 const normalized = (view: unknown): unknown =>

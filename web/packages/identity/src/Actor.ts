@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 import { AthleteId } from "./Athlete.id.ts";
 
 /** The parts of Cadencia that act on their own: policies and scheduled jobs. */
-export const SystemName = Schema.Literals(["coach", "CalendarPublishing", "IntervalsSync"]);
+export const SystemName = Schema.Literals(["CalendarPublishing", "IntervalsSync", "PlanReplacement"]);
 export type SystemName = typeof SystemName.Type;
 
 /**

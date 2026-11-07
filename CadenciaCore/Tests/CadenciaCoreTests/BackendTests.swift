@@ -97,7 +97,7 @@ final class BackendContractTests: XCTestCase {
         let transport = BackendTransport()
         transport.views = [
             "ConsultationView": [#"{"stage":"created","turns":[],"draft":null,"planId":"\#(TestIDs.plan)","refusal":null}"#],
-            "TodayDecision": [#"{"athleteId":"i100","day":"2026-11-10","attempt":1,"status":"accepted","workout":null,"note":null,"evidence":null,"model":null,"interpretedOn":null,"refusal":null}"#],
+            "TodayDecision": [#"{"athleteId":"i100","day":"2026-11-10","attempt":1,"status":"accepted","workout":null,"note":null,"evidence":null,"model":null,"interpretedOn":null,"refusal":null,"planHolds":null,"awaiting":[]}"#],
             "ConversationThread": [#"{"messages":[]}"#],
         ]
         let api = CadenciaAPI(baseURL: URL(string: "https://cadencia.example")!, transport: transport, sessionToken: "token")
@@ -111,7 +111,7 @@ final class BackendContractTests: XCTestCase {
         _ = try await api.startConsultation(consultation, commandId: "start-c1"); label("startConsultation")
         _ = try await backend.recordQuestion("What should your riding feel like?", model: "gpt-5.5", in: consultation); label("recordCoachQuestion")
         _ = try await backend.answer("Six weeks of base, three rides a week.", in: consultation); label("answerQuestion")
-        _ = try await backend.recordDraft(try CadenciaAPI.PlanDraft(draft(), athleteId: TestIDs.athlete, today: today), model: "gpt-5.5", in: consultation)
+        _ = try await backend.recordDraft(try CadenciaAPI.PlanDraft(draft(), today: today), model: "gpt-5.5", in: consultation)
         label("recordDraft")
         _ = try await backend.acceptDraft(planId: plan, in: consultation); label("acceptDraft")
         _ = try await backend.recordDecision(on: tuesday, planId: plan, workout: threshold, note: note, evidence: evidence(TestIDs.fingerprint("1")), model: "gpt-5.5")
@@ -123,7 +123,7 @@ final class BackendContractTests: XCTestCase {
                                            planId: plan, today: tuesday)
         _ = try await backend.recordReply("I'll shorten Thursday to 40 minutes.", messageId: m(2), inReplyTo: m(1), intent: limit,
                                           model: "gpt-5.5", on: tuesday); label("recordCoachReplyWithIntent")
-        _ = try await backend.acceptIntent(messageId: m(2), in: conversation); label("acceptIntent")
+        _ = try await backend.acceptIntent(messageId: m(2), in: conversation, today: tuesday); label("acceptIntent")
         try await backend.sendMessage("Thanks!", messageId: m(3), on: tuesday); label("sendMessageThanks")
         _ = try await backend.recordReply("You're welcome.", messageId: m(4), inReplyTo: m(3), intent: nil, model: "gpt-5.5", on: tuesday)
         label("recordCoachReplyWithoutIntent")
@@ -138,7 +138,7 @@ final class BackendContractTests: XCTestCase {
         _ = try await backend.recordDayRequirement("Thursday I only have 40 minutes.", maxMinutes: nil, on: thursday, plan: plan)
         label("recordDayRequirement")
         _ = try await backend.moveSession(CadenciaAPI.SessionId(thursday.iso), to: thursday.adding(days: 1), plan: plan); label("moveSession")
-        _ = try await backend.retirePlan(plan); label("retirePlan")
+        _ = try await backend.retirePlan(plan, today: tuesday); label("retirePlan")
 
         let commands = transport.commands
         XCTAssertEqual(commands.count, labels.count)
@@ -187,7 +187,9 @@ final class BackendContractTests: XCTestCase {
         XCTAssertTrue((try input("recordDraft")["draft"] as? [String: Any])?["event"] is NSNull)
         XCTAssertTrue(try input("recordDayRequirement")["maxMinutes"] is NSNull)
         XCTAssertEqual(try input("startConsultation").count, 0)
-        XCTAssertEqual(try input("retirePlan").count, 0)
+        // The athlete's local day goes with every command the plan dates from it.
+        XCTAssertEqual(try input("retirePlan") as NSDictionary, ["today": "2026-11-10"])
+        XCTAssertEqual(try input("acceptIntent")["today"] as? String, "2026-11-10")
         let workout = decision["workout"] as? [String: Any]
         XCTAssertTrue((workout?["steps"] as? [[String: Any]])?.first?["cadenceRpm"] is NSNull)
         XCTAssertTrue(workout?["intensityCeiling"] is NSNull)
@@ -195,8 +197,7 @@ final class BackendContractTests: XCTestCase {
     }
 
     func testDraftBecomesThePlanSessionsWithTheirPurpose() throws {
-        let wire = try CadenciaAPI.PlanDraft(draft(), athleteId: TestIDs.athlete, today: today)
-        XCTAssertEqual(wire.athleteId, "i100")
+        let wire = try CadenciaAPI.PlanDraft(draft(), today: today)
         XCTAssertEqual(wire.goal, .endurance)
         XCTAssertEqual(wire.longRideWeekday, 1)
         XCTAssertEqual(wire.sessions.first?.day, "2026-11-10")
@@ -289,7 +290,9 @@ final class BackendContractTests: XCTestCase {
         XCTAssertEqual(plan.backendID, TestIDs.plan)
         XCTAssertTrue(plan.isActive)
         XCTAssertEqual(plan.title, "Base block")
+        XCTAssertEqual(plan.objective, "Build an aerobic base")
         XCTAssertEqual(plan.consultation, draft().details)
+        XCTAssertTrue(plan.sessions.allSatisfy { $0.calendarProblem == nil })
         XCTAssertEqual(plan.availability.minutesByWeekday[5], 60)
         let tuesday = try XCTUnwrap(plan.sessions.first { $0.day == self.tuesday })
         XCTAssertEqual(tuesday.status, .generated)
@@ -303,6 +306,12 @@ final class BackendContractTests: XCTestCase {
         XCTAssertEqual(TrainingPlan(view, context: context), plan)
         // Another plan's context is not applied.
         XCTAssertNil(TrainingPlan(view, context: PlanContext(planId: TestIDs.otherPlan, details: draft().details))?.consultation)
+        // A session the Intervals calendar refused carries why.
+        var refused = view
+        refused.calendarProblems = [.init(sessionId: "2026-11-12", problem: .notConnected)]
+        let problems = try XCTUnwrap(TrainingPlan(refused, context: context)).sessions.filter { $0.calendarProblem != nil }
+        XCTAssertEqual(problems.map(\.day), [thursday])
+        XCTAssertEqual(problems.first?.calendarProblem, .notConnected)
     }
 
     func testRetiredPlanAndChangesNeedingNoAI() throws {
@@ -320,6 +329,8 @@ final class BackendContractTests: XCTestCase {
         let refused = try JSONDecoder().decode(CadenciaAPI.TodayDecisionState.self, from: BackendFixtures.view("decisionRefused"))
         XCTAssertEqual(refused.status, .refused)
         XCTAssertEqual(refused.refusal?.reason, .hardensPlan)
+        XCTAssertNil(refused.planHolds)
+        XCTAssertEqual(refused.awaiting, [])
         let accepted = try JSONDecoder().decode(CadenciaAPI.TodayDecisionState.self, from: BackendFixtures.view("decisionAccepted"))
         XCTAssertEqual(accepted.status, .accepted)
         XCTAssertEqual(accepted.attempt, 2)
@@ -330,6 +341,10 @@ final class BackendContractTests: XCTestCase {
         XCTAssertEqual(workout.id, Workout(accepted.workout!, identity: "i100:2026-11-10#2").id)
         XCTAssertEqual(CoachNote(try XCTUnwrap(accepted.note)), note)
         XCTAssertEqual(accepted.evidence?.fingerprint, TestIDs.fingerprint("1"))
+        // The plan holds the accepted proposal; nothing is still waiting for its answer.
+        XCTAssertEqual(accepted.planHolds?.attempt, 2)
+        XCTAssertEqual(accepted.planHolds?.workout, accepted.workout)
+        XCTAssertEqual(accepted.awaiting, [])
     }
 
     func testThreadShowsEachIntentAndWhereItStands() throws {
@@ -368,14 +383,14 @@ final class CadenciaAPITests: XCTestCase {
         XCTAssertNil(CadenciaAPI.handoff(from: URL(string: "cadencia://oauth?code=1")!))
         XCTAssertNil(CadenciaAPI.handoff(from: URL(string: "cadencia://auth/callback")!))
 
-        let transport = FakeTransport(responses: [.init(status: 200, body: Data(#"{"token":"session-token"}"#.utf8)),
+        let transport = FakeTransport(responses: [.init(status: 200, body: Data(#"{"token":"session-token","intervalsAccessToken":"intervals-token"}"#.utf8)),
                                                   .init(status: 200, body: Data(#"{"athleteId":"i100"}"#.utf8))])
         var client = CadenciaAPI(baseURL: base, transport: transport)
-        let token = try await client.exchange(handoff: "abc.def")
-        XCTAssertEqual(token, "session-token")
+        let signIn = try await client.exchange(handoff: "abc.def")
+        XCTAssertEqual(signIn, .init(token: "session-token", intervalsAccessToken: "intervals-token"))
         XCTAssertEqual(transport.requests[0].url.absoluteString, "https://cadencia.example/auth/exchange")
         XCTAssertEqual(String(decoding: transport.requests[0].body!, as: UTF8.self), #"{"handoff":"abc.def"}"#)
-        client.sessionToken = token
+        client.sessionToken = signIn.token
         let athlete = try await client.signedInAthlete()
         XCTAssertEqual(athlete, "i100")
         XCTAssertEqual(transport.requests[1].headers["Authorization"], "Bearer session-token")
@@ -405,14 +420,19 @@ final class CadenciaAPITests: XCTestCase {
             let transport = BackendTransport()
             transport.failures = [.init(status: status, body: Data(body.utf8))]
             do {
-                _ = try await CadenciaAPI(baseURL: base, transport: transport).retirePlan(TestIDs.plan)
+                _ = try await CadenciaAPI(baseURL: base, transport: transport).retirePlan(TestIDs.plan, .init(today: "2026-11-10"))
                 return nil
             } catch { return error as? CadenciaAPIError }
         }
         let refused = await failure(409, #"{"_tag":"PlanNotActive"}"#)
         XCTAssertEqual(refused?.rejection, "PlanNotActive")
-        let signedOut = await failure(422, #"{"_tag":"Unauthorized"}"#)
+        // Not signed in is a 401; an older backend answered it as a 422 rejection.
+        let signedOut = await failure(401, #"{"_tag":"Unauthorized"}"#)
         XCTAssertEqual(signedOut, .signedOut)
+        let olderSignedOut = await failure(422, #"{"_tag":"Unauthorized"}"#)
+        XCTAssertEqual(olderSignedOut, .signedOut)
+        let implausible = await failure(422, #"{"_tag":"ImplausibleToday","today":"2026-11-10"}"#)
+        XCTAssertEqual(implausible?.rejection, "ImplausibleToday")
         if case .invalidRequest = await failure(400, "Expected a string") {} else { XCTFail("A malformed request is a 400") }
         if case .server(503, _) = await failure(503, "busy") {} else { XCTFail("Server faults keep their status") }
     }
@@ -427,7 +447,7 @@ final class CoachBackendTests: XCTestCase {
     let day = Day(year: 2026, month: 11, day: 10)
     func decision(_ status: String, attempt: Int = 1, refusal: String? = nil) -> String {
         let reason = refusal.map { #"{"reason":"\#($0)","detail":null}"# } ?? "null"
-        return #"{"athleteId":"i100","day":"2026-11-10","attempt":\#(attempt),"status":"\#(status)","workout":null,"note":null,"evidence":null,"model":"gpt-5.5","interpretedOn":"ios","refusal":\#(reason)}"#
+        return #"{"athleteId":"i100","day":"2026-11-10","attempt":\#(attempt),"status":"\#(status)","workout":null,"note":null,"evidence":null,"model":"gpt-5.5","interpretedOn":"ios","refusal":\#(reason),"planHolds":null,"awaiting":[]}"#
     }
     let evidence = CadenciaAPI.EvidenceSnapshot(fingerprint: TestIDs.fingerprint("f"), readiness: .init(level: .normal, score: 60, summary: "Typical."),
                                                 days: [], eventDays: [])
@@ -511,7 +531,7 @@ final class PlanAnswerTests: XCTestCase {
     func testANewPlanIsReadOnceTheViewShowsIt() async throws {
         let transport = BackendTransport()
         func plan(_ id: CadenciaAPI.PlanId) -> String {
-            #"{"planId":"\#(id)","status":"active","title":null,"goal":null,"startDay":null,"endDay":null,"phases":[],"longRideWeekday":null,"event":null,"sessions":[],"requirements":[]}"#
+            #"{"planId":"\#(id)","status":"active","title":null,"goal":null,"objective":null,"startDay":null,"endDay":null,"phases":[],"longRideWeekday":null,"event":null,"sessions":[],"requirements":[],"calendarProblems":[]}"#
         }
         transport.views["CurrentPlan"] = [plan(TestIDs.otherPlan), plan(TestIDs.otherPlan), plan(TestIDs.plan)]
         let shown = try await backend(transport).plan(showing: TestIDs.plan)

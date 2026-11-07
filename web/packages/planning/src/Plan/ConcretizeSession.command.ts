@@ -4,14 +4,26 @@ import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { SessionKind } from "@cadencia/kernel/Training/SessionKind";
-import { FtpFraction } from "@cadencia/kernel/Training/Units";
+import { FtpFraction, Minutes } from "@cadencia/kernel/Training/Units";
 import { Workout } from "@cadencia/kernel/Training/Workout";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
-import { AvailabilityExceeded } from "./AvailabilityExceeded.rejection.ts";
-import { HardensPlannedSession } from "./HardensPlannedSession.rejection.ts";
 import { PlanNotActive } from "./PlanNotActive.rejection.ts";
 import { PlannedSession } from "./PlanShape.ts";
+
+/** More riding than the day allows: availability, time away, or the athlete's own limit. */
+export class AvailabilityExceeded extends Domain.Rejection(
+  "AvailabilityExceeded",
+  { day: Day, allowedMinutes: Minutes, proposedMinutes: Minutes },
+  { httpApiStatus: 422 },
+) {}
+
+/** Readiness can soften a planned session, never harden it beyond the plan. */
+export class HardensPlannedSession extends Domain.Rejection(
+  "HardensPlannedSession",
+  { day: Day, planned: SessionKind, proposed: SessionKind, peakIntensity: FtpFraction },
+  { httpApiStatus: 422 },
+) {}
 
 /** The plan has no session that day. */
 export class DayNotPlanned extends Domain.Rejection("DayNotPlanned", { day: Day }, { httpApiStatus: 422 }) {}

@@ -1,3 +1,4 @@
+import { ownerOf } from "@cadencia/identity/Athlete.id";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import { Planner, requestFor } from "../Planner.external.ts";
@@ -18,6 +19,7 @@ export const DecisionToPlanLive = DecisionToPlan.toLayer(
     return Effect.fn(function* ({ source, event, envelope }) {
       const { answer } = yield* planner.concretizeSession({
         requestId: requestFor(envelope),
+        athleteId: ownerOf(source.id),
         planId: event.planId,
         day: event.day,
         workout: event.workout,

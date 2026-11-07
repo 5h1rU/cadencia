@@ -1,31 +1,43 @@
-import { IntervalsActivityId } from "@cadencia/athlete/Activity.id";
-import { EvidenceSnapshot } from "@cadencia/athlete/Evidence";
-import { Bpm, FtpWatts, HrvMs, Kilograms, Rpe, TrainingLoad, Watts, WellnessScale } from "@cadencia/athlete/Measures";
+import { ActivitySummary } from "@cadencia/athlete/ActivitySummary";
+import { AthleteMeasures } from "@cadencia/athlete/AthleteMeasures";
+import { HistoryRange } from "@cadencia/athlete/HistoryRange";
+import { WellnessDay, WellnessDeclaration } from "@cadencia/athlete/Wellness";
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
-import { CoachNote, Refusal, type RefusalReason } from "@cadencia/coach/CoachShape";
-import { ModelName } from "@cadencia/coach/CoachText";
-import { ConversationId } from "@cadencia/coach/Conversation/Conversation.id";
+import type { RefusalReason } from "@cadencia/coach/CoachShape";
+import { ConversationId, conversationIdFor, monthOf } from "@cadencia/coach/Conversation/Conversation.id";
 import { ThreadMessage } from "@cadencia/coach/Conversation/ConversationThread.view";
 import { MessageId } from "@cadencia/coach/Conversation/Message.id";
-import { DailyDecisionId } from "@cadencia/coach/DailyDecision/DailyDecision.id";
-import { RiderReport } from "@cadencia/coach/RiderProfile/RiderReport";
+import { dailyDecisionIdFor } from "@cadencia/coach/DailyDecision/DailyDecision.id";
+import { TodayDecision } from "@cadencia/coach/DailyDecision/TodayDecision.view";
+import { RiderProfileCard } from "@cadencia/coach/RiderProfile/RiderProfileCard.view";
 import { AthleteId } from "@cadencia/identity/Athlete.id";
+import type { NotYours } from "@cadencia/identity/NotYours.rejection";
+import type { Unauthorized } from "@cadencia/identity/Session.middleware";
 import { addDays, Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
-import { Paragraph, Title } from "@cadencia/kernel/Text";
-import { Minutes, Seconds } from "@cadencia/kernel/Training/Units";
-import { Workout } from "@cadencia/kernel/Training/Workout";
+import { Paragraph } from "@cadencia/kernel/Text";
+import type { SessionKind } from "@cadencia/kernel/Training/SessionKind";
+import { Minutes } from "@cadencia/kernel/Training/Units";
+import { totalMinutes, type Workout } from "@cadencia/kernel/Training/Workout";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
-import { DayRequirement, Phase, PlannedSession } from "@cadencia/planning/Plan/PlanShape";
+import type { CalendarProblem } from "@cadencia/planning/Plan/Calendar.external";
+import { CurrentPlanState } from "@cadencia/planning/Plan/CurrentPlan.view";
+import type { PlannedSession, SessionStatus } from "@cadencia/planning/Plan/PlanShape";
 import { SessionId } from "@cadencia/planning/Plan/Session.id";
 import type * as Domain from "@alchemy.run/domain";
 import * as DomainFoldkit from "@alchemy.run/domain/Foldkit";
+import * as Duration from "effect/Duration";
+import { WebApi } from "@cadencia/web-api/WebApi";
 import * as Effect from "effect/Effect";
+import * as HttpApiClient from "effect/http-api/HttpApiClient";
 import * as Option from "effect/Option";
+import type * as RpcClientError from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
-import { Command, Subscription, type Update } from "foldkit";
+import * as Stream from "effect/Stream";
+import { Command, Http, Subscription, type Update } from "foldkit";
 import type { Document, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
+import { defineTaggedUnion } from "foldkit/schema";
 import { modifyFields } from "foldkit/struct";
 
 type Clients = Domain.Api.ClientKey<"AthletePlanningApi"> | Domain.Api.ClientKey<"AthleteCoachApi">;
@@ -37,60 +49,40 @@ export const CoachClient = DomainFoldkit.make(AthleteCoachApi);
 export const Section = Schema.Literals(["home", "coach", "plan", "history", "profile"]);
 export type Section = typeof Section.Type;
 
-const PlanView = Schema.Struct({
-  planId: PlanId,
-  status: Schema.Literals(["none", "active", "retired"]),
-  title: Schema.NullOr(Title),
-  startDay: Schema.NullOr(Day),
-  endDay: Schema.NullOr(Day),
-  phases: Schema.Array(Phase),
-  sessions: Schema.Array(PlannedSession),
-  requirements: Schema.Array(DayRequirement),
-});
-type PlanView = typeof PlanView.Type;
+/** The views' own state schemas: the app keeps exactly what the domain shows. */
+const DecisionState = TodayDecision.State;
+const ProfileState = RiderProfileCard.State;
 
-const DecisionView = Schema.Struct({
-  status: Schema.Literals(["none", "pending", "accepted", "refused"]),
-  workout: Schema.NullOr(Workout),
-  note: Schema.NullOr(CoachNote),
-  evidence: Schema.NullOr(EvidenceSnapshot),
-  model: Schema.NullOr(ModelName),
-  refusal: Schema.NullOr(Refusal),
-});
-type DecisionView = typeof DecisionView.Type;
-
-const ProfileView = Schema.Struct({ report: Schema.NullOr(RiderReport), model: Schema.NullOr(ModelName) });
+/** A month of conversation, with the id it was read under: an intent's answer goes back to it. */
+const Thread = Schema.Struct({ conversationId: ConversationId, messages: Schema.Array(ThreadMessage) });
 
 /**
- * The fields the server passes through from Intervals.icu. `name` and
- * `start_date_local` stay Intervals' own text: any app, or the athlete, wrote them.
+ * A write the web sends, as the Api command's target and input. It is kept
+ * while in flight, so an unknown outcome can be sent again unchanged.
  */
-export const ActivityRow = Schema.Struct({
-  id: IntervalsActivityId,
-  name: Schema.optional(Schema.NullOr(Schema.String)),
-  start_date_local: Schema.optional(Schema.NullOr(Schema.String)),
-  moving_time: Schema.optional(Schema.NullOr(Seconds)),
-  icu_training_load: Schema.optional(Schema.NullOr(TrainingLoad)),
-  icu_weighted_avg_watts: Schema.optional(Schema.NullOr(Watts)),
-  icu_rpe: Schema.optional(Schema.NullOr(Rpe)),
+export const Write = defineTaggedUnion({
+  AcceptIntent: { target: ConversationId, input: Schema.Struct({ messageId: MessageId, today: Day }) },
+  DismissIntent: { target: ConversationId, input: Schema.Struct({ messageId: MessageId }) },
+  MoveSession: { target: PlanId, input: Schema.Struct({ sessionId: SessionId, toDay: Day }) },
+  RecordDayRequirement: {
+    target: PlanId,
+    input: Schema.Struct({ day: Day, instructions: Paragraph, maxMinutes: Schema.NullOr(Minutes) }),
+  },
+  RetirePlan: { target: PlanId, input: Schema.Struct({ today: Day }) },
 });
-export type ActivityRow = typeof ActivityRow.Type;
+export type Write = typeof Write.Type;
 
-export const WellnessRow = Schema.Struct({
-  id: Day,
-  ctl: Schema.optional(Schema.NullOr(TrainingLoad)),
-  atl: Schema.optional(Schema.NullOr(TrainingLoad)),
-  weight: Schema.optional(Schema.NullOr(Kilograms)),
-  hrv: Schema.optional(Schema.NullOr(HrvMs)),
-  restingHR: Schema.optional(Schema.NullOr(Bpm)),
+/** The write waiting for its outcome: `unknown` when it may or may not have been applied. */
+export const InFlight = Schema.Struct({
+  write: Write,
+  commandId: Schema.String,
+  outcome: Schema.Literals(["sending", "unknown"]),
 });
-export type WellnessRow = typeof WellnessRow.Type;
+export type InFlight = typeof InFlight.Type;
 
-export const AthleteRow = Schema.Struct({
-  name: Schema.NullOr(Schema.String),
-  weight: Schema.NullOr(Kilograms),
-  ftp: Schema.NullOr(FtpWatts),
-});
+/** Why an Intervals.icu read or write didn't happen. */
+export const IntervalsProblem = Schema.Literals(["signedOut", "notConnected", "unavailable"]);
+export type IntervalsProblem = typeof IntervalsProblem.Type;
 
 /**
  * The day's declaration as the form holds it: what the athlete typed, not yet
@@ -116,20 +108,29 @@ export type Flags = typeof Flags.Type;
 
 export const Model = Schema.Struct({
   athleteId: Schema.NullOr(AthleteId),
+  /** The athlete's local day; it advances at local midnight. */
   today: Day,
   section: Section,
   commandIds: DomainFoldkit.CommandIds,
-  plan: Schema.Option(PlanView),
-  decision: Schema.Option(DecisionView),
-  thread: Schema.Array(ThreadMessage),
-  profile: Schema.Option(ProfileView),
-  activities: Schema.Array(ActivityRow),
-  wellness: Schema.Array(WellnessRow),
-  athlete: Schema.Option(AthleteRow),
+  /** Whether the live reads may run: false after a transport failure, until the backoff ends. */
+  readsOnline: Schema.Boolean,
+  /** Transport failures since the last read that worked, for the backoff. */
+  readRetries: Schema.Number,
+  plan: Schema.Option(CurrentPlanState),
+  decision: Schema.Option(DecisionState),
+  thread: Schema.Option(Thread),
+  profile: Schema.Option(ProfileState),
+  activities: Schema.Array(ActivitySummary),
+  wellness: Schema.Array(WellnessDay),
+  athlete: Schema.Option(AthleteMeasures),
   move: Schema.Struct({ sessionId: Schema.String, toDay: Schema.String }),
   requirement: Schema.Struct({ day: Schema.String, maxMinutes: Schema.String, instructions: Schema.String }),
   declaration: Declaration,
+  savingDeclaration: Schema.Boolean,
   confirmRetire: Schema.Boolean,
+  inFlight: Schema.Option(InFlight),
+  /** Intervals.icu said the athlete's connection is gone: offer to connect again. */
+  needsReconnect: Schema.Boolean,
   notice: Schema.Option(Schema.String),
   error: Schema.Option(Schema.String),
 });
@@ -137,25 +138,25 @@ export type Model = typeof Model.Type;
 
 // MESSAGE
 
-/** The writes the web makes, none of which needs AI. */
-const WriteAction = Schema.Literals(["acceptIntent", "dismissIntent", "moveSession", "requirement", "retire", "declaration"]);
-type WriteAction = typeof WriteAction.Type;
-
 export const Message = defineMessageUnion({
   ClickedSection: { section: Section },
-  ReceivedPlan: { plan: Schema.Option(PlanView) },
-  ReceivedDecision: { decision: Schema.Option(DecisionView) },
-  ReceivedThread: { messages: Schema.Array(ThreadMessage) },
-  ReceivedProfile: { profile: Schema.Option(ProfileView) },
-  FailedRead: { reason: Schema.String },
+  ChangedDay: { today: Day },
+  ReceivedPlan: { plan: Schema.Option(CurrentPlanState) },
+  ReceivedDecision: { decision: Schema.Option(DecisionState) },
+  ReceivedThread: { thread: Thread },
+  ReceivedProfile: { profile: Schema.Option(ProfileState) },
+  RefusedRead: {},
+  LostReads: {},
+  ReconnectedReads: {},
+  SignedOut: {},
   LoadedIntervals: {
-    activities: Schema.Array(ActivityRow),
-    wellness: Schema.Array(WellnessRow),
-    athlete: Schema.Option(AthleteRow),
+    activities: Schema.Array(ActivitySummary),
+    wellness: Schema.Array(WellnessDay),
+    athlete: AthleteMeasures,
   },
-  FailedIntervals: { reason: Schema.String },
-  ClickedAcceptIntent: { messageId: MessageId },
-  ClickedDismissIntent: { messageId: MessageId },
+  FailedIntervals: { problem: IntervalsProblem },
+  ClickedAcceptIntent: { conversationId: ConversationId, messageId: MessageId },
+  ClickedDismissIntent: { conversationId: ConversationId, messageId: MessageId },
   ChangedMove: { field: Schema.Literals(["sessionId", "toDay"]), value: Schema.String },
   SubmittedMove: {},
   ChangedRequirement: { field: Schema.Literals(["day", "maxMinutes", "instructions"]), value: Schema.String },
@@ -163,63 +164,86 @@ export const Message = defineMessageUnion({
   ClickedRetire: {},
   ClickedConfirmRetire: {},
   ClickedCancelRetire: {},
+  ClickedRetryWrite: {},
+  ClickedForgetWrite: {},
+  ReceivedPlanningResult: { result: PlanningClient.Message },
+  ReceivedCoachResult: { result: CoachClient.Message },
   ChangedDeclaration: {
     field: Schema.Literals(["mood", "motivation", "soreness", "fatigue", "weight", "comments"]),
     value: Schema.String,
   },
   SubmittedDeclaration: {},
-  CompletedDeclaration: {},
-  CompletedWrite: { action: WriteAction },
-  FailedWrite: { action: WriteAction, reason: Schema.String },
+  SavedDeclaration: {},
+  FailedDeclaration: { problem: IntervalsProblem },
 });
 export type Message = typeof Message.Type;
 
 // COMMAND
 
-const getJson = (path: string) =>
-  Effect.tryPromise(async () => {
-    const response = await fetch(path, { credentials: "same-origin" });
-    if (!response.ok) throw new Error(`${path}: ${response.status}`);
-    return (await response.json()) as unknown;
+/** The domain command for a write, its result mapped back into the app. */
+export const commandFor = (write: Write, commandId: string): Command.Command<Message, never, Clients> => {
+  const planning = (result: typeof PlanningClient.Message.Type): Message => Message.ReceivedPlanningResult({ result });
+  const coach = (result: typeof CoachClient.Message.Type): Message => Message.ReceivedCoachResult({ result });
+  return Write.match<Command.Command<Message, never, Clients>>(write, {
+    AcceptIntent: ({ target, input }) => Command.mapMessage(CoachClient.AcceptIntent({ target, input, commandId }), coach),
+    DismissIntent: ({ target, input }) => Command.mapMessage(CoachClient.DismissIntent({ target, input, commandId }), coach),
+    MoveSession: ({ target, input }) => Command.mapMessage(PlanningClient.MoveSession({ target, input, commandId }), planning),
+    RecordDayRequirement: ({ target, input }) =>
+      Command.mapMessage(PlanningClient.RecordDayRequirement({ target, input, commandId }), planning),
+    RetirePlan: ({ target, input }) => Command.mapMessage(PlanningClient.RetirePlan({ target, input, commandId }), planning),
   });
+};
+
+/** The Worker's WebApi, on this origin, so the browser sends the session cookie with every call. */
+const webApi = HttpApiClient.make(WebApi, { baseUrl: globalThis.location?.origin });
+
+/** What a failed Intervals.icu call means to the athlete: the WebApi's declared errors, or no answer at all. */
+export const intervalsProblemOf = (error: { readonly _tag: string }): IntervalsProblem =>
+  error._tag === "Unauthorized" ? "signedOut" : error._tag === "IntervalsNotConnected" ? "notConnected" : "unavailable";
 
 export const LoadIntervals = Command.define("LoadIntervals", {
-  args: { today: Day },
+  args: { range: HistoryRange },
   messages: [Message.LoadedIntervals, Message.FailedIntervals],
-  execute: ({ today }) => {
-    const range = `oldest=${addDays(today, -27)}&newest=${today}`;
-    return Effect.all({
-      activities: getJson(`/api/intervals/activities?${range}`).pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(ActivityRow))),
+  execute: ({ range }) =>
+    webApi.pipe(
+      Effect.flatMap(({ intervals }) =>
+        Effect.all(
+          {
+            activities: intervals.activities({ query: range }),
+            wellness: intervals.wellness({ query: range }),
+            athlete: intervals.athlete(),
+          },
+          { concurrency: "unbounded" },
+        ),
       ),
-      wellness: getJson(`/api/intervals/wellness?${range}`).pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(WellnessRow))),
-      ),
-      athlete: getJson("/api/intervals/athlete").pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(AthleteRow)),
-        Effect.option,
-      ),
-    }).pipe(
       Effect.map((loaded) => Message.LoadedIntervals(loaded)),
-      Effect.catch(() =>
-        Effect.succeed(Message.FailedIntervals({ reason: "No se pudo leer Intervals.icu. Vuelve a intentarlo." })),
-      ),
-    );
-  },
+      Effect.catch((error) => Effect.succeed(Message.FailedIntervals({ problem: intervalsProblemOf(error) }))),
+      Effect.provide(Http.layer),
+    ),
 });
 
-/** What the athlete may declare from the web, each in its Intervals unit. */
-export const WellnessDeclaration = Schema.Struct({
-  mood: Schema.optional(WellnessScale),
-  motivation: Schema.optional(WellnessScale),
-  soreness: Schema.optional(WellnessScale),
-  fatigue: Schema.optional(WellnessScale),
-  weight: Schema.optional(Kilograms),
-  comments: Schema.optional(Paragraph),
+export const SaveDeclaration = Command.define("SaveDeclaration", {
+  args: { day: Day, declaration: WellnessDeclaration },
+  messages: [Message.SavedDeclaration, Message.FailedDeclaration],
+  execute: ({ day, declaration }) =>
+    webApi.pipe(
+      Effect.flatMap(({ intervals }) => intervals.declareWellness({ params: { day }, payload: declaration })),
+      Effect.as(Message.SavedDeclaration()),
+      Effect.catch((error) => Effect.succeed(Message.FailedDeclaration({ problem: intervalsProblemOf(error) }))),
+      Effect.provide(Http.layer),
+    ),
 });
-export type WellnessDeclaration = typeof WellnessDeclaration.Type;
 
-/** The form, decoded: empty fields are left out; anything else must be valid. */
+/** Seconds to wait before reading again after `retries` transport failures in a row. */
+export const backoffSeconds = (retries: number) => Math.min(60, 2 ** retries);
+
+export const WaitToReconnect = Command.define("WaitToReconnect", {
+  args: { seconds: Schema.Number },
+  messages: [Message.ReconnectedReads],
+  execute: ({ seconds }) => Effect.sleep(Duration.seconds(seconds)).pipe(Effect.as(Message.ReconnectedReads())),
+});
+
+/** What the wellness form becomes once decoded: empty fields are left out; anything else must be valid. */
 export const declarationOf = (form: Declaration) => {
   const number = (value: string) => (value.trim() === "" ? undefined : Number(value));
   return Schema.decodeUnknownOption(WellnessDeclaration)(
@@ -236,106 +260,210 @@ export const declarationOf = (form: Declaration) => {
   );
 };
 
-export const SaveDeclaration = Command.define("SaveDeclaration", {
-  args: { today: Day, declaration: WellnessDeclaration },
-  messages: [Message.CompletedDeclaration, Message.FailedWrite],
-  execute: ({ today, declaration }) =>
-    Effect.tryPromise(async () => {
-      const body = Schema.encodeSync(WellnessDeclaration)(declaration);
-      const response = await fetch(`/api/intervals/wellness/${today}`, {
-        method: "PUT",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) throw new Error(String(response.status));
-    }).pipe(
-      Effect.as(Message.CompletedDeclaration()),
-      Effect.catch(() =>
-        Effect.succeed(Message.FailedWrite({ action: "declaration", reason: "Intervals.icu no guardó los datos." })),
-      ),
-    ),
-});
-
-/** A domain command's result as a plain outcome: done, or the rejection's name. */
-const outcome =
-  (action: WriteAction) =>
-  (result: { readonly _tag: string }): Message => {
-    if (!result._tag.startsWith("Failed")) return Message.CompletedWrite({ action });
-    const failure = (result as { readonly failure?: unknown }).failure as
-      | { readonly _tag: string; readonly rejection?: { readonly _tag: string } }
-      | undefined;
-    const reason =
-      failure?._tag === "Rejected" && failure.rejection ? failure.rejection._tag : (failure?._tag ?? "Unknown");
-    return Message.FailedWrite({ action, reason });
-  };
+/** The four weeks of history the web shows. */
+const historyOf = (today: Day): HistoryRange => ({ oldest: addDays(today, -27), newest: today });
 
 // UPDATE
 
-const REASONS: Record<string, string> = {
-  NotYours: "No tienes permiso para cambiar esto.",
-  PlanNotActive: "El plan no está activo.",
-  SessionNotFound: "Esa sesión ya no existe en el plan.",
-  DayOutsidePlan: "El día está fuera de las fechas del plan.",
-  DayTaken: "Ese día ya tiene otra sesión.",
-  NoOpenIntent: "Esa propuesta ya no está pendiente.",
-  Unknown: "No sabemos si se guardó. Vuelve a intentarlo.",
+type PlanningResult = typeof PlanningClient.Message.Type;
+type CoachResult = typeof CoachClient.Message.Type;
+/** The rejections a command's derived result can carry. */
+type RejectionOf<Result, Tag extends string> =
+  Extract<Result, { readonly _tag: Tag }> extends { readonly failure: infer F }
+    ? F extends { readonly _tag: "Rejected"; readonly rejection: infer R }
+      ? R
+      : never
+    : never;
+
+/** One text per rejection a command declares: adding a rejection to the domain fails the build here. */
+type Explanations<R extends { readonly _tag: string }> = {
+  readonly [T in R["_tag"]]: (rejection: Extract<R, { readonly _tag: T }>) => string;
 };
 
-const reasonText = (reason: string) => REASONS[reason] ?? reason;
+const explain =
+  <R extends { readonly _tag: string }>(texts: Explanations<R>) =>
+  (rejection: R): string =>
+    (texts[rejection._tag as R["_tag"]] as (r: R) => string)(rejection);
 
-const allocate = (model: Model) => DomainFoldkit.next(model.commandIds);
+const notYours = () => "Esto pertenece a otra cuenta. Vuelve a entrar con la tuya de Intervals.icu.";
+const planNotActive = () => "El plan ya no está activo.";
+const dayOutsidePlan = ({ startDay, endDay }: { readonly startDay: Day; readonly endDay: Day }) =>
+  `Ese día está fuera del plan (${startDay} → ${endDay}).`;
+const noOpenIntent = () => "Esa propuesta ya no está pendiente.";
 
-const send = (
-  model: Model,
-  build: (commandId: string) => Command.Command<Message, never, Clients>,
-): Update.Return<Model, Message, Clients> => {
-  const { commandId, commandIds } = allocate(model);
+export const MOVE_REJECTIONS: Explanations<RejectionOf<PlanningResult, "FailedMoveSession">> = {
+  PlanNotActive: planNotActive,
+  SessionNotFound: () => "Esa sesión ya no existe en el plan.",
+  SessionNotMovable: ({ status }) =>
+    status === "skipped"
+      ? "Esa sesión se omitió porque ese día no tenías disponibilidad: ya no se puede mover."
+      : "Esa sesión la cambiaste en Intervals.icu, que manda: muévela allí.",
+  DayOutsidePlan: dayOutsidePlan,
+  DayTaken: ({ day }) => `El ${day} ya tiene otra sesión.`,
+  NotYours: notYours,
+};
+
+export const REQUIREMENT_REJECTIONS: Explanations<RejectionOf<PlanningResult, "FailedRecordDayRequirement">> = {
+  PlanNotActive: planNotActive,
+  DayOutsidePlan: dayOutsidePlan,
+  NotYours: notYours,
+};
+
+export const RETIRE_REJECTIONS: Explanations<RejectionOf<PlanningResult, "FailedRetirePlan">> = {
+  PlanNotActive: planNotActive,
+  ImplausibleToday: () => "La fecha de este dispositivo no cuadra con la de Cadencia. Revisa la fecha y la hora.",
+  NotYours: notYours,
+};
+
+export const ACCEPT_REJECTIONS: Explanations<RejectionOf<CoachResult, "FailedAcceptIntent">> = {
+  NoOpenIntent: noOpenIntent,
+  IntentExpired: () => "Esa propuesta era para días que ya han pasado.",
+  NotYours: notYours,
+};
+
+export const DISMISS_REJECTIONS: Explanations<RejectionOf<CoachResult, "FailedDismissIntent">> = {
+  NoOpenIntent: noOpenIntent,
+  NotYours: notYours,
+};
+
+export const UNKNOWN_OUTCOME = "No sabemos si se guardó: Cadencia no respondió.";
+const SIGNED_OUT = "Tu sesión ha terminado. Vuelve a conectar con Intervals.icu.";
+
+const INTERVALS_PROBLEMS: Record<Exclude<IntervalsProblem, "signedOut">, string> = {
+  notConnected: "Intervals.icu no está conectado.",
+  unavailable: "No se pudo hablar con Intervals.icu. Vuelve a intentarlo.",
+};
+
+type Return = Update.Return<Model, Message, Clients>;
+
+const clearMessages = { error: () => Option.none(), notice: () => Option.none() } as const;
+
+/** Signed out: the session ended or was refused. Forget the athlete's data and offer to connect again. */
+const signedOut = (model: Model): Return => ({
+  model: modifyFields(model, {
+    athleteId: () => null,
+    plan: () => Option.none(),
+    decision: () => Option.none(),
+    thread: () => Option.none(),
+    profile: () => Option.none(),
+    activities: () => [],
+    wellness: () => [],
+    athlete: () => Option.none(),
+    inFlight: () => Option.none(),
+    savingDeclaration: () => false,
+    confirmRetire: () => false,
+    notice: () => Option.none(),
+    error: () => Option.some(SIGNED_OUT),
+  }),
+});
+
+/** Send a write, one at a time: while one is in flight, the others wait for its outcome. */
+const send = (model: Model, write: Write): Return => {
+  if (Option.isSome(model.inFlight)) return { model };
+  const { commandId, commandIds } = DomainFoldkit.next(model.commandIds);
   return {
-    model: modifyFields(model, { commandIds: () => commandIds, error: () => Option.none(), notice: () => Option.none() }),
-    commands: [build(commandId)],
+    model: modifyFields(model, {
+      ...clearMessages,
+      commandIds: () => commandIds,
+      inFlight: () => Option.some({ write, commandId, outcome: "sending" as const }),
+    }),
+    commands: [commandFor(write, commandId)],
   };
 };
 
+/** Whether this result answers the write in flight; any other is stale and changes nothing. */
+const answers = (model: Model, commandId: string) => Option.exists(model.inFlight, (f) => f.commandId === commandId);
+
+const succeeded = (model: Model, commandId: string, notice: string, after: (model: Model) => Model = (m) => m): Return =>
+  answers(model, commandId)
+    ? { model: after(modifyFields(model, { inFlight: () => Option.none(), notice: () => Option.some(notice) })) }
+    : { model };
+
+type Failure<R> =
+  | { readonly _tag: "Rejected"; readonly rejection: R }
+  | { readonly _tag: "Denied" }
+  | { readonly _tag: "Unknown" };
+
+/** A refusal is final; a denial means signed out; an unknown outcome waits to be sent again with the same id. */
+const failed = <R>(model: Model, commandId: string, failure: Failure<R>, text: (rejection: R) => string): Return => {
+  if (!answers(model, commandId)) return { model };
+  switch (failure._tag) {
+    case "Rejected":
+      return {
+        model: modifyFields(model, { inFlight: () => Option.none(), error: () => Option.some(text(failure.rejection)) }),
+      };
+    case "Denied":
+      return signedOut(model);
+    case "Unknown":
+      return {
+        model: modifyFields(model, {
+          inFlight: (f) => Option.map(f, (w) => ({ ...w, outcome: "unknown" as const })),
+          error: () => Option.some(UNKNOWN_OUTCOME),
+        }),
+      };
+  }
+};
+
 const planIdOf = (model: Model) =>
-  Option.flatMap(model.plan, (plan) => (plan.status === "active" ? Option.some(plan.planId) : Option.none()));
+  Option.flatMap(model.plan, (plan) => (plan.status === "active" ? Option.fromNullishOr(plan.planId) : Option.none()));
 
-/** Keys are only read while signed in; a placeholder keeps them well-formed before that. */
-const owner = (model: Model) => model.athleteId ?? "signed-out";
-const conversationOf = (model: Model) => ConversationId.make(`${owner(model)}:${model.today.slice(0, 7)}`);
+const loadIntervalsFor = (model: Model, section: Section) =>
+  (section === "history" || section === "profile") && model.athleteId !== null
+    ? [LoadIntervals({ range: historyOf(model.today) })]
+    : [];
 
-export const update = (model: Model, message: Message): Update.Return<Model, Message, Clients> =>
-  Message.match<Update.Return<Model, Message, Clients>>(message, {
+/** A read worked: the reads are healthy again. */
+const read = (model: Model): Return => ({ model: modifyFields(model, { readRetries: () => 0 }) });
+
+const intervalsFailed = (model: Model, problem: IntervalsProblem, saving: boolean): Return =>
+  problem === "signedOut"
+    ? signedOut(model)
+    : {
+        model: modifyFields(model, {
+          ...(saving ? { savingDeclaration: () => false } : {}),
+          needsReconnect: () => problem === "notConnected",
+          error: () => Option.some(INTERVALS_PROBLEMS[problem]),
+        }),
+      };
+
+export const update = (model: Model, message: Message): Return =>
+  Message.match<Return>(message, {
     ClickedSection: ({ section }) => ({
-      model: modifyFields(model, { section: () => section, error: () => Option.none(), notice: () => Option.none() }),
-      commands:
-        (section === "history" || section === "profile") && model.athleteId !== null
-          ? [LoadIntervals({ today: model.today })]
-          : [],
+      model: modifyFields(model, { ...clearMessages, section: () => section }),
+      commands: loadIntervalsFor(model, section),
     }),
-    ReceivedPlan: ({ plan }) => ({ model: modifyFields(model, { plan: () => plan }) }),
-    ReceivedDecision: ({ decision }) => ({ model: modifyFields(model, { decision: () => decision }) }),
-    ReceivedThread: ({ messages }) => ({ model: modifyFields(model, { thread: () => messages }) }),
-    ReceivedProfile: ({ profile }) => ({ model: modifyFields(model, { profile: () => profile }) }),
-    FailedRead: ({ reason }) => ({ model: modifyFields(model, { error: () => Option.some(reasonText(reason)) }) }),
+    ChangedDay: ({ today }) =>
+      today === model.today
+        ? { model }
+        : { model: modifyFields(model, { today: () => today }), commands: loadIntervalsFor({ ...model, today }, model.section) },
+    ReceivedPlan: ({ plan }) => read(modifyFields(model, { plan: () => plan })),
+    ReceivedDecision: ({ decision }) => read(modifyFields(model, { decision: () => decision })),
+    ReceivedThread: ({ thread }) => read(modifyFields(model, { thread: () => Option.some(thread) })),
+    ReceivedProfile: ({ profile }) => read(modifyFields(model, { profile: () => profile })),
+    RefusedRead: () => ({ model: modifyFields(model, { error: () => Option.some(notYours()) }) }),
+    LostReads: () =>
+      // The first failure takes the reads offline and schedules one reconnection; the others wait for it.
+      model.readsOnline && model.athleteId !== null
+        ? {
+            model: modifyFields(model, { readsOnline: () => false, readRetries: (n) => n + 1 }),
+            commands: [WaitToReconnect({ seconds: backoffSeconds(model.readRetries) })],
+          }
+        : { model },
+    ReconnectedReads: () => ({ model: modifyFields(model, { readsOnline: () => true }) }),
+    SignedOut: () => signedOut(model),
     LoadedIntervals: ({ activities, wellness, athlete }) => ({
-      model: modifyFields(model, { activities: () => activities, wellness: () => wellness, athlete: () => athlete }),
+      model: modifyFields(model, {
+        activities: () => activities,
+        wellness: () => wellness,
+        athlete: () => Option.some(athlete),
+        needsReconnect: () => false,
+      }),
     }),
-    FailedIntervals: ({ reason }) => ({ model: modifyFields(model, { error: () => Option.some(reason) }) }),
-    ClickedAcceptIntent: ({ messageId }) =>
-      send(model, (commandId) =>
-        Command.mapMessage(
-          CoachClient.AcceptIntent({ target: conversationOf(model), input: { messageId }, commandId }),
-          outcome("acceptIntent"),
-        ),
-      ),
-    ClickedDismissIntent: ({ messageId }) =>
-      send(model, (commandId) =>
-        Command.mapMessage(
-          CoachClient.DismissIntent({ target: conversationOf(model), input: { messageId }, commandId }),
-          outcome("dismissIntent"),
-        ),
-      ),
+    FailedIntervals: ({ problem }) => intervalsFailed(model, problem, false),
+    ClickedAcceptIntent: ({ conversationId, messageId }) =>
+      send(model, Write.AcceptIntent({ target: conversationId, input: { messageId, today: model.today } })),
+    ClickedDismissIntent: ({ conversationId, messageId }) =>
+      send(model, Write.DismissIntent({ target: conversationId, input: { messageId } })),
     ChangedMove: ({ field, value }) => ({
       model: modifyFields(model, { move: (m) => ({ ...m, [field]: value }) }),
     }),
@@ -346,16 +474,7 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
       if (Option.isNone(planId) || Option.isNone(toDay) || Option.isNone(sessionId)) {
         return { model: modifyFields(model, { error: () => Option.some("Elige una sesión y un día nuevo.") }) };
       }
-      return send(model, (commandId) =>
-        Command.mapMessage(
-          PlanningClient.MoveSession({
-            target: planId.value,
-            input: { sessionId: sessionId.value, toDay: toDay.value },
-            commandId,
-          }),
-          outcome("moveSession"),
-        ),
-      );
+      return send(model, Write.MoveSession({ target: planId.value, input: { sessionId: sessionId.value, toDay: toDay.value } }));
     },
     ChangedRequirement: ({ field, value }) => ({
       model: modifyFields(model, { requirement: (r) => ({ ...r, [field]: value }) }),
@@ -367,76 +486,112 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
       const raw = model.requirement.maxMinutes.trim();
       const minutes = raw === "" ? Option.some(null) : Schema.decodeUnknownOption(Minutes)(Number(raw));
       if (Option.isNone(planId) || Option.isNone(day) || Option.isNone(instructions) || Option.isNone(minutes)) {
-        return { model: modifyFields(model, { error: () => Option.some("Indica un día y, si quieres, un máximo de minutos.") }) };
+        return {
+          model: modifyFields(model, { error: () => Option.some("Indica un día, una nota y, si quieres, un máximo de minutos.") }),
+        };
       }
-      return send(model, (commandId) =>
-        Command.mapMessage(
-          PlanningClient.RecordDayRequirement({
-            target: planId.value,
-            input: { day: day.value, instructions: instructions.value, maxMinutes: minutes.value },
-            commandId,
-          }),
-          outcome("requirement"),
-        ),
+      return send(
+        model,
+        Write.RecordDayRequirement({
+          target: planId.value,
+          input: { day: day.value, instructions: instructions.value, maxMinutes: minutes.value },
+        }),
       );
     },
     ClickedRetire: () => ({ model: modifyFields(model, { confirmRetire: () => true }) }),
     ClickedCancelRetire: () => ({ model: modifyFields(model, { confirmRetire: () => false }) }),
-    ClickedConfirmRetire: () => {
-      const planId = planIdOf(model);
-      if (Option.isNone(planId)) return { model };
-      const next = send(model, (commandId) =>
-        Command.mapMessage(PlanningClient.RetirePlan({ target: planId.value, input: {}, commandId }), outcome("retire")),
-      );
-      return { ...next, model: modifyFields(next.model, { confirmRetire: () => false }) };
-    },
+    ClickedConfirmRetire: () =>
+      Option.match(planIdOf(model), {
+        onNone: () => ({ model }),
+        onSome: (planId) => {
+          const next = send(model, Write.RetirePlan({ target: planId, input: { today: model.today } }));
+          return { ...next, model: modifyFields(next.model, { confirmRetire: () => false }) };
+        },
+      }),
+    ClickedRetryWrite: () =>
+      Option.match(model.inFlight, {
+        onNone: () => ({ model }),
+        onSome: (inFlight): Return =>
+          inFlight.outcome !== "unknown"
+            ? { model }
+            : {
+                // The same command id: the write may have been applied, and the domain applies it once.
+                model: modifyFields(model, {
+                  ...clearMessages,
+                  inFlight: () => Option.some({ ...inFlight, outcome: "sending" as const }),
+                }),
+                commands: [commandFor(inFlight.write, inFlight.commandId)],
+              },
+      }),
+    ClickedForgetWrite: () =>
+      Option.exists(model.inFlight, (f) => f.outcome === "unknown")
+        ? { model: modifyFields(model, { ...clearMessages, inFlight: () => Option.none() }) }
+        : { model },
+    ReceivedPlanningResult: ({ result }) =>
+      PlanningClient.Message.match<Return>(result, {
+        SucceededMoveSession: ({ commandId }) =>
+          succeeded(model, commandId, "Sesión movida.", (m) => modifyFields(m, { move: () => ({ sessionId: "", toDay: "" }) })),
+        FailedMoveSession: ({ commandId, failure }) => failed(model, commandId, failure, explain(MOVE_REJECTIONS)),
+        SucceededRecordDayRequirement: ({ commandId }) =>
+          succeeded(model, commandId, "Guardado. El plan ya lo tiene en cuenta.", (m) =>
+            modifyFields(m, { requirement: () => ({ day: model.today, maxMinutes: "", instructions: "" }) }),
+          ),
+        FailedRecordDayRequirement: ({ commandId, failure }) =>
+          failed(model, commandId, failure, explain(REQUIREMENT_REJECTIONS)),
+        SucceededRetirePlan: ({ commandId }) => succeeded(model, commandId, "Plan retirado."),
+        FailedRetirePlan: ({ commandId, failure }) => failed(model, commandId, failure, explain(RETIRE_REJECTIONS)),
+      }),
+    ReceivedCoachResult: ({ result }) =>
+      CoachClient.Message.match<Return>(result, {
+        SucceededAcceptIntent: ({ commandId }) =>
+          succeeded(model, commandId, "Propuesta aceptada. El plan la aplicará si cumple sus reglas."),
+        FailedAcceptIntent: ({ commandId, failure }) => failed(model, commandId, failure, explain(ACCEPT_REJECTIONS)),
+        SucceededDismissIntent: ({ commandId }) => succeeded(model, commandId, "Propuesta descartada."),
+        FailedDismissIntent: ({ commandId, failure }) => failed(model, commandId, failure, explain(DISMISS_REJECTIONS)),
+        // The web never sends it: the FTP proposal is answered in iOS.
+        SucceededDismissFtpProposal: () => ({ model }),
+        FailedDismissFtpProposal: () => ({ model }),
+      }),
     ChangedDeclaration: ({ field, value }) => ({
       model: modifyFields(model, { declaration: (d) => ({ ...d, [field]: value }) }),
     }),
     SubmittedDeclaration: () =>
-      Option.match(declarationOf(model.declaration), {
-        onNone: () => ({
-          model: modifyFields(model, {
-            error: () => Option.some("Revisa los datos: las escalas van de 1 a 4 y el peso, de 20 a 350 kg."),
+      model.savingDeclaration
+        ? { model }
+        : Option.match(declarationOf(model.declaration), {
+            onNone: () => ({
+              model: modifyFields(model, {
+                error: () => Option.some("Revisa los datos: las escalas van de 1 a 4 y el peso, de 20 a 350 kg."),
+              }),
+            }),
+            onSome: (declaration) => ({
+              model: modifyFields(model, { ...clearMessages, savingDeclaration: () => true }),
+              commands: [SaveDeclaration({ day: model.today, declaration })],
+            }),
           }),
-        }),
-        onSome: (declaration) => ({
-          model: modifyFields(model, { error: () => Option.none(), notice: () => Option.none() }),
-          commands: [SaveDeclaration({ today: model.today, declaration })],
-        }),
-      }),
-    CompletedDeclaration: () => ({
+    SavedDeclaration: () => ({
       model: modifyFields(model, {
+        savingDeclaration: () => false,
         declaration: () => emptyDeclaration,
         notice: () => Option.some("Guardado en Intervals.icu."),
       }),
     }),
-    CompletedWrite: ({ action }) => ({
-      model: modifyFields(model, {
-        notice: () =>
-          Option.some(
-            action === "acceptIntent"
-              ? "Propuesta aceptada. El plan la aplicará si cumple sus reglas."
-              : action === "retire"
-                ? "Plan retirado."
-                : "Hecho.",
-          ),
-      }),
-    }),
-    FailedWrite: ({ reason }) => ({ model: modifyFields(model, { error: () => Option.some(reasonText(reason)) }) }),
+    FailedDeclaration: ({ problem }) => intervalsFailed(model, problem, true),
   });
 
 // INIT
 
-export const init = (flags: Flags): Update.Return<Model, Message, Clients> => ({
+export const init = (flags: Flags): Return => ({
   model: Model.make({
     athleteId: flags.athleteId,
     today: flags.today,
     section: "home",
     commandIds: { session: flags.session, sent: 0 },
+    readsOnline: true,
+    readRetries: 0,
     plan: Option.none(),
     decision: Option.none(),
-    thread: [],
+    thread: Option.none(),
     profile: Option.none(),
     activities: [],
     wellness: [],
@@ -444,7 +599,10 @@ export const init = (flags: Flags): Update.Return<Model, Message, Clients> => ({
     move: { sessionId: "", toDay: "" },
     requirement: { day: flags.today, maxMinutes: "", instructions: "" },
     declaration: emptyDeclaration,
+    savingDeclaration: false,
     confirmRetire: false,
+    inFlight: Option.none(),
+    needsReconnect: false,
     notice: Option.none(),
     error: Option.none(),
   }),
@@ -452,42 +610,108 @@ export const init = (flags: Flags): Update.Return<Model, Message, Clients> => ({
 
 // SUBSCRIPTION
 
-const signedIn = (model: Model) => model.athleteId !== null;
+/**
+ * Keys must be well-formed even before anyone signs in. This athlete id is
+ * never read: every watch is disabled while signed out.
+ */
+const NOBODY = AthleteId.make("i1");
 
-export const subscriptions = Subscription.make<Model, Message, Clients>()(() => ({
-  plan: PlanningClient.CurrentPlan.watch({
-    key: (model: Model) => AthleteId.make(owner(model)),
-    isEnabled: signedIn,
+const ownerOf = (model: Model): AthleteId => model.athleteId ?? NOBODY;
+export const conversationOf = (model: Model): ConversationId => conversationIdFor(ownerOf(model), monthOf(model.today));
+
+/** Live reads run while signed in, unless they are waiting out a transport failure. */
+const reading = (model: Model) => model.athleteId !== null && model.readsOnline;
+
+type ReadFailure = NotYours | Unauthorized | RpcClientError.RpcClientError;
+
+/** A read ended: refused, signed out, or the connection dropped. */
+export const readFailed = (error: ReadFailure): Message => {
+  switch (error._tag) {
+    case "Unauthorized":
+      return Message.SignedOut();
+    case "NotYours":
+      return Message.RefusedRead();
+    case "RpcClientError":
+      return Message.LostReads();
+  }
+};
+
+const lostReads = (): Message => Message.LostReads();
+
+/** Today's local day of a moment, as `YYYY-MM-DD`. */
+export const localDayOf = (date: Date): Day =>
+  Day.make(
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
+  );
+
+/** The wait until just after the next local midnight. */
+export const untilNextMidnight = (now: Date): Duration.Duration =>
+  Duration.millis(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime() + 1000);
+
+/**
+ * The local day, looked at after each local midnight and whenever the page
+ * comes back into view (a sleeping laptop misses its timers).
+ */
+const localDays: Stream.Stream<Day> = Stream.suspend(() =>
+  Stream.merge(
+    Stream.fromEffectRepeat(Effect.suspend(() => Effect.sleep(untilNextMidnight(new Date())))),
+    Stream.merge(Stream.fromEventListener(document, "visibilitychange"), Stream.fromEventListener(window, "focus")),
+  ),
+).pipe(Stream.map(() => localDayOf(new Date())));
+
+/** The thread of one conversation, its messages tagged with that conversation's id. */
+const threadWatch = (conversationId: ConversationId) =>
+  CoachClient.ConversationThread.watch({
+    key: (_: Model) => conversationId,
     toMessage: ({ state }): Message =>
-      Message.ReceivedPlan({
-        plan: Option.flatMap(state, (p) =>
-          p.planId === null ? Option.none() : Option.some({ ...p, planId: p.planId }),
-        ),
+      Message.ReceivedThread({
+        thread: { conversationId, messages: Option.match(state, { onNone: () => [], onSome: (t) => t.messages }) },
       }),
-    onFailure: (error): Message => Message.FailedRead({ reason: error._tag }),
-    onDefect: (): Message => Message.FailedRead({ reason: "Unknown" }),
+    onFailure: readFailed,
+    onDefect: lostReads,
+  });
+
+export const subscriptions = Subscription.make<Model, Message, Clients>()((entry) => ({
+  today: entry(
+    { today: Day },
+    {
+      modelToDependencies: (model) => ({ today: model.today }),
+      dependenciesToStream: ({ today }) =>
+        localDays.pipe(
+          Stream.filter((day) => day !== today),
+          Stream.take(1),
+          Stream.map((day): Message => Message.ChangedDay({ today: day })),
+        ),
+    },
+  ),
+  plan: PlanningClient.CurrentPlan.watch({
+    key: ownerOf,
+    isEnabled: reading,
+    toMessage: ({ state }): Message =>
+      Message.ReceivedPlan({ plan: Option.filter(state, (p) => p.planId !== null) }),
+    onFailure: readFailed,
+    onDefect: lostReads,
   }),
   decision: CoachClient.TodayDecision.watch({
-    key: (model: Model) => DailyDecisionId.make(`${owner(model)}:${model.today}`),
-    isEnabled: signedIn,
+    key: (model: Model) => dailyDecisionIdFor(ownerOf(model), model.today),
+    isEnabled: reading,
     toMessage: ({ state }): Message => Message.ReceivedDecision({ decision: state }),
-    onFailure: (error): Message => Message.FailedRead({ reason: error._tag }),
-    onDefect: (): Message => Message.FailedRead({ reason: "Unknown" }),
+    onFailure: readFailed,
+    onDefect: lostReads,
   }),
-  thread: CoachClient.ConversationThread.watch({
-    key: conversationOf,
-    isEnabled: signedIn,
-    toMessage: ({ state }): Message =>
-      Message.ReceivedThread({ messages: Option.match(state, { onNone: () => [], onSome: (t) => t.messages }) }),
-    onFailure: (error): Message => Message.FailedRead({ reason: error._tag }),
-    onDefect: (): Message => Message.FailedRead({ reason: "Unknown" }),
-  }),
+  // The watch is rebuilt for each conversation, so every snapshot names the
+  // conversation it came from; only its dependency schema is taken from this one.
+  thread: {
+    ...threadWatch(conversationIdFor(NOBODY, monthOf(Day.make("2000-01-01")))),
+    modelToDependencies: (model: Model) => ({ key: conversationOf(model), isEnabled: reading(model) }),
+    dependenciesToStream: (dependencies) => threadWatch(dependencies.key).dependenciesToStream(dependencies),
+  },
   profile: CoachClient.RiderProfileCard.watch({
-    key: (model: Model) => AthleteId.make(owner(model)),
-    isEnabled: signedIn,
+    key: ownerOf,
+    isEnabled: reading,
     toMessage: ({ state }): Message => Message.ReceivedProfile({ profile: state }),
-    onFailure: (error): Message => Message.FailedRead({ reason: error._tag }),
-    onDefect: (): Message => Message.FailedRead({ reason: "Unknown" }),
+    onFailure: readFailed,
+    onDefect: lostReads,
   }),
 }));
 
@@ -501,7 +725,7 @@ const SECTIONS: ReadonlyArray<readonly [Section, string]> = [
   ["profile", "Perfil"],
 ];
 
-const KIND: Record<string, string> = {
+const KIND: Record<SessionKind, string> = {
   rest: "Descanso",
   recovery: "Recuperación",
   endurance: "Resistencia",
@@ -515,7 +739,7 @@ const KIND: Record<string, string> = {
   strength: "Fuerza",
 };
 
-const STATUS: Record<string, readonly [string, string]> = {
+const STATUS: Record<SessionStatus, readonly [string, string]> = {
   provisional: ["Provisional", "info"],
   concrete: ["Concretada", "info"],
   published: ["En Intervals", "good"],
@@ -524,26 +748,40 @@ const STATUS: Record<string, readonly [string, string]> = {
   removedInIntervals: ["Borrada en Intervals", "bad"],
 };
 
+/** Sessions Cadencia still owns and that still ride: the only ones the plan lets the athlete move. */
+export const isMovable = (session: PlannedSession) =>
+  session.status === "provisional" || session.status === "concrete" || session.status === "published";
+
+const CALENDAR_PROBLEMS: Record<CalendarProblem, string> = {
+  notConnected: "Intervals.icu no está conectado",
+  refused: "Intervals.icu rechazó esta sesión",
+};
+
 const REFUSALS: Record<RefusalReason, string> = {
   planNotActive: "el plan no está activo",
   dayNotPlanned: "ese día no tiene sesión",
-  dayOutsidePlan: "el día está fuera del plan",
-  dayTaken: "ese día ya tiene sesión",
-  sessionNotFound: "la sesión ya no existe",
   availabilityExceeded: "supera el tiempo disponible",
   intensityAfterHardTraining: "hay entrenamiento duro el mismo día o el anterior",
   hardensPlan: "endurecía una sesión suave del plan",
   purposeMismatch: "no encaja con el propósito de la sesión",
   invalidPlan: "el borrador no es un plan válido",
   planAlreadyExists: "el plan ya existe",
+  implausibleToday: "la fecha del dispositivo no cuadraba",
   notYours: "no tienes permiso",
 };
 
-const refusalText = (refusal: Refusal | null) => (refusal === null ? "" : REFUSALS[refusal.reason]);
+const refusalText = (refusal: { readonly reason: RefusalReason } | null) => (refusal === null ? "" : REFUSALS[refusal.reason]);
 
-const minutesOf = (workout: Workout) => Math.round(workout.steps.reduce((s, step) => s + step.durationSeconds, 0) / 60);
+const minutesOf = (workout: Workout) => Math.round(totalMinutes(workout));
+
+const workoutLine = (workout: Workout) => `${workout.name} · ${KIND[workout.kind]} · ${minutesOf(workout)} min`;
 
 const pill = (h: HtmlBuilder<Message>, text: string, tone: string) => h.span([h.Class(`pill ${tone}`)], [text]);
+
+const reconnectLink = (h: HtmlBuilder<Message>, text: string) => h.a([h.Href("/auth/intervals/start")], [text]);
+
+/** Whether a write is waiting: every write control is disabled until it settles. */
+const busy = (model: Model) => Option.isSome(model.inFlight);
 
 const homeView = (model: Model, h: HtmlBuilder<Message>) => {
   const decision = Option.getOrNull(model.decision);
@@ -551,6 +789,7 @@ const homeView = (model: Model, h: HtmlBuilder<Message>) => {
     onNone: () => [],
     onSome: (plan) => plan.sessions.filter((s) => s.day >= model.today && s.day <= addDays(model.today, 6)),
   });
+  const problems = Option.match(model.plan, { onNone: () => [], onSome: (plan) => plan.calendarProblems });
   const decisionCard =
     decision === null || decision.status === "none" || decision.note === null
       ? h.div([h.Class("card")], [
@@ -567,8 +806,13 @@ const homeView = (model: Model, h: HtmlBuilder<Message>) => {
           h.p([], [decision.note.body]),
           h.p([], [decision.note.session]),
           ...(decision.note.watch ? [h.p([h.Class("muted")], [decision.note.watch])] : []),
-          ...(decision.workout
-            ? [h.p([h.Class("muted")], [`${KIND[decision.workout.kind] ?? decision.workout.kind} · ${minutesOf(decision.workout)} min`])]
+          ...(decision.workout ? [h.p([h.Class("muted")], [workoutLine(decision.workout)])] : []),
+          // The plan keeps the last proposal it accepted, which can be an earlier attempt.
+          ...(decision.planHolds !== null && decision.planHolds.attempt !== decision.attempt
+            ? [h.p([], [`El plan mantiene: ${decision.planHolds.note.headline} (${workoutLine(decision.planHolds.workout)})`])]
+            : []),
+          ...(decision.awaiting.length > 0 && decision.status !== "pending"
+            ? [h.p([h.Class("muted")], ["Hay otra propuesta esperando la respuesta del plan."])]
             : []),
           ...(decision.evidence
             ? [h.p([h.Class("muted")], [`Readiness: ${decision.evidence.readiness.summary} (${decision.evidence.readiness.score}/100)`])]
@@ -581,64 +825,99 @@ const homeView = (model: Model, h: HtmlBuilder<Message>) => {
       h.h2([], ["Próximos 7 días"]),
       upcoming.length === 0
         ? h.p([h.Class("muted")], ["No hay sesiones planificadas esta semana."])
-        : sessionsTable(h, upcoming),
+        : sessionsTable(h, upcoming, problems),
     ]),
   ];
 };
 
-const sessionsTable = (h: HtmlBuilder<Message>, sessions: ReadonlyArray<PlannedSession>) =>
+const sessionsTable = (
+  h: HtmlBuilder<Message>,
+  sessions: ReadonlyArray<PlannedSession>,
+  problems: (typeof CurrentPlanState.Type)["calendarProblems"],
+) =>
   h.div([h.Class("scroll")], [
     h.table([], [
       h.thead([], [h.tr([], [h.th([], ["Día"]), h.th([], ["Sesión"]), h.th([], ["Min"]), h.th([], ["Estado"])])]),
       h.tbody(
         [],
         sessions.map((s) => {
-          const [label, tone] = STATUS[s.status] ?? [s.status, "info"];
+          const [label, tone] = STATUS[s.status];
+          const problem = problems.find((p) => p.sessionId === s.sessionId);
           return h.keyed("tr")(s.sessionId, [], [
             h.td([], [s.day]),
-            h.td([], [`${s.workout?.name ?? s.title} · ${KIND[s.kind] ?? s.kind}`]),
+            h.td([], [`${s.workout?.name ?? s.title} · ${KIND[s.kind]}`]),
             h.td([], [String(s.workout ? minutesOf(s.workout) : s.targetMinutes)]),
-            h.td([], [pill(h, label, tone)]),
+            h.td([], [
+              pill(h, label, tone),
+              ...(problem === undefined
+                ? []
+                : [
+                    h.p([h.Class("error")], [
+                      CALENDAR_PROBLEMS[problem.problem],
+                      ...(problem.problem === "notConnected" ? [" · ", reconnectLink(h, "Conectar de nuevo")] : []),
+                    ]),
+                  ]),
+            ]),
           ]);
         }),
       ),
     ]),
   ]);
 
-const coachView = (model: Model, h: HtmlBuilder<Message>) => [
-  h.div([h.Class("card")], [
-    h.h2([], ["Conversación de este mes"]),
-    h.p([h.Class("muted")], ["Para escribir al coach usa Cadencia en el iPhone: la respuesta necesita la IA. Aquí puedes aceptar o descartar lo que te propone."]),
-    ...(model.thread.length === 0
-      ? [h.p([h.Class("muted")], ["Todavía no hay mensajes este mes."])]
-      : model.thread.map((m) =>
-          h.keyed("div")(m.messageId, [h.Class(`message ${m.role}`)], [
-            h.p([], [m.text]),
-            ...(m.intent
-              ? [
-                  h.p([h.Class("muted")], [`Propuesta: ${m.intent.summary}`]),
-                  m.intentStatus === "proposed"
-                    ? h.div([h.Class("row")], [
-                        h.button([h.Class("primary"), h.OnClick(Message.ClickedAcceptIntent({ messageId: m.messageId }))], ["Aceptar"]),
-                        h.button([h.Class("secondary"), h.OnClick(Message.ClickedDismissIntent({ messageId: m.messageId }))], ["Descartar"]),
-                      ])
-                    : pill(
-                        h,
-                        m.intentStatus === "applied"
-                          ? "Aplicada al plan"
-                          : m.intentStatus === "refused"
-                            ? `El plan la rechazó: ${refusalText(m.refusal)}`
-                            : m.intentStatus === "dismissed"
-                              ? "Descartada"
-                              : "Aceptada",
-                        m.intentStatus === "applied" ? "good" : m.intentStatus === "refused" ? "bad" : "info",
-                      ),
-                ]
-              : []),
-          ]),
-        )),
-  ]),
-];
+const coachView = (model: Model, h: HtmlBuilder<Message>) => {
+  const thread = Option.getOrNull(model.thread);
+  const messages = thread?.messages ?? [];
+  return [
+    h.div([h.Class("card")], [
+      h.h2([], ["Conversación de este mes"]),
+      h.p([h.Class("muted")], [
+        "Para escribir al coach usa Cadencia en el iPhone: la respuesta necesita la IA. Aquí puedes aceptar o descartar lo que te propone.",
+      ]),
+      ...(thread === null || messages.length === 0
+        ? [h.p([h.Class("muted")], ["Todavía no hay mensajes este mes."])]
+        : messages.map((m) =>
+            h.keyed("div")(m.messageId, [h.Class(`message ${m.role}`)], [
+              h.p([], [m.text]),
+              ...(m.intent
+                ? [
+                    h.p([h.Class("muted")], [`Propuesta: ${m.intent.summary}`]),
+                    m.intentStatus === "proposed"
+                      ? h.div([h.Class("row")], [
+                          h.button(
+                            [
+                              h.Class("primary"),
+                              h.Disabled(busy(model)),
+                              h.OnClick(Message.ClickedAcceptIntent({ conversationId: thread.conversationId, messageId: m.messageId })),
+                            ],
+                            ["Aceptar"],
+                          ),
+                          h.button(
+                            [
+                              h.Class("secondary"),
+                              h.Disabled(busy(model)),
+                              h.OnClick(Message.ClickedDismissIntent({ conversationId: thread.conversationId, messageId: m.messageId })),
+                            ],
+                            ["Descartar"],
+                          ),
+                        ])
+                      : pill(
+                          h,
+                          m.intentStatus === "applied"
+                            ? "Aplicada al plan"
+                            : m.intentStatus === "refused"
+                              ? `El plan la rechazó: ${refusalText(m.refusal)}`
+                              : m.intentStatus === "dismissed"
+                                ? "Descartada"
+                                : "Aceptada",
+                          m.intentStatus === "applied" ? "good" : m.intentStatus === "refused" ? "bad" : "info",
+                        ),
+                  ]
+                : []),
+            ]),
+          )),
+    ]),
+  ];
+};
 
 const planView = (model: Model, h: HtmlBuilder<Message>) =>
   Option.match(model.plan, {
@@ -652,14 +931,16 @@ const planView = (model: Model, h: HtmlBuilder<Message>) =>
       h.div([h.Class("card")], [
         h.h2([], [plan.title ?? "Plan"]),
         pill(h, plan.status === "active" ? "Activo" : "Retirado", plan.status === "active" ? "good" : "warn"),
+        ...(plan.objective === null ? [] : [h.p([], [plan.objective])]),
         h.p([h.Class("muted")], [`${plan.startDay ?? ""} → ${plan.endDay ?? ""}`]),
         h.ul([], plan.phases.map((p) => h.li([], [`Semanas ${p.startWeek}–${p.endWeek}: ${p.summary}`]))),
       ]),
-      h.div([h.Class("card")], [h.h2([], ["Sesiones"]), sessionsTable(h, plan.sessions)]),
+      h.div([h.Class("card")], [h.h2([], ["Sesiones"]), sessionsTable(h, plan.sessions, plan.calendarProblems)]),
       ...(plan.status === "active"
         ? [
             h.div([h.Class("card")], [
               h.h2([], ["Mover una sesión"]),
+              h.p([h.Class("muted")], ["Las sesiones que cambiaste en Intervals.icu se mueven allí."]),
               h.form([h.Class("row"), h.OnSubmit(Message.SubmittedMove())], [
                 h.label([], [
                   "Sesión",
@@ -668,7 +949,7 @@ const planView = (model: Model, h: HtmlBuilder<Message>) =>
                     [
                       h.option([h.Value("")], ["Elige…"]),
                       ...plan.sessions
-                        .filter((s) => s.day >= model.today)
+                        .filter((s) => s.day >= model.today && isMovable(s))
                         .map((s) => h.option([h.Value(s.sessionId)], [`${s.day} · ${s.title}`])),
                     ],
                   ),
@@ -677,37 +958,53 @@ const planView = (model: Model, h: HtmlBuilder<Message>) =>
                   "Nuevo día",
                   h.input([h.Type("date"), h.Value(model.move.toDay), h.OnInput((value) => Message.ChangedMove({ field: "toDay", value }))]),
                 ]),
-                h.button([h.Class("primary"), h.Type("submit")], ["Mover"]),
+                h.button([h.Class("primary"), h.Type("submit"), h.Disabled(busy(model))], ["Mover"]),
               ]),
             ]),
             h.div([h.Class("card")], [
               h.h2([], ["Requisito para un día"]),
-              h.p([h.Class("muted")], ["El plan nunca te propondrá más minutos de los que indiques."]),
+              h.p([h.Class("muted")], ["El plan nunca te propondrá más minutos de los que indiques, y ajusta la sesión de ese día al momento."]),
               h.form([h.Class("row"), h.OnSubmit(Message.SubmittedRequirement())], [
                 h.label([], [
                   "Día",
-                  h.input([h.Type("date"), h.Value(model.requirement.day), h.OnInput((value) => Message.ChangedRequirement({ field: "day", value }))]),
+                  h.input([
+                    h.Type("date"),
+                    h.Value(model.requirement.day),
+                    h.OnInput((value) => Message.ChangedRequirement({ field: "day", value })),
+                  ]),
                 ]),
                 h.label([], [
                   "Máximo de minutos",
-                  h.input([h.Type("number"), h.Min("0"), h.Value(model.requirement.maxMinutes), h.OnInput((value) => Message.ChangedRequirement({ field: "maxMinutes", value }))]),
+                  h.input([
+                    h.Type("number"),
+                    h.Min("0"),
+                    h.Value(model.requirement.maxMinutes),
+                    h.OnInput((value) => Message.ChangedRequirement({ field: "maxMinutes", value })),
+                  ]),
                 ]),
                 h.label([], [
                   "Nota",
-                  h.input([h.Type("text"), h.Value(model.requirement.instructions), h.OnInput((value) => Message.ChangedRequirement({ field: "instructions", value }))]),
+                  h.input([
+                    h.Type("text"),
+                    h.Value(model.requirement.instructions),
+                    h.OnInput((value) => Message.ChangedRequirement({ field: "instructions", value })),
+                  ]),
                 ]),
-                h.button([h.Class("primary"), h.Type("submit")], ["Guardar"]),
+                h.button([h.Class("primary"), h.Type("submit"), h.Disabled(busy(model))], ["Guardar"]),
               ]),
             ]),
             h.div([h.Class("card")], [
               h.h2([], ["Retirar el plan"]),
-              h.p([h.Class("muted")], ["Sus próximas sesiones salen del calendario de Intervals.icu."]),
+              h.p([h.Class("muted")], ["Sus sesiones desde hoy salen del calendario de Intervals.icu."]),
               model.confirmRetire
                 ? h.div([h.Class("row")], [
-                    h.button([h.Class("primary"), h.OnClick(Message.ClickedConfirmRetire())], ["Sí, retirar el plan"]),
+                    h.button(
+                      [h.Class("primary"), h.Disabled(busy(model)), h.OnClick(Message.ClickedConfirmRetire())],
+                      ["Sí, retirar el plan"],
+                    ),
                     h.button([h.Class("secondary"), h.OnClick(Message.ClickedCancelRetire())], ["Cancelar"]),
                   ])
-                : h.button([h.Class("secondary"), h.OnClick(Message.ClickedRetire())], ["Retirar el plan"]),
+                : h.button([h.Class("secondary"), h.Disabled(busy(model)), h.OnClick(Message.ClickedRetire())], ["Retirar el plan"]),
             ]),
           ]
         : []),
@@ -719,8 +1016,10 @@ const historyView = (model: Model, h: HtmlBuilder<Message>) => {
   return [
     h.div([h.Class("card")], [
       h.h2([], ["Forma"]),
-      latest && latest.ctl != null && latest.atl != null
-        ? h.p([], [`Forma (CTL) ${latest.ctl.toFixed(0)} · Fatiga (ATL) ${latest.atl.toFixed(0)} · Balance ${(latest.ctl - latest.atl).toFixed(0)}`])
+      latest && latest.fitness !== null && latest.acuteLoad !== null
+        ? h.p([], [
+            `Forma (CTL) ${latest.fitness.toFixed(0)} · Fatiga (ATL) ${latest.acuteLoad.toFixed(0)} · Balance ${(latest.fitness - latest.acuteLoad).toFixed(0)}`,
+          ])
         : h.p([h.Class("muted")], ["Sin datos de bienestar en las últimas cuatro semanas."]),
     ]),
     h.div([h.Class("card")], [
@@ -729,16 +1028,18 @@ const historyView = (model: Model, h: HtmlBuilder<Message>) => {
         ? h.p([h.Class("muted")], ["No hay actividades en Intervals.icu en estas fechas."])
         : h.div([h.Class("scroll")], [
             h.table([], [
-              h.thead([], [h.tr([], [h.th([], ["Fecha"]), h.th([], ["Actividad"]), h.th([], ["Min"]), h.th([], ["Carga"]), h.th([], ["NP"])])]),
+              h.thead([], [
+                h.tr([], [h.th([], ["Fecha"]), h.th([], ["Actividad"]), h.th([], ["Min"]), h.th([], ["Carga"]), h.th([], ["NP"])]),
+              ]),
               h.tbody(
                 [],
                 [...model.activities].reverse().map((a) =>
-                  h.keyed("tr")(a.id, [], [
-                    h.td([], [(a.start_date_local ?? "").slice(0, 10)]),
+                  h.keyed("tr")(a.activityId, [], [
+                    h.td([], [a.day ?? ""]),
                     h.td([], [a.name ?? ""]),
-                    h.td([], [a.moving_time != null ? String(Math.round(a.moving_time / 60)) : ""]),
-                    h.td([], [a.icu_training_load != null ? String(a.icu_training_load) : ""]),
-                    h.td([], [a.icu_weighted_avg_watts != null ? `${a.icu_weighted_avg_watts} W` : ""]),
+                    h.td([], [a.movingTime !== null ? String(Math.round(a.movingTime / 60)) : ""]),
+                    h.td([], [a.trainingLoad !== null ? a.trainingLoad.toFixed(0) : ""]),
+                    h.td([], [a.normalizedPower !== null ? `${a.normalizedPower.toFixed(0)} W` : ""]),
                   ]),
                 ),
               ),
@@ -776,13 +1077,21 @@ const profileView = (model: Model, h: HtmlBuilder<Message>) => {
         scale(h, "Fatiga", "fatigue", model.declaration.fatigue),
         h.label([], [
           "Peso (kg)",
-          h.input([h.Type("number"), h.Value(model.declaration.weight), h.OnInput((value) => Message.ChangedDeclaration({ field: "weight", value }))]),
+          h.input([
+            h.Type("number"),
+            h.Value(model.declaration.weight),
+            h.OnInput((value) => Message.ChangedDeclaration({ field: "weight", value })),
+          ]),
         ]),
         h.label([], [
           "Comentario",
-          h.input([h.Type("text"), h.Value(model.declaration.comments), h.OnInput((value) => Message.ChangedDeclaration({ field: "comments", value }))]),
+          h.input([
+            h.Type("text"),
+            h.Value(model.declaration.comments),
+            h.OnInput((value) => Message.ChangedDeclaration({ field: "comments", value })),
+          ]),
         ]),
-        h.button([h.Class("primary"), h.Type("submit")], ["Guardar en Intervals"]),
+        h.button([h.Class("primary"), h.Type("submit"), h.Disabled(model.savingDeclaration)], ["Guardar en Intervals"]),
       ]),
     ]),
     h.div([h.Class("card")], [
@@ -792,11 +1101,28 @@ const profileView = (model: Model, h: HtmlBuilder<Message>) => {
         : h.div([], [
             h.p([], [h.strong([], [report.headline])]),
             h.p([], [report.summary]),
-            h.p([h.Class("muted")], [`Basado en ${report.rideCount} salidas, ${report.oldest} → ${report.newest}. Confianza: ${report.confidence}.`]),
+            h.p([h.Class("muted")], [
+              `Basado en ${report.rideCount} salidas, ${report.oldest} → ${report.newest}. Confianza: ${report.confidence}.`,
+            ]),
           ]),
     ]),
   ];
 };
+
+/** The write in flight, or the one whose outcome is unknown, with what can be done about it. */
+const writeStatus = (model: Model, h: HtmlBuilder<Message>) =>
+  Option.match(model.inFlight, {
+    onNone: () => [],
+    onSome: (inFlight) =>
+      inFlight.outcome === "sending"
+        ? [h.p([h.Class("muted"), h.AriaLive("polite")], ["Guardando…"])]
+        : [
+            h.div([h.Class("row"), h.AriaLive("polite")], [
+              h.button([h.Class("primary"), h.OnClick(Message.ClickedRetryWrite())], ["Reintentar"]),
+              h.button([h.Class("secondary"), h.OnClick(Message.ClickedForgetWrite())], ["Dejarlo"]),
+            ]),
+          ],
+  });
 
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
   title: "Cadencia",
@@ -821,13 +1147,24 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       ? [
           h.div([h.Class("card")], [
             h.h2([], ["Entra con tu cuenta de Intervals.icu"]),
+            ...Option.match(model.error, { onNone: () => [], onSome: (e) => [h.p([h.Class("error")], [e])] }),
             h.p([], ["Cadencia usa Intervals.icu como fuente de verdad: tus actividades, tu bienestar y tu calendario siguen allí."]),
             h.a([h.Class("connect"), h.Href("/auth/intervals/start")], ["Conectar con Intervals.icu"]),
           ]),
         ]
       : [
-          ...Option.match(model.error, { onNone: () => [], onSome: (e) => [h.p([h.Class("error")], [e])] }),
-          ...Option.match(model.notice, { onNone: () => [], onSome: (n) => [h.p([h.Class("muted")], [n])] }),
+          ...(model.readsOnline ? [] : [h.p([h.Class("muted"), h.AriaLive("polite")], ["Sin conexión con Cadencia. Reintentando…"])]),
+          ...Option.match(model.error, {
+            onNone: () => [],
+            onSome: (e) => [
+              h.p([h.Class("error"), h.AriaLive("polite")], [
+                e,
+                ...(model.needsReconnect ? [" ", reconnectLink(h, "Conectar de nuevo")] : []),
+              ]),
+            ],
+          }),
+          ...writeStatus(model, h),
+          ...Option.match(model.notice, { onNone: () => [], onSome: (n) => [h.p([h.Class("muted"), h.AriaLive("polite")], [n])] }),
           ...(model.section === "home"
             ? homeView(model, h)
             : model.section === "coach"

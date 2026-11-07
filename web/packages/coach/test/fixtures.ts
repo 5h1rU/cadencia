@@ -75,7 +75,6 @@ export const intent = Schema.decodeUnknownSync(Intent)({
 export const limits = intent.limits.map((l) => Schema.decodeUnknownSync(DayLimit)(l));
 
 export const draft = Schema.decodeUnknownSync(PlanDraft)({
-  athleteId: "i100",
   title: "Gran fondo build",
   goal: "event",
   objective: "Finish strong",

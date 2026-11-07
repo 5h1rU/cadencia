@@ -12,7 +12,8 @@
     "acceptIntent" : {
       "body" : {
         "input" : {
-          "messageId" : "00000000-0000-4000-8000-000000000002"
+          "messageId" : "00000000-0000-4000-8000-000000000002",
+          "today" : "2026-11-10"
         },
         "target" : "i100:2026-11"
       },
@@ -334,7 +335,6 @@
       "body" : {
         "input" : {
           "draft" : {
-            "athleteId" : "i100",
             "endDay" : "2026-12-20",
             "event" : null,
             "goal" : "endurance",
@@ -542,7 +542,7 @@
     "retirePlan" : {
       "body" : {
         "input" : {
-
+          "today" : "2026-11-10"
         },
         "target" : "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f"
       },

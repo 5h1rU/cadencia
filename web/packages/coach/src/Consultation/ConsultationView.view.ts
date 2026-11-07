@@ -26,6 +26,8 @@ export class ConsultationView extends Domain.View("ConsultationView", {
     planId: Schema.NullOr(PlanId),
     refusal: Schema.NullOr(Refusal),
   }),
+  // Bump when the state or how it folds changes, so the view is rebuilt from its events.
+  version: 1,
   initial: { stage: "new", turns: [], draft: null, planId: null, refusal: null },
   evolve: {
     ConsultationStarted: (v) => ({ ...v, stage: "open" as const }),

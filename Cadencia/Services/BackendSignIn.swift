@@ -11,26 +11,25 @@ struct BackendSession: Codable, Equatable {
 }
 
 /// Signs in to Cadencia's backend: the server sends the athlete to Intervals.icu, then back to
-/// `cadencia://auth/callback?handoff=…`; the one-minute handoff is exchanged for a session.
+/// `cadencia://auth/callback?handoff=…`; the one-minute handoff is exchanged for a session and the athlete's
+/// Intervals.icu access token.
 @MainActor
 final class BackendSignIn: NSObject, ASWebAuthenticationPresentationContextProviding {
     enum Failure: LocalizedError {
-        case cancelled, missingHandoff, notConfigured
+        case cancelled, missingHandoff
 
         var errorDescription: String? {
             switch self {
             case .cancelled: return String(localized: "Sign-in was cancelled.")
             case .missingHandoff: return String(localized: "Cadencia did not complete the sign-in. Try again.")
-            case .notConfigured: return String(localized: "This build has no Cadencia server configured.")
             }
         }
     }
 
     private var session: ASWebAuthenticationSession?
 
-    func signIn(transport: any HTTPTransport) async throws -> BackendSession {
-        guard let baseURL = AppConfig.backendURL else { throw Failure.notConfigured }
-        var api = CadenciaAPI(baseURL: baseURL, transport: transport)
+    func signIn(transport: any HTTPTransport) async throws -> (session: BackendSession, intervals: IntervalsCredential) {
+        var api = CadenciaAPI(baseURL: AppConfig.backendURL, transport: transport)
         let callback: URL = try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(url: api.signInURL, callbackURLScheme: CadenciaAPI.callbackScheme) { url, error in
                 if let url {
@@ -47,9 +46,10 @@ final class BackendSignIn: NSObject, ASWebAuthenticationPresentationContextProvi
             session.start()
         }
         guard let handoff = CadenciaAPI.handoff(from: callback) else { throw Failure.missingHandoff }
-        let token = try await api.exchange(handoff: handoff)
-        api.sessionToken = token
-        return BackendSession(token: token, athleteID: try await api.signedInAthlete())
+        let signIn = try await api.exchange(handoff: handoff)
+        api.sessionToken = signIn.token
+        return (BackendSession(token: signIn.token, athleteID: try await api.signedInAthlete()),
+                IntervalsCredential(accessToken: signIn.intervalsAccessToken))
     }
 
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {

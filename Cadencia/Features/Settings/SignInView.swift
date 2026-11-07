@@ -1,15 +1,12 @@
 import SwiftUI
 import CadenciaCore
 
-/// First screen when no Intervals.icu credential is stored. OAuth is the primary path when the app has a
-/// registered client id; the API key path always works and is where the design puts it: under "Advanced".
+/// First screen until the athlete is signed in with Intervals.icu through Cadencia's server, which gives the
+/// session for the plan and the coach, and the Intervals.icu token for what this phone sends Intervals itself.
 struct SignInView: View {
     @Environment(AppModel.self) private var model
-    @State private var showAPIKey = false
     @State private var busy = false
     @State private var error: String?
-
-    private var oauthAvailable: Bool { AppConfig.intervalsOAuth != nil }
 
     var body: some View {
         NavigationStack {
@@ -29,124 +26,46 @@ struct SignInView: View {
                         .padding(.horizontal, 32)
                 }
                 Spacer()
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle")
+                if let message = error ?? model.backendError {
+                    Label(message, systemImage: "exclamationmark.triangle")
                         .font(.footnote)
                         .foregroundStyle(.red)
                         .padding(.horizontal, 32)
                 }
-                VStack(spacing: 12) {
-                    if oauthAvailable {
-                        Button {
-                            Task { await signInWithOAuth() }
-                        } label: {
-                            // The hidden title keeps the button from resizing; .regular stops the spinner inheriting .large.
-                            Text("Connect Intervals.icu")
-                                .font(.headline)
-                                .opacity(busy ? 0 : 1)
-                                .overlay { if busy { ProgressView().controlSize(.regular) } }
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .disabled(busy)
-                        Button { showAPIKey = true } label: {
-                            Text("Use an API key instead")
-                                .font(.footnote)
-                                .frame(minHeight: 44)
-                                .contentShape(.rect)
-                        }
-                        .buttonStyle(.borderless)
-                    } else {
-                        Button {
-                            showAPIKey = true
-                        } label: {
-                            Text("Connect with an API key").font(.headline).frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                    }
+                Button {
+                    Task { await signIn() }
+                } label: {
+                    // The hidden title keeps the button from resizing; .regular stops the spinner inheriting .large.
+                    Text("Sign in with Intervals.icu")
+                        .font(.headline)
+                        .opacity(busy ? 0 : 1)
+                        .overlay { if busy { ProgressView().controlSize(.regular) } }
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(busy)
                 .padding(.horizontal, 24)
-                Text("Cadencia stores your credential only in this phone's Keychain and talks to Intervals.icu directly.")
+                Text("Cadencia keeps your plan and the coach's notes on its server in the EU. The coach's AI runs on this phone.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
                     .padding(.bottom, 16)
             }
-            .sheet(isPresented: $showAPIKey) { APIKeyView() }
         }
     }
 
-    private func signInWithOAuth() async {
+    private func signIn() async {
         guard !busy else { return }
         busy = true
         defer { busy = false }
         error = nil
-        do { try await model.signInWithOAuth() } catch { self.error = Self.describe(error) }
-    }
-
-    static func describe(_ error: Error) -> String {
-        if let http = error as? HTTPError, http.isAuthFailure { return String(localized: "Intervals.icu did not accept that credential.") }
-        return error.localizedDescription
-    }
-}
-
-struct APIKeyView: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var key = ""
-    @State private var busy = false
-    @State private var error: String?
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                InfoSection {
-                    SecureField("API key", text: $key)
-                        .textContentType(.password)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .focused($focused)
-                        .submitLabel(.go)
-                        .onSubmit { Task { await connect() } }
-                } header: {
-                    Text("Intervals.icu API key")
-                } information: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("In Intervals.icu open Settings, scroll to Developer Settings and copy the API key. The key gives full access to your account; it never leaves this phone except to call intervals.icu.")
-                        Link("Open Intervals.icu settings", destination: AppConfig.intervalsSettingsURL)
-                    }
-                }
-                if let error {
-                    Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) }
-                }
-            }
-            .navigationTitle("API key")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    if busy { ProgressView() } else { Button("Connect") { Task { await connect() } }.disabled(key.trimmingCharacters(in: .whitespaces).isEmpty) }
-                }
-            }
-            .onAppear { focused = true }
-        }
-    }
-
-    private func connect() async {
-        // The keyboard's Go reaches here even while Connect is disabled for an empty key.
-        guard !busy, !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        busy = true
-        defer { busy = false }
-        error = nil
         do {
-            try await model.signIn(apiKey: key)
-            dismiss()
+            try await model.signIn()
+        } catch BackendSignIn.Failure.cancelled {
         } catch {
-            self.error = SignInView.describe(error)
+            self.error = error.localizedDescription
         }
     }
 }

@@ -36,6 +36,8 @@ export class ConversationThread extends Domain.View("ConversationThread", {
   middleware: [Session],
   rejects: [NotYours],
   state: Schema.Struct({ messages: Schema.Array(ThreadMessage) }),
+  // Bump when the state or how it folds changes, so the view is rebuilt from its events.
+  version: 1,
   initial: { messages: [] },
   evolve: {
     MessageSent: (v, e, { at }) => ({

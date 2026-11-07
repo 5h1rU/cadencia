@@ -4,6 +4,7 @@
     { "path": "./packages/identity" },
     { "path": "./packages/kernel" },
     { "path": "./packages/athlete" },
+    { "path": "./packages/web-api" },
     { "path": "./packages/planning" },
     { "path": "./packages/coach" },
     { "path": "./packages/server" },

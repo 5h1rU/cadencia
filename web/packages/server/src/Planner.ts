@@ -1,31 +1,36 @@
 import type { PlanAnswer, RefusalReason } from "@cadencia/coach/CoachShape";
 import { Planner } from "@cadencia/coach/Planner.external";
-import { system } from "@cadencia/identity/Actor";
+import { athlete } from "@cadencia/identity/Actor";
+import type { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Paragraph } from "@cadencia/kernel/Text";
 import { CoachPlanningApi } from "@cadencia/planning/CoachPlanningApi.api";
+import type * as Domain from "@alchemy.run/domain";
+import * as Model from "@alchemy.run/domain/Model";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { layerOverPlanning } from "./Hosting.ts";
+import { PlanningInternals } from "./Hosting.ts";
 import { actingAs } from "./Session.ts";
+
+/** Every rejection Planning can answer the Coach with, as CoachPlanningApi's commands declare them. */
+type PlanningRejection = InstanceType<Domain.Api.RejectionsOf<typeof CoachPlanningApi>>;
 
 /**
  * Each Planning rejection in the coach's words. This is the anti-corruption
  * layer between the two models: Coach never sees Planning's rejection classes.
+ * Keyed by the rejections Planning declares, so a new one fails to compile
+ * here until it has a translation.
  */
-const REASONS: Record<string, RefusalReason> = {
+const REASONS: { readonly [Tag in PlanningRejection["_tag"]]: RefusalReason } = {
   PlanNotActive: "planNotActive",
   DayNotPlanned: "dayNotPlanned",
-  DayOutsidePlan: "dayOutsidePlan",
-  DayTaken: "dayTaken",
-  SessionNotFound: "sessionNotFound",
   AvailabilityExceeded: "availabilityExceeded",
   IntensityAfterHardTraining: "intensityAfterHardTraining",
   HardensPlannedSession: "hardensPlan",
   PurposeMismatch: "purposeMismatch",
   InvalidPlan: "invalidPlan",
   PlanAlreadyExists: "planAlreadyExists",
+  ImplausibleToday: "implausibleToday",
   NotYours: "notYours",
 };
 
@@ -38,51 +43,82 @@ const detailOf = (rejection: object): Paragraph | null => {
   );
 };
 
-const accepted: PlanAnswer = { _tag: "Accepted" };
+const accepted: { readonly answer: PlanAnswer } = { answer: { _tag: "Accepted" } };
 
-const refused = (rejection: { readonly _tag: string }): Effect.Effect<{ readonly answer: PlanAnswer }> => {
-  const reason = REASONS[rejection._tag];
-  // A rejection without a translation is a contract this adapter does not know yet: a defect, not a refusal.
-  if (!reason) return Effect.die(new Error(`Untranslated Planning rejection: ${rejection._tag}`));
-  return Effect.succeed({ answer: { _tag: "Refused", refusal: { reason, detail: detailOf(rejection) } } });
-};
+const isPlanningRejection = (error: { readonly _tag: string }): error is PlanningRejection => error._tag in REASONS;
 
 /**
- * The Coach's `Planner`, answered by the Planning model in this process. The
- * coach acts as the system: Planning's own rules still decide. Each request's
- * id is the command's id, so a policy that runs again gets the same answer
- * instead of acting twice.
+ * Planning's answer in the coach's words. A rejection is a refusal; anything
+ * else (the in-process transport, a session) is a defect for the policy's
+ * redelivery, not an answer.
+ */
+const answerOf = <A, E extends { readonly _tag: string }>(
+  call: Effect.Effect<A, E>,
+): Effect.Effect<{ readonly answer: PlanAnswer }> =>
+  call.pipe(
+    Effect.as(accepted),
+    Effect.catch((error) =>
+      isPlanningRejection(error)
+        ? Effect.succeed({
+            answer: { _tag: "Refused", refusal: { reason: REASONS[error._tag], detail: detailOf(error) } },
+          } as const)
+        : Effect.die(error),
+    ),
+  );
+
+/**
+ * The Coach's `Planner`, answered by the Planning model in this process. Each
+ * call acts as the athlete the Coach acts for, so Planning's own rules check
+ * that the plan is theirs. A client is built per call: Workers forbid sharing
+ * I/O across requests. Each request's id is the command's id, so a policy that
+ * runs again gets the same answer instead of acting twice.
  */
 export const PlanningPlanner = Planner.toLayer(
   Effect.gen(function* () {
-    const planning = yield* CoachPlanningApi.Client;
+    const internals = yield* PlanningInternals;
+    const asAthlete = <A, E>(
+      athleteId: AthleteId,
+      call: (planning: Effect.Success<typeof CoachPlanningApi.clientInProcess>) => Effect.Effect<A, E>,
+    ) =>
+      CoachPlanningApi.clientInProcess.pipe(
+        Effect.flatMap(call),
+        Effect.provide(actingAs(athlete(athleteId))),
+        Effect.provideService(Model.Internals, internals),
+        Effect.scoped,
+      );
     return {
-      concretizeSession: ({ requestId, planId, day, workout, evidence }) =>
-        planning
-          .ConcretizeSession(planId, { day, workout, evidence }, { commandId: requestId })
-          .pipe(Effect.as({ answer: accepted }), Effect.catch(refused)),
-      reviseWeek: ({ requestId, planId, limits }) =>
-        planning.ReviseWeek(planId, { limits }, { commandId: requestId }).pipe(Effect.as({ answer: accepted }), Effect.catch(refused)),
-      createPlan: ({ requestId, planId, draft }) =>
-        planning
-          .CreatePlan(
+      concretizeSession: ({ requestId, athleteId, planId, day, workout, evidence }) =>
+        answerOf(
+          asAthlete(athleteId, (planning) =>
+            planning.ConcretizeSession(planId, { day, workout, evidence }, { commandId: requestId }),
+          ),
+        ),
+      reviseWeek: ({ requestId, athleteId, planId, limits, today }) =>
+        answerOf(
+          asAthlete(athleteId, (planning) => planning.ReviseWeek(planId, { limits, today }, { commandId: requestId })),
+        ),
+      // The plan's objective is the one agreed in the consultation; the draft's rationale explains the
+      // draft to the athlete and stays with the consultation.
+      createPlan: ({ requestId, athleteId, planId, draft }) =>
+        answerOf(
+          asAthlete(athleteId, (planning) =>
+            planning.CreatePlan(
             planId,
             {
-            athleteId: draft.athleteId,
-            title: draft.title,
-            goal: draft.goal,
-            startDay: draft.startDay,
-            endDay: draft.endDay,
-            phases: draft.phases,
-            longRideWeekday: draft.longRideWeekday,
-            event: draft.event ? { ...draft.event, objective: draft.objective } : null,
-            sessions: draft.sessions,
+              title: draft.title,
+              goal: draft.goal,
+              objective: draft.objective,
+              startDay: draft.startDay,
+              endDay: draft.endDay,
+              phases: draft.phases,
+              longRideWeekday: draft.longRideWeekday,
+              event: draft.event ? { ...draft.event, objective: draft.objective } : null,
+              sessions: draft.sessions,
             },
-            { commandId: requestId },
-          )
-          .pipe(Effect.as({ answer: accepted }), Effect.catch(refused)),
+              { commandId: requestId },
+            ),
+          ),
+        ),
     };
   }),
-).pipe(
-  Layer.provide(layerOverPlanning(CoachPlanningApi.layerClientInProcess.pipe(Layer.provide(actingAs(system("coach")))))),
 );

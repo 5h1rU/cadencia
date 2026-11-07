@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { PlanId } from "@cadencia/kernel/Plan.id";
-import { ExternalId, externalIdFor, IntervalsEventId, SessionId } from "../src/Plan/Session.id.ts";
+import { ExternalId, externalIdFor, SessionId } from "../src/Plan/Session.id.ts";
 
 const UUID = "0b6f5a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b";
 
@@ -10,7 +10,6 @@ const UUID = "0b6f5a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b";
 const cases: ReadonlyArray<readonly [string, Schema.Top, ReadonlyArray<unknown>, ReadonlyArray<unknown>]> = [
   ["SessionId", SessionId, ["2026-11-09"], ["s1", ""]],
   ["ExternalId", ExternalId, [`cadencia-i100-${UUID}-2026-11-09`], ["cadencia-i100-p1-2026-11-09", "other-app-1"]],
-  ["IntervalsEventId", IntervalsEventId, [1, 98765], [0, -1, 1.5]],
 ];
 
 describe("the schema catalog", () => {

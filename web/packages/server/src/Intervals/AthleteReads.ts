@@ -1,131 +1,127 @@
-import { FtpWatts, Kilograms, WellnessScale } from "@cadencia/athlete/Measures";
-import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { IntervalsActivityId } from "@cadencia/athlete/Activity.id";
+import { ActivitySummary } from "@cadencia/athlete/ActivitySummary";
+import { AthleteMeasures } from "@cadencia/athlete/AthleteMeasures";
+import type { HistoryRange } from "@cadencia/athlete/HistoryRange";
+import { Bpm, FtpWatts, HrvMs, Kilograms, Rpe, TrainingLoad, Watts, WellnessScale } from "@cadencia/athlete/Measures";
+import { WellnessDay, WellnessDeclaration } from "@cadencia/athlete/Wellness";
+import type { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Day } from "@cadencia/kernel/Calendar/Day";
-import { Paragraph } from "@cadencia/kernel/Text";
+import { Paragraph, Title } from "@cadencia/kernel/Text";
+import { Kilometers, Seconds } from "@cadencia/kernel/Training/Units";
+import { IntervalsUnavailable } from "@cadencia/web-api/IntervalsGroup";
 import * as Effect from "effect/Effect";
-import { HttpServerRequest } from "effect/http/HttpServerRequest";
-import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Option from "effect/Option";
+import type * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import { Connections } from "../Connections.ts";
-import { actorOf } from "../Session.ts";
 import { athletePath, callIntervals } from "./IntervalsHttp.ts";
 
-/** Only these fields leave the server: what the web shows, never Intervals' whole record. */
-const pick = <K extends string>(row: unknown, keys: ReadonlyArray<K>): Partial<Record<K, unknown>> => {
-  const source = (row ?? {}) as Record<string, unknown>;
-  return Object.fromEntries(keys.filter((k) => source[k] !== undefined).map((k) => [k, source[k]])) as Partial<
-    Record<K, unknown>
-  >;
+// The edge between Intervals.icu and the web: each row Intervals returns is
+// decoded here into Cadencia's read models (`@cadencia/athlete`), and only
+// those leave the server. Intervals' own names and values never reach the app.
+// The web reaches these through `WebApi`'s `intervals` group.
+
+type Row = Readonly<Record<string, unknown>>;
+
+const rowOf = (value: unknown): Row =>
+  typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Row) : {};
+
+/** The value when `schema` accepts it, else null: one field Cadencia can't use never loses the row. */
+const orNull = <S extends Schema.ConstraintDecoder<unknown>>(schema: S, value: unknown): S["Type"] | null =>
+  Option.getOrNull(Schema.decodeUnknownOption(schema)(value));
+
+/** Text any app, or the athlete, wrote: trimmed first, as Cadencia's text never has outer spaces. */
+const trimmed = (value: unknown) => (typeof value === "string" ? value.trim() : value);
+
+/** An Intervals activity, or none when it has no id Cadencia can name it by. */
+export const activityFromIntervals = (value: unknown): Option.Option<ActivitySummary> => {
+  const row = rowOf(value);
+  return Option.map(Schema.decodeUnknownOption(IntervalsActivityId)(row.id), (activityId) => ({
+    activityId,
+    day: orNull(Day, typeof row.start_date_local === "string" ? row.start_date_local.slice(0, 10) : null),
+    name: orNull(Title, trimmed(row.name)),
+    movingTime: orNull(Seconds, row.moving_time),
+    // Intervals measures distance in metres.
+    distance: orNull(Kilometers, typeof row.distance === "number" ? row.distance / 1000 : null),
+    trainingLoad: orNull(TrainingLoad, row.icu_training_load),
+    averagePower: orNull(Watts, row.icu_average_watts),
+    normalizedPower: orNull(Watts, row.icu_weighted_avg_watts),
+    averageHeartRate: orNull(Bpm, row.average_heartrate),
+    rpe: orNull(Rpe, row.icu_rpe),
+  }));
 };
 
-const WELLNESS_FIELDS = [
-  "id", "ctl", "atl", "weight", "restingHR", "hrv", "sleepSecs", "sleepQuality",
-  "soreness", "fatigue", "stress", "mood", "motivation", "injury", "readiness", "comments",
-] as const;
+/** A day of Intervals wellness, or none when its id is not a day. */
+export const wellnessFromIntervals = (value: unknown): Option.Option<WellnessDay> => {
+  const row = rowOf(value);
+  return Option.map(Schema.decodeUnknownOption(Day)(row.id), (day) => ({
+    day,
+    fitness: orNull(TrainingLoad, row.ctl),
+    acuteLoad: orNull(TrainingLoad, row.atl),
+    weight: orNull(Kilograms, row.weight),
+    restingHeartRate: orNull(Bpm, row.restingHR),
+    hrv: orNull(HrvMs, row.hrv),
+    sleep: orNull(Seconds, row.sleepSecs),
+    sleepQuality: orNull(WellnessScale, row.sleepQuality),
+    soreness: orNull(WellnessScale, row.soreness),
+    fatigue: orNull(WellnessScale, row.fatigue),
+    stress: orNull(WellnessScale, row.stress),
+    mood: orNull(WellnessScale, row.mood),
+    motivation: orNull(WellnessScale, row.motivation),
+    injury: orNull(WellnessScale, row.injury),
+    comments: orNull(Paragraph, trimmed(row.comments)),
+  }));
+};
 
-const ACTIVITY_FIELDS = [
-  "id", "name", "type", "start_date_local", "moving_time", "distance", "icu_training_load",
-  "icu_average_watts", "icu_weighted_avg_watts", "average_heartrate", "icu_rpe", "feel",
-  "paired_event_id", "compliance",
-] as const;
+/** The athlete's Intervals record: their name, weight and Ride FTP. */
+export const measuresFromIntervals = (value: unknown): AthleteMeasures => {
+  const athlete = rowOf(value);
+  const settings = Array.isArray(athlete.sportSettings) ? athlete.sportSettings.map(rowOf) : [];
+  const ride = settings.find((s) => Array.isArray(s.types) && s.types.includes("Ride"));
+  return {
+    name: orNull(Title, trimmed(athlete.name)),
+    weight: orNull(Kilograms, athlete.icu_weight ?? athlete.weight),
+    ftp: orNull(FtpWatts, ride?.ftp),
+  };
+};
 
-/** What an athlete may declare from the web. Each maps to an Intervals wellness field. */
-const WellnessDeclaration = Schema.Struct({
-  weight: Schema.optional(Kilograms),
-  soreness: Schema.optional(WellnessScale),
-  fatigue: Schema.optional(WellnessScale),
-  stress: Schema.optional(WellnessScale),
-  mood: Schema.optional(WellnessScale),
-  motivation: Schema.optional(WellnessScale),
-  sleepQuality: Schema.optional(WellnessScale),
-  injury: Schema.optional(WellnessScale),
-  comments: Schema.optional(Paragraph),
+/** Every row of a list Intervals returned that decodes; anything else is left out. */
+export const rowsFromIntervals = <A>(rows: unknown, decode: (row: unknown) => Option.Option<A>): ReadonlyArray<A> =>
+  Array.isArray(rows) ? rows.flatMap((row) => Option.toArray(decode(row))) : [];
+
+/** A declaration as Intervals' wellness record: Cadencia's names are Intervals' here, and the day is its id. */
+export const wellnessForIntervals = (day: Day, declaration: WellnessDeclaration) => ({
+  id: day,
+  ...Schema.encodeSync(WellnessDeclaration)(declaration),
 });
 
-/** A range of days to read, from the query string. */
-const DayRange = Schema.Struct({ oldest: Day, newest: Day }).pipe(
-  Schema.check(Schema.makeFilter((r) => (r.oldest <= r.newest ? undefined : "oldest comes on or before newest"))),
-);
+/** Intervals' error as the web's: whatever went wrong, it didn't answer. */
+const unavailable = Effect.mapError(() => new IntervalsUnavailable());
 
-/**
- * `/api/intervals/*`: reads and declarations the web makes on Intervals.icu,
- * the system of record, as the signed-in athlete. None needs AI.
- */
-export const athleteReadsRoute = Effect.gen(function* () {
-  const request = yield* HttpServerRequest;
-  const actor = yield* actorOf(request.headers);
-  if (Option.isNone(actor) || actor.value._tag !== "Athlete") return HttpServerResponse.empty({ status: 401 });
-  const athleteId: AthleteId = actor.value.athleteId;
-  const connection = yield* (yield* Connections).find(athleteId);
-  if (Option.isNone(connection)) return HttpServerResponse.text("Connect Intervals.icu again.", { status: 409 });
-  const token = connection.value.token;
-  const url = new URL(request.url, "http://localhost");
-  const path = url.pathname.replace(/^\/api\/intervals/, "");
-  const range = () =>
-    Schema.decodeUnknownOption(DayRange)({ oldest: url.searchParams.get("oldest"), newest: url.searchParams.get("newest") });
-  const fail = () => HttpServerResponse.text("Intervals.icu did not answer. Try again.", { status: 502 });
+/** The athlete's wellness in a range, from Intervals. */
+export const readWellness = (token: Redacted.Redacted<string>, athleteId: AthleteId, range: HistoryRange) =>
+  callIntervals(token, "GET", athletePath(athleteId, "/wellness"), { query: range }).pipe(
+    Effect.map((rows) => rowsFromIntervals(rows, wellnessFromIntervals)),
+    unavailable,
+  );
 
-  if (request.method === "GET" && path === "/wellness") {
-    const r = range();
-    if (Option.isNone(r)) return HttpServerResponse.text("Expected ?oldest=YYYY-MM-DD&newest=YYYY-MM-DD", { status: 400 });
-    return yield* callIntervals(token, "GET", athletePath(athleteId, "/wellness"), { query: r.value }).pipe(
-      Effect.flatMap((rows) => HttpServerResponse.json((Array.isArray(rows) ? rows : []).map((row) => pick(row, WELLNESS_FIELDS)))),
-      Effect.catchTag("IntervalsError", () => Effect.succeed(fail())),
-    );
-  }
-  if (request.method === "GET" && path === "/activities") {
-    const r = range();
-    if (Option.isNone(r)) return HttpServerResponse.text("Expected ?oldest=YYYY-MM-DD&newest=YYYY-MM-DD", { status: 400 });
-    return yield* callIntervals(token, "GET", athletePath(athleteId, "/activities"), { query: r.value }).pipe(
-      Effect.flatMap((rows) => HttpServerResponse.json((Array.isArray(rows) ? rows : []).map((row) => pick(row, ACTIVITY_FIELDS)))),
-      Effect.catchTag("IntervalsError", () => Effect.succeed(fail())),
-    );
-  }
-  if (request.method === "GET" && path === "/athlete") {
-    return yield* callIntervals(token, "GET", athletePath(athleteId, "")).pipe(
-      Effect.flatMap((athlete) => {
-        const a = (athlete ?? {}) as Record<string, unknown>;
-        const ride = ((a.sportSettings as Array<Record<string, unknown>>) ?? []).find((s) =>
-          ((s.types as Array<string>) ?? []).includes("Ride"),
-        );
-        return HttpServerResponse.json({
-          athleteId,
-          name: a.name ?? null,
-          weight: a.icu_weight ?? a.weight ?? null,
-          height: a.height ?? null,
-          ftp: ride?.ftp ?? null,
-          measurementPreference: a.measurement_preference ?? null,
-        });
-      }),
-      Effect.catchTag("IntervalsError", () => Effect.succeed(fail())),
-    );
-  }
-  const wellnessDay = Option.flatMap(Option.fromNullishOr(/^\/wellness\/([^/]+)$/.exec(path)?.[1]), Schema.decodeUnknownOption(Day));
-  if (request.method === "PUT" && Option.isSome(wellnessDay)) {
-    const body = yield* request.json.pipe(Effect.flatMap(Schema.decodeUnknownEffect(WellnessDeclaration)), Effect.option);
-    if (Option.isNone(body)) return HttpServerResponse.text("Unexpected wellness fields", { status: 400 });
-    return yield* callIntervals(token, "PUT", athletePath(athleteId, `/wellness/${wellnessDay.value}`), {
-      body: { id: wellnessDay.value, ...body.value },
-    }).pipe(
-      Effect.as(HttpServerResponse.empty({ status: 204 })),
-      Effect.catchTag("IntervalsError", () => Effect.succeed(fail())),
-    );
-  }
-  if (request.method === "PUT" && path === "/ftp") {
-    const body = yield* request.json.pipe(
-      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Struct({ ftp: FtpWatts }))),
-      Effect.option,
-    );
-    if (Option.isNone(body)) {
-      return HttpServerResponse.text("Expected { ftp } between 30 and 700 W", { status: 400 });
-    }
-    return yield* callIntervals(token, "PUT", `/api/v1/athlete/${athleteId}/sport-settings/Ride`, {
-      body: { ftp: body.value.ftp },
-    }).pipe(
-      Effect.as(HttpServerResponse.empty({ status: 204 })),
-      Effect.catchTag("IntervalsError", () => Effect.succeed(fail())),
-    );
-  }
-  return HttpServerResponse.text("Not Found", { status: 404 });
-});
+/** The athlete's activities in a range, from Intervals. */
+export const readActivities = (token: Redacted.Redacted<string>, athleteId: AthleteId, range: HistoryRange) =>
+  callIntervals(token, "GET", athletePath(athleteId, "/activities"), { query: range }).pipe(
+    Effect.map((rows) => rowsFromIntervals(rows, activityFromIntervals)),
+    unavailable,
+  );
+
+/** The athlete's name, weight and Ride FTP, from Intervals. */
+export const readMeasures = (token: Redacted.Redacted<string>, athleteId: AthleteId) =>
+  callIntervals(token, "GET", athletePath(athleteId, "")).pipe(Effect.map(measuresFromIntervals), unavailable);
+
+/** Record a wellness declaration in Intervals, where it belongs. */
+export const declareWellness = (
+  token: Redacted.Redacted<string>,
+  athleteId: AthleteId,
+  day: Day,
+  declaration: WellnessDeclaration,
+) =>
+  callIntervals(token, "PUT", athletePath(athleteId, `/wellness/${day}`), {
+    body: wellnessForIntervals(day, declaration),
+  }).pipe(Effect.asVoid, unavailable);

@@ -39,7 +39,7 @@ struct PlanConsultationPreview: View {
         let coach = LLMCoach(transport: transport, endpoint: URL(string: "https://example.invalid/chat/completions")!, apiKey: "preview")
         let backend = CoachBackend(api: CadenciaAPI(baseURL: URL(string: "https://cadencia.invalid")!, transport: transport, sessionToken: "preview"),
                                    athleteId: athlete, pause: { _ in })
-        let model = AppModel(state: state, credential: .apiKey("preview"), store: .temporary(), keychain: KeychainStore(service: "preview.consultation"),
+        let model = AppModel(state: state, credential: IntervalsCredential(accessToken: "preview"), store: .temporary(), keychain: KeychainStore(service: "preview.consultation"),
                              transport: transport, coachOverride: coach, backendOverride: backend)
         model.previewConsultationReply(session.reply!)
         return model

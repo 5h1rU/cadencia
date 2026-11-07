@@ -1,10 +1,11 @@
 import { ownerOf } from "@cadencia/identity/Athlete.id";
+import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { mustOwn } from "@cadencia/identity/owns";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { inputOf } from "../inputOf.ts";
-import { AcceptIntent, IntentAccepted } from "./AcceptIntent.command.ts";
+import { AcceptIntent, IntentAccepted, IntentExpired } from "./AcceptIntent.command.ts";
 import { ConversationId } from "./Conversation.id.ts";
 import { DismissIntent, IntentDismissed } from "./DismissIntent.command.ts";
 import { Intent, IntentStatus } from "./Intent.ts";
@@ -41,13 +42,18 @@ export class Conversation extends Domain.Aggregate("Conversation", {
     }),
     RecordCoachReply: Effect.fn(function* (_, cmd, { id }) {
       yield* mustOwn(ownerOf(id));
+      // An intent changes the athlete's own plan; the plan id names its athlete.
+      if (cmd.intent !== null && ownerOf(cmd.intent.planId) !== ownerOf(id)) return yield* new NotYours();
       return [new CoachReplied(inputOf(cmd))];
     }),
     AcceptIntent: Effect.fn(function* (state, cmd, { id }) {
       yield* mustOwn(ownerOf(id));
       const open = openIntent(state, cmd.messageId);
       if (!open) return yield* new NoOpenIntent({ messageId: cmd.messageId });
-      return [new IntentAccepted({ messageId: cmd.messageId, intent: open.intent })];
+      if (open.intent.limits.every((limit) => limit.day < cmd.today)) {
+        return yield* new IntentExpired({ messageId: cmd.messageId });
+      }
+      return [new IntentAccepted({ messageId: cmd.messageId, intent: open.intent, today: cmd.today })];
     }),
     DismissIntent: Effect.fn(function* (state, cmd, { id }) {
       yield* mustOwn(ownerOf(id));

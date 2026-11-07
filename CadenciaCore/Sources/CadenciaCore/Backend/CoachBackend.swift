@@ -93,8 +93,12 @@ public struct CoachBackend: Sendable {
     }
 
     /// Accepts the change a reply proposes and returns the thread once the plan has applied or refused it.
-    public func acceptIntent(messageId: CadenciaAPI.MessageId, in conversation: CadenciaAPI.ConversationId) async throws -> CadenciaAPI.ConversationThreadState? {
-        let receipt = try await send { try await api.acceptIntent(conversation, .init(messageId: messageId), commandId: $0) }
+    /// `today` is the athlete's local day: the plan revises the week from it, and refuses a change whose days
+    /// have all passed (`IntentExpired`).
+    public func acceptIntent(messageId: CadenciaAPI.MessageId, in conversation: CadenciaAPI.ConversationId,
+                             today: Day) async throws -> CadenciaAPI.ConversationThreadState? {
+        let input = CadenciaAPI.AcceptIntentInput(messageId: messageId, today: .init(today))
+        let receipt = try await send { try await api.acceptIntent(conversation, input, commandId: $0) }
         let thread = try await answer(read: { try await api.getConversationThread(conversation, after: $0) }, after: receipt) { thread in
             let status = thread.messages.first { $0.messageId == messageId }?.intentStatus
             return status != .accepted
@@ -177,8 +181,9 @@ public struct CoachBackend: Sendable {
         return try await api.getCurrentPlan(athleteId, after: receipt)
     }
 
-    public func retirePlan(_ planId: CadenciaAPI.PlanId) async throws -> CadenciaAPI.CurrentPlanState? {
-        let receipt = try await send { try await api.retirePlan(planId, commandId: $0) }
+    /// Retires the plan as of `today`, the athlete's local day: the plan withdraws its sessions from that day on.
+    public func retirePlan(_ planId: CadenciaAPI.PlanId, today: Day) async throws -> CadenciaAPI.CurrentPlanState? {
+        let receipt = try await send { try await api.retirePlan(planId, .init(today: .init(today)), commandId: $0) }
         return try await api.getCurrentPlan(athleteId, after: receipt)
     }
 

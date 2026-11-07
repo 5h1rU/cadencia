@@ -55,7 +55,7 @@ final class FeedbackWellnessTests: XCTestCase {
     func testWellnessDecodesSubjectiveFieldsAndIgnoresUnsetValues() async throws {
         let body = #"[{"id":"2026-11-02","soreness":3,"fatigue":-1,"sleepQuality":1,"motivation":2,"mood":4,"stress":2,"injury":1,"comments":"Tired"}]"#
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(body.utf8))])
-        let days = try await IntervalsClient(transport: t, credential: .apiKey("k")).wellness(oldest: monday, newest: monday)
+        let days = try await IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k")).wellness(oldest: monday, newest: monday)
         let day = try XCTUnwrap(days.first)
         XCTAssertNil(day.fatigue, "-1 is Intervals' unset value")
         let feedback = try XCTUnwrap(SubjectiveFeedback(wellness: day))
@@ -68,7 +68,7 @@ final class FeedbackWellnessTests: XCTestCase {
 
     func testSingleDayWriteUsesPutWellnessAndLocalDateForTodaysWeight() async throws {
         let t = FakeTransport()
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         try await client.updateWellness(WellnessUpdate(day: monday, weightKg: 71.4), localDate: monday)
         XCTAssertEqual(t.requests[0].method, .put)
         XCTAssertEqual(t.requests[0].url.path, "/api/v1/athlete/0/wellness/2026-11-02")
@@ -79,7 +79,7 @@ final class FeedbackWellnessTests: XCTestCase {
     func testSeveralDaysGoInOneBulkRequest() async throws {
         let t = FakeTransport()
         let updates = [WellnessUpdate(day: monday, soreness: 2), WellnessUpdate(day: monday.adding(days: 1), motivation: 1)]
-        try await IntervalsClient(transport: t, credential: .apiKey("k")).updateWellness(updates)
+        try await IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k")).updateWellness(updates)
         XCTAssertEqual(t.requests.count, 1)
         XCTAssertEqual(t.requests[0].url.path, "/api/v1/athlete/0/wellness-bulk")
         let rows = try XCTUnwrap(json(t.requests[0]) as? [[String: Any]])
@@ -127,14 +127,6 @@ final class FeedbackWellnessTests: XCTestCase {
         XCTAssertTrue(outbox.isEmpty)
     }
 
-    func testFlushHoldsWellnessWhenTheTokenOnlyReads() async {
-        let t = FakeTransport()
-        let client = IntervalsClient(transport: t, credential: .oauth(accessToken: "x", scopes: ["WELLNESS:READ", "SETTINGS:READ"]))
-        let result = await client.flush(IntervalsOutbox(wellness: [WellnessUpdate(day: monday, soreness: 2)]), ftp: nil, athlete: nil, today: monday)
-        XCTAssertTrue(t.requests.isEmpty)
-        XCTAssertEqual(result.missingScopes, [.wellnessWrite])
-        XCTAssertTrue(result.wellness.isEmpty)
-    }
 }
 
 // MARK: - 2. FTP → sport settings; estimate from Intervals' eFTP
@@ -142,7 +134,7 @@ final class FeedbackWellnessTests: XCTestCase {
 final class FTPSourceOfTruthTests: XCTestCase {
     func testAcceptedFTPWritesRideSportSettingsAndIndoorFTPWhenUsed() async throws {
         let t = FakeTransport()
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let athlete = AthleteProfile(id: "i1", name: "F", ftp: 240, indoorFTP: 232)
         let result = await client.flush(IntervalsOutbox(), ftp: 251, athlete: athlete, today: monday)
         XCTAssertEqual(result.ftp, 251)
@@ -156,19 +148,10 @@ final class FTPSourceOfTruthTests: XCTestCase {
 
     func testFTPIntervalsAlreadyHoldsIsConfirmedWithoutAWrite() async {
         let t = FakeTransport()
-        let result = await IntervalsClient(transport: t, credential: .apiKey("k"))
+        let result = await IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
             .flush(IntervalsOutbox(), ftp: 240, athlete: AthleteProfile(id: "i1", name: "F", ftp: 240), today: monday)
         XCTAssertEqual(result.ftp, 240)
         XCTAssertTrue(t.requests.isEmpty)
-    }
-
-    func testFTPWaitsForSettingsWriteScope() async {
-        let t = FakeTransport()
-        let result = await IntervalsClient(transport: t, credential: .oauth(accessToken: "x", scopes: ["SETTINGS:READ"]))
-            .flush(IntervalsOutbox(heightCm: 180), ftp: 250, athlete: nil, today: monday)
-        XCTAssertTrue(t.requests.isEmpty)
-        XCTAssertNil(result.ftp)
-        XCTAssertEqual(result.missingScopes, [.settingsWrite])
     }
 
     func testEstimatePrefersIntervalsRollingFTPOverLocalHeuristics() throws {
@@ -193,7 +176,7 @@ final class FTPSourceOfTruthTests: XCTestCase {
 final class MeasurementsSourceOfTruthTests: XCTestCase {
     func testAthleteHeightIsReadInMetresAndWrittenInMetres() async throws {
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"id":"i1","height":1.78,"measurement_preference":"feet"}"#.utf8))])
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let athlete = try await client.athlete()
         XCTAssertEqual(athlete.heightCm, 178)
         XCTAssertEqual(athlete.measurementPreference, "feet")
@@ -206,7 +189,7 @@ final class MeasurementsSourceOfTruthTests: XCTestCase {
         let t = FakeTransport()
         let outbox = IntervalsOutbox(wellness: [WellnessUpdate(day: monday.adding(days: -1), soreness: 2),
                                                 WellnessUpdate(day: monday, weightKg: 70.2)], heightCm: 179)
-        let result = await IntervalsClient(transport: t, credential: .apiKey("k")).flush(outbox, ftp: nil, athlete: nil, today: monday)
+        let result = await IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k")).flush(outbox, ftp: nil, athlete: nil, today: monday)
         XCTAssertEqual(t.requests.map(\.url.path), ["/api/v1/athlete/0/wellness/2026-11-02", "/api/v1/athlete/0/wellness/2026-11-01", "/api/v1/athlete/0"])
         XCTAssertEqual(query(t.requests[0])["localDate"], "2026-11-02")
         XCTAssertEqual(Set(result.wellness.map(\.day)), [monday, monday.adding(days: -1)])
@@ -250,7 +233,7 @@ final class AvailabilitySourceOfTruthTests: XCTestCase {
     func testAvailabilityIsDecodedAndWrittenOnTheAthlete() async throws {
         let athleteJSON = #"{"id":"i1","training_availability":[{"day_of_week":1,"training_availability":"LIMITED","max_training_time":3600,"can_train_sports":["Ride"]}]}"#
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(athleteJSON.utf8))])
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let athlete = try await client.athlete()
         XCTAssertEqual(athlete.trainingAvailability, [IntervalsAvailabilityDay(dayOfWeek: 1, level: .limited, maxTrainingSeconds: 3600, sports: ["Ride"])])
         try await client.updateAthlete(trainingAvailability: [IntervalsAvailabilityDay(dayOfWeek: 3, level: .unavailable)])
@@ -345,7 +328,7 @@ final class CalendarEntryTests: XCTestCase {
         let entry = CalendarEntry.race(TrainingEvent(name: "Race", day: monday.adding(days: 10)))
         let created = #"[{"id":77,"external_id":"cadencia-race-2026-11-12","category":"RACE_A"}]"#
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data("[]".utf8)), HTTPResponse(status: 200, body: Data(created.utf8))])
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let base = try await client.syncCalendarEntries([entry], base: [:], today: monday)
         XCTAssertEqual(t.requests.map(\.method), [.get, .post])
         XCTAssertEqual(t.requests[1].url.path, "/api/v1/athlete/0/events/bulk")
@@ -358,7 +341,7 @@ final class CalendarEntryTests: XCTestCase {
 
     func testRetiredEntriesAreBulkDeletedByExternalIDAndKnownIDs() async throws {
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"eventsDeleted":1}"#.utf8))])
-        try await IntervalsClient(transport: t, credential: .apiKey("k"))
+        try await IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
             .deleteEvents([.init(externalID: "cadencia-ride-2026-11-02", eventID: 41), .init(externalID: nil, eventID: 12)])
         XCTAssertEqual(t.requests[0].url.path, "/api/v1/athlete/0/events/bulk-delete")
         let items = try XCTUnwrap(json(t.requests[0]) as? [[String: AnyHashable]])
@@ -410,7 +393,7 @@ final class PlannedSessionNativeFieldTests: XCTestCase {
     func testUpsertWritesIndoorFTPTagsAndDayIdentity() async throws {
         var session = PlannedSession(day: monday, kind: .threshold, title: "Threshold", targetMinutes: 60, location: .indoor, prescriptionFTP: 236)
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"id":9}"#.utf8))])
-        _ = try await IntervalsClient(transport: t, credential: .apiKey("k")).upsertPlannedWorkout(session, ftp: 250)
+        _ = try await IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k")).upsertPlannedWorkout(session, ftp: 250)
         var body = try XCTUnwrap(json(t.requests[0]) as? [String: Any])
         XCTAssertEqual(body["external_id"] as? String, "cadencia-ride-2026-11-02")
         XCTAssertEqual(body["indoor"] as? Bool, true)
@@ -418,7 +401,7 @@ final class PlannedSessionNativeFieldTests: XCTestCase {
         XCTAssertEqual(body["tags"] as? [String], ["threshold"])
         session.location = .outdoor
         t.responses = [HTTPResponse(status: 200, body: Data(#"{"id":9}"#.utf8))]
-        _ = try await IntervalsClient(transport: t, credential: .apiKey("k")).upsertPlannedWorkout(session, ftp: 250, existingEventID: 9)
+        _ = try await IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k")).upsertPlannedWorkout(session, ftp: 250, existingEventID: 9)
         body = try XCTUnwrap(json(t.requests[1]) as? [String: Any])
         XCTAssertEqual(body["icu_ftp"] as? Int, 250, "outdoor watts were scaled to the outdoor FTP")
         XCTAssertEqual(body["indoor"] as? Bool, false)
@@ -489,25 +472,16 @@ final class UnitsSourceOfTruthTests: XCTestCase {
 
     func testUnitsAreWrittenOnTheAthlete() async throws {
         let t = FakeTransport()
-        let result = await IntervalsClient(transport: t, credential: .apiKey("k"))
+        let result = await IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
             .flush(IntervalsOutbox(measurementPreference: "feet"), ftp: nil, athlete: nil, today: monday)
         XCTAssertEqual(result.measurementPreference, "feet")
         XCTAssertEqual((try json(t.requests.first) as? [String: String])?["measurement_preference"], "feet")
     }
 }
 
-// MARK: - Scopes and the one-time migration
+// MARK: - The one-time migration
 
-final class ScopesAndMigrationTests: XCTestCase {
-    func testOldTokensMissTheNewWriteScopesAndAPIKeysNeverDo() {
-        let old = IntervalsCredential.oauth(accessToken: "x", scopes: ["ACTIVITY:WRITE", "WELLNESS:READ", "CALENDAR:WRITE", "SETTINGS:READ", "CHATS:WRITE"])
-        XCTAssertEqual(old.missingScopes, [.wellnessWrite, .settingsWrite])
-        XCTAssertFalse(old.grants(.wellnessWrite))
-        XCTAssertTrue(old.grants(.calendarWrite))
-        XCTAssertEqual(IntervalsCredential.oauth(accessToken: "x", scopes: IntervalsOAuth.defaultScopes).missingScopes, [])
-        XCTAssertEqual(IntervalsCredential.apiKey("k").missingScopes, [])
-    }
-
+final class MigrationTests: XCTestCase {
     func testMigrationUploadsLocalDataOnceWithoutOverwritingIntervals() {
         let feedback = [SubjectiveFeedback(day: monday, rpe: 6, legs: .heavy, motivation: 5),
                         SubjectiveFeedback(day: monday.adding(days: 1), legs: .fresh, note: "Great")]

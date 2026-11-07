@@ -1,4 +1,5 @@
 import { EvidenceSnapshot } from "@cadencia/athlete/Evidence";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { Workout } from "@cadencia/kernel/Training/Workout";
@@ -24,20 +25,35 @@ export const requestFor = (envelope: { readonly stream: string; readonly seq: nu
   PlannerRequestId.make(`${envelope.stream}:${envelope.seq}`);
 
 /**
- * The Planning model, in the coach's language. The coach proposes; Planning
- * decides with its own rules and answers whether it accepted.
+ * The Planning model, in the coach's language. The coach proposes on behalf of
+ * `athleteId`, the athlete whose decision, intent or consultation it is;
+ * Planning decides with its own rules, as that athlete, and answers whether it
+ * accepted.
  */
 export class Planner extends Domain.ExternalSystem("Planner", {
   concretizeSession: {
-    args: { requestId: PlannerRequestId, planId: PlanId, day: Day, workout: Workout, evidence: EvidenceSnapshot },
+    args: {
+      requestId: PlannerRequestId,
+      athleteId: AthleteId,
+      planId: PlanId,
+      day: Day,
+      workout: Workout,
+      evidence: EvidenceSnapshot,
+    },
     success: { answer: PlanAnswer },
   },
   reviseWeek: {
-    args: { requestId: PlannerRequestId, planId: PlanId, limits: Schema.Array(DayLimit) },
+    args: {
+      requestId: PlannerRequestId,
+      athleteId: AthleteId,
+      planId: PlanId,
+      limits: Schema.Array(DayLimit),
+      today: Day,
+    },
     success: { answer: PlanAnswer },
   },
   createPlan: {
-    args: { requestId: PlannerRequestId, planId: PlanId, draft: PlanDraft },
+    args: { requestId: PlannerRequestId, athleteId: AthleteId, planId: PlanId, draft: PlanDraft },
     success: { answer: PlanAnswer },
   },
 }) {}

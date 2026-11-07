@@ -206,10 +206,36 @@ extension CadenciaAPI {
             case retired
         }
 
+        public struct CalendarProblem: Codable, Equatable, Sendable {
+            public enum Problem: String, Codable, Equatable, Sendable, CaseIterable {
+                case notConnected
+                case refused
+            }
+
+            public var sessionId: SessionId
+            public var problem: Problem
+
+            public init(sessionId: SessionId, problem: Problem) {
+                self.sessionId = sessionId
+                self.problem = problem
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case sessionId, problem
+            }
+
+            public func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(sessionId, forKey: .sessionId)
+                try container.encode(problem, forKey: .problem)
+            }
+        }
+
         public var planId: PlanId?
         public var status: Status
         public var title: Title?
         public var goal: GoalKind?
+        public var objective: Paragraph?
         public var startDay: Day?
         public var endDay: Day?
         public var phases: [PlanPhase]
@@ -217,12 +243,14 @@ extension CadenciaAPI {
         public var event: GoalEvent?
         public var sessions: [PlannedSession]
         public var requirements: [DayRequirement]
+        public var calendarProblems: [CalendarProblem]
 
-        public init(planId: PlanId? = nil, status: Status, title: Title? = nil, goal: GoalKind? = nil, startDay: Day? = nil, endDay: Day? = nil, phases: [PlanPhase], longRideWeekday: Weekday? = nil, event: GoalEvent? = nil, sessions: [PlannedSession], requirements: [DayRequirement]) {
+        public init(planId: PlanId? = nil, status: Status, title: Title? = nil, goal: GoalKind? = nil, objective: Paragraph? = nil, startDay: Day? = nil, endDay: Day? = nil, phases: [PlanPhase], longRideWeekday: Weekday? = nil, event: GoalEvent? = nil, sessions: [PlannedSession], requirements: [DayRequirement], calendarProblems: [CalendarProblem]) {
             self.planId = planId
             self.status = status
             self.title = title
             self.goal = goal
+            self.objective = objective
             self.startDay = startDay
             self.endDay = endDay
             self.phases = phases
@@ -230,10 +258,11 @@ extension CadenciaAPI {
             self.event = event
             self.sessions = sessions
             self.requirements = requirements
+            self.calendarProblems = calendarProblems
         }
 
         private enum CodingKeys: String, CodingKey {
-            case planId, status, title, goal, startDay, endDay, phases, longRideWeekday, event, sessions, requirements
+            case planId, status, title, goal, objective, startDay, endDay, phases, longRideWeekday, event, sessions, requirements, calendarProblems
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -242,6 +271,7 @@ extension CadenciaAPI {
             try container.encode(status, forKey: .status)
             try container.encode(title, forKey: .title)
             try container.encode(goal, forKey: .goal)
+            try container.encode(objective, forKey: .objective)
             try container.encode(startDay, forKey: .startDay)
             try container.encode(endDay, forKey: .endDay)
             try container.encode(phases, forKey: .phases)
@@ -249,6 +279,7 @@ extension CadenciaAPI {
             try container.encode(event, forKey: .event)
             try container.encode(sessions, forKey: .sessions)
             try container.encode(requirements, forKey: .requirements)
+            try container.encode(calendarProblems, forKey: .calendarProblems)
         }
     }
 
@@ -675,7 +706,6 @@ extension CadenciaAPI {
     }
 
     public struct PlanDraft: Codable, Equatable, Sendable {
-        public var athleteId: AthleteId
         public var title: Title
         public var goal: GoalKind
         public var objective: Paragraph
@@ -687,8 +717,7 @@ extension CadenciaAPI {
         public var event: DraftEvent?
         public var sessions: [DraftSession]
 
-        public init(athleteId: AthleteId, title: Title, goal: GoalKind, objective: Paragraph, rationale: Paragraph, startDay: Day, endDay: Day, phases: [PlanPhase], longRideWeekday: Weekday, event: DraftEvent? = nil, sessions: [DraftSession]) {
-            self.athleteId = athleteId
+        public init(title: Title, goal: GoalKind, objective: Paragraph, rationale: Paragraph, startDay: Day, endDay: Day, phases: [PlanPhase], longRideWeekday: Weekday, event: DraftEvent? = nil, sessions: [DraftSession]) {
             self.title = title
             self.goal = goal
             self.objective = objective
@@ -702,12 +731,11 @@ extension CadenciaAPI {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case athleteId, title, goal, objective, rationale, startDay, endDay, phases, longRideWeekday, event, sessions
+            case title, goal, objective, rationale, startDay, endDay, phases, longRideWeekday, event, sessions
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(athleteId, forKey: .athleteId)
             try container.encode(title, forKey: .title)
             try container.encode(goal, forKey: .goal)
             try container.encode(objective, forKey: .objective)
@@ -878,15 +906,13 @@ extension CadenciaAPI {
         public enum Reason: String, Codable, Equatable, Sendable, CaseIterable {
             case planNotActive
             case dayNotPlanned
-            case dayOutsidePlan
-            case dayTaken
-            case sessionNotFound
             case availabilityExceeded
             case intensityAfterHardTraining
             case hardensPlan
             case purposeMismatch
             case invalidPlan
             case planAlreadyExists
+            case implausibleToday
             case notYours
         }
 
@@ -1116,6 +1142,52 @@ extension CadenciaAPI {
             case refused
         }
 
+        public struct PlanHolds: Codable, Equatable, Sendable {
+            public var attempt: Attempt
+            public var workout: Workout
+            public var note: CoachNote
+
+            public init(attempt: Attempt, workout: Workout, note: CoachNote) {
+                self.attempt = attempt
+                self.workout = workout
+                self.note = note
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case attempt, workout, note
+            }
+
+            public func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(attempt, forKey: .attempt)
+                try container.encode(workout, forKey: .workout)
+                try container.encode(note, forKey: .note)
+            }
+        }
+
+        public struct AwaitingItem: Codable, Equatable, Sendable {
+            public var attempt: Attempt
+            public var workout: Workout
+            public var note: CoachNote
+
+            public init(attempt: Attempt, workout: Workout, note: CoachNote) {
+                self.attempt = attempt
+                self.workout = workout
+                self.note = note
+            }
+
+            private enum CodingKeys: String, CodingKey {
+                case attempt, workout, note
+            }
+
+            public func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(attempt, forKey: .attempt)
+                try container.encode(workout, forKey: .workout)
+                try container.encode(note, forKey: .note)
+            }
+        }
+
         public var athleteId: AthleteId?
         public var day: Day?
         public var attempt: Attempt?
@@ -1126,8 +1198,10 @@ extension CadenciaAPI {
         public var model: ModelName?
         public var interpretedOn: InterpretedOn?
         public var refusal: Refusal?
+        public var planHolds: PlanHolds?
+        public var awaiting: [AwaitingItem]
 
-        public init(athleteId: AthleteId? = nil, day: Day? = nil, attempt: Attempt? = nil, status: Status, workout: Workout? = nil, note: CoachNote? = nil, evidence: EvidenceSnapshot? = nil, model: ModelName? = nil, interpretedOn: InterpretedOn? = nil, refusal: Refusal? = nil) {
+        public init(athleteId: AthleteId? = nil, day: Day? = nil, attempt: Attempt? = nil, status: Status, workout: Workout? = nil, note: CoachNote? = nil, evidence: EvidenceSnapshot? = nil, model: ModelName? = nil, interpretedOn: InterpretedOn? = nil, refusal: Refusal? = nil, planHolds: PlanHolds? = nil, awaiting: [AwaitingItem]) {
             self.athleteId = athleteId
             self.day = day
             self.attempt = attempt
@@ -1138,10 +1212,12 @@ extension CadenciaAPI {
             self.model = model
             self.interpretedOn = interpretedOn
             self.refusal = refusal
+            self.planHolds = planHolds
+            self.awaiting = awaiting
         }
 
         private enum CodingKeys: String, CodingKey {
-            case athleteId, day, attempt, status, workout, note, evidence, model, interpretedOn, refusal
+            case athleteId, day, attempt, status, workout, note, evidence, model, interpretedOn, refusal, planHolds, awaiting
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -1156,6 +1232,8 @@ extension CadenciaAPI {
             try container.encode(model, forKey: .model)
             try container.encode(interpretedOn, forKey: .interpretedOn)
             try container.encode(refusal, forKey: .refusal)
+            try container.encode(planHolds, forKey: .planHolds)
+            try container.encode(awaiting, forKey: .awaiting)
         }
     }
 
@@ -1455,18 +1533,21 @@ extension CadenciaAPI {
 
     public struct AcceptIntentInput: Codable, Equatable, Sendable {
         public var messageId: MessageId
+        public var today: Day
 
-        public init(messageId: MessageId) {
+        public init(messageId: MessageId, today: Day) {
             self.messageId = messageId
+            self.today = today
         }
 
         private enum CodingKeys: String, CodingKey {
-            case messageId
+            case messageId, today
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(messageId, forKey: .messageId)
+            try container.encode(today, forKey: .today)
         }
     }
 
@@ -1523,115 +1604,132 @@ extension CadenciaAPI {
             try container.encode(toDay, forKey: .toDay)
         }
     }
+
+    public struct RetirePlanInput: Codable, Equatable, Sendable {
+        public var today: Day
+
+        public init(today: Day) {
+            self.today = today
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case today
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(today, forKey: .today)
+        }
+    }
 }
 
 extension CadenciaAPI {
-    /// `POST /v1/RecordDailyDecision`. Rejections: NotYours (403), DecisionAlreadyAccepted (409), Unauthorized (422).
+    /// `POST /v1/RecordDailyDecision`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), DecisionAlreadyAccepted (409).
     public func recordDailyDecision(_ target: DailyDecisionId, _ input: RecordDailyDecisionInput, commandId: String? = nil) async throws -> Receipt {
         try await command("RecordDailyDecision", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/SendMessage`. Rejections: NotYours (403), Unauthorized (422).
+    /// `POST /v1/SendMessage`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403).
     public func sendMessage(_ target: ConversationId, _ input: SendMessageInput, commandId: String? = nil) async throws -> Receipt {
         try await command("SendMessage", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/RecordCoachReply`. Rejections: NotYours (403), Unauthorized (422).
+    /// `POST /v1/RecordCoachReply`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403).
     public func recordCoachReply(_ target: ConversationId, _ input: RecordCoachReplyInput, commandId: String? = nil) async throws -> Receipt {
         try await command("RecordCoachReply", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/StartConsultation`. Rejections: NotYours (403), ConsultationAlreadyStarted (409), Unauthorized (422).
+    /// `POST /v1/StartConsultation`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsultationAlreadyStarted (409).
     public func startConsultation(_ target: ConsultationId, commandId: String? = nil) async throws -> Receipt {
         try await command("StartConsultation", target: target.rawValue, input: EmptyObject(), commandId: commandId)
     }
 
-    /// `POST /v1/RecordCoachQuestion`. Rejections: NotYours (403), ConsultationNotOpen (409), Unauthorized (422).
+    /// `POST /v1/RecordCoachQuestion`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsultationNotOpen (409).
     public func recordCoachQuestion(_ target: ConsultationId, _ input: RecordCoachQuestionInput, commandId: String? = nil) async throws -> Receipt {
         try await command("RecordCoachQuestion", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/AnswerQuestion`. Rejections: NotYours (403), ConsultationNotOpen (409), Unauthorized (422).
+    /// `POST /v1/AnswerQuestion`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsultationNotOpen (409).
     public func answerQuestion(_ target: ConsultationId, _ input: AnswerQuestionInput, commandId: String? = nil) async throws -> Receipt {
         try await command("AnswerQuestion", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/RecordDraft`. Rejections: NotYours (403), ConsultationNotOpen (409), Unauthorized (422).
+    /// `POST /v1/RecordDraft`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsultationNotOpen (409).
     public func recordDraft(_ target: ConsultationId, _ input: RecordDraftInput, commandId: String? = nil) async throws -> Receipt {
         try await command("RecordDraft", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/AcceptDraft`. Rejections: NotYours (403), ConsultationNotOpen | NoDraft (409), Unauthorized (422).
+    /// `POST /v1/AcceptDraft`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsultationNotOpen | NoDraft (409).
     public func acceptDraft(_ target: ConsultationId, _ input: AcceptDraftInput, commandId: String? = nil) async throws -> Receipt {
         try await command("AcceptDraft", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/RecordProfileAttempt`. Rejections: NotYours (403), AutomaticAttemptUsed (409), Unauthorized (422).
+    /// `POST /v1/RecordProfileAttempt`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), AutomaticAttemptUsed (409).
     public func recordProfileAttempt(_ target: AthleteId, _ input: RecordProfileAttemptInput, commandId: String? = nil) async throws -> Receipt {
         try await command("RecordProfileAttempt", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/RecordProfile`. Rejections: NotYours (403), Unauthorized (422).
+    /// `POST /v1/RecordProfile`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403).
     public func recordProfile(_ target: AthleteId, _ input: RecordProfileInput, commandId: String? = nil) async throws -> Receipt {
         try await command("RecordProfile", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/AcceptIntent`. Rejections: NotYours (403), NoOpenIntent (409), Unauthorized (422).
+    /// `POST /v1/AcceptIntent`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), NoOpenIntent | IntentExpired (409).
     public func acceptIntent(_ target: ConversationId, _ input: AcceptIntentInput, commandId: String? = nil) async throws -> Receipt {
         try await command("AcceptIntent", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/DismissIntent`. Rejections: NotYours (403), NoOpenIntent (409), Unauthorized (422).
+    /// `POST /v1/DismissIntent`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), NoOpenIntent (409).
     public func dismissIntent(_ target: ConversationId, _ input: DismissIntentInput, commandId: String? = nil) async throws -> Receipt {
         try await command("DismissIntent", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/DismissFtpProposal`. Rejections: NotYours (403), Unauthorized (422).
+    /// `POST /v1/DismissFtpProposal`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403).
     public func dismissFtpProposal(_ target: AthleteId, _ input: DismissFtpProposalInput, commandId: String? = nil) async throws -> Receipt {
         try await command("DismissFtpProposal", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `GET /v1/TodayDecision/{key}`: nil while the key has no data. With `after`, waits until the view includes that write.
-    /// Rejections: NotYours (403), ConsistencyTimeout | Unauthorized (422).
+    /// Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsistencyTimeout (422).
     public func getTodayDecision(_ key: DailyDecisionId, after receipt: Receipt? = nil) async throws -> TodayDecisionState? {
         try await read("TodayDecision", key: key.rawValue, after: receipt)
     }
 
     /// `GET /v1/ConversationThread/{key}`: nil while the key has no data. With `after`, waits until the view includes that write.
-    /// Rejections: NotYours (403), ConsistencyTimeout | Unauthorized (422).
+    /// Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsistencyTimeout (422).
     public func getConversationThread(_ key: ConversationId, after receipt: Receipt? = nil) async throws -> ConversationThreadState? {
         try await read("ConversationThread", key: key.rawValue, after: receipt)
     }
 
     /// `GET /v1/ConsultationView/{key}`: nil while the key has no data. With `after`, waits until the view includes that write.
-    /// Rejections: NotYours (403), ConsistencyTimeout | Unauthorized (422).
+    /// Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsistencyTimeout (422).
     public func getConsultationView(_ key: ConsultationId, after receipt: Receipt? = nil) async throws -> ConsultationViewState? {
         try await read("ConsultationView", key: key.rawValue, after: receipt)
     }
 
     /// `GET /v1/RiderProfileCard/{key}`: nil while the key has no data. With `after`, waits until the view includes that write.
-    /// Rejections: NotYours (403), ConsistencyTimeout | Unauthorized (422).
+    /// Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsistencyTimeout (422).
     public func getRiderProfileCard(_ key: AthleteId, after receipt: Receipt? = nil) async throws -> RiderProfileCardState? {
         try await read("RiderProfileCard", key: key.rawValue, after: receipt)
     }
 
-    /// `POST /v1/MoveSession`. Rejections: NotYours (403), SessionNotFound (404), PlanNotActive | DayTaken (409), DayOutsidePlan | Unauthorized (422).
+    /// `POST /v1/MoveSession`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), SessionNotFound (404), PlanNotActive | SessionNotMovable | DayTaken (409), DayOutsidePlan (422).
     public func moveSession(_ target: PlanId, _ input: MoveSessionInput, commandId: String? = nil) async throws -> Receipt {
         try await command("MoveSession", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/RecordDayRequirement`. Rejections: NotYours (403), PlanNotActive (409), DayOutsidePlan | Unauthorized (422).
+    /// `POST /v1/RecordDayRequirement`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), PlanNotActive (409), DayOutsidePlan (422).
     public func recordDayRequirement(_ target: PlanId, _ input: DayRequirement, commandId: String? = nil) async throws -> Receipt {
         try await command("RecordDayRequirement", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/RetirePlan`. Rejections: NotYours (403), PlanNotActive (409), Unauthorized (422).
-    public func retirePlan(_ target: PlanId, commandId: String? = nil) async throws -> Receipt {
-        try await command("RetirePlan", target: target.rawValue, input: EmptyObject(), commandId: commandId)
+    /// `POST /v1/RetirePlan`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), PlanNotActive (409), ImplausibleToday (422).
+    public func retirePlan(_ target: PlanId, _ input: RetirePlanInput, commandId: String? = nil) async throws -> Receipt {
+        try await command("RetirePlan", target: target.rawValue, input: input, commandId: commandId)
     }
 
     /// `GET /v1/CurrentPlan/{key}`: nil while the key has no data. With `after`, waits until the view includes that write.
-    /// Rejections: NotYours (403), ConsistencyTimeout | Unauthorized (422).
+    /// Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsistencyTimeout (422).
     public func getCurrentPlan(_ key: AthleteId, after receipt: Receipt? = nil) async throws -> CurrentPlanState? {
         try await read("CurrentPlan", key: key.rawValue, after: receipt)
     }

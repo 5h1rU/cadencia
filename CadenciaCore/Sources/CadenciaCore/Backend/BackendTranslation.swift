@@ -193,10 +193,10 @@ extension CadenciaAPI.Intent {
 
 extension CadenciaAPI.PlanDraft {
     /// A plan as the backend creates it from a consultation: the intent, the phases and one session per
-    /// planned day. Planning checks it again when it is accepted.
-    public init(_ plan: TrainingPlan, athleteId: CadenciaAPI.AthleteId, objective: String, rationale: String) throws {
+    /// planned day. It belongs to the consultation's athlete. Planning checks it again when it is accepted.
+    public init(_ plan: TrainingPlan, objective: String, rationale: String) throws {
         let phaseOf = { (day: Day) in plan.phase(for: day)?.summary }
-        try self.init(athleteId: athleteId, title: .init(fitting: plan.title), goal: CadenciaAPI.GoalKind(rawValue: plan.goal.rawValue)!,
+        try self.init(title: .init(fitting: plan.title), goal: CadenciaAPI.GoalKind(rawValue: plan.goal.rawValue)!,
                       objective: .init(fitting: objective), rationale: .init(fitting: rationale),
                       startDay: .init(plan.startDay), endDay: .init(plan.endDay),
                       phases: plan.phases.map {
@@ -216,9 +216,9 @@ extension CadenciaAPI.PlanDraft {
     }
 
     /// The coach's consultation draft, expanded into its sessions.
-    public init(_ draft: PlanConsultation.Draft, athleteId: CadenciaAPI.AthleteId, today: Day) throws {
+    public init(_ draft: PlanConsultation.Draft, today: Day) throws {
         let plan = try draft.makePlan(today: today)
-        try self.init(plan, athleteId: athleteId, objective: draft.details.objective, rationale: draft.details.rationale)
+        try self.init(plan, objective: draft.details.objective, rationale: draft.details.rationale)
     }
 }
 
@@ -244,6 +244,9 @@ extension TrainingPlan {
         guard view.status != .none, let planId = view.planId, let startDay = view.startDay, let endDay = view.endDay,
               let start = Day(startDay), let end = Day(endDay) else { return nil }
         let context = context?.planId == planId ? context : nil
+        let problems = Dictionary(view.calendarProblems.compactMap { p in
+            PlannedSession.CalendarProblem(rawValue: p.problem.rawValue).map { (p.sessionId, $0) }
+        }, uniquingKeysWith: { _, last in last })
         let sessions = view.sessions.compactMap { s -> PlannedSession? in
             guard let day = Day(s.day) else { return nil }
             let kind = SessionKind(s.kind)
@@ -256,6 +259,7 @@ extension TrainingPlan {
                                          note: s.purpose.rawValue, isPriority: view.event?.day == s.day)
             session.externalID = s.externalId.rawValue
             session.backendID = s.sessionId
+            session.calendarProblem = problems[s.sessionId]
             return session
         }
         let minutes = Dictionary(sessions.filter { !$0.isPriority && $0.status != .skipped }.map { ($0.day.weekday(), $0.targetMinutes) },
@@ -285,6 +289,7 @@ extension TrainingPlan {
                   },
                   sessions: sessions.sorted { $0.day < $1.day }, isActive: view.status == .active)
         backendID = planId
+        objective = view.objective?.rawValue
         consultation = context?.details
         requirements = view.requirements.compactMap { r in
             Day(r.day).map { CoachIntent.WorkoutRequest(day: $0, instructions: r.instructions.rawValue, maxMinutes: r.maxMinutes?.rawValue) }

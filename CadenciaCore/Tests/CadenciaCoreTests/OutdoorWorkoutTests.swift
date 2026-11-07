@@ -74,7 +74,7 @@ final class OutdoorWorkoutTests: XCTestCase {
         let prepared = OutdoorWorkout(workout: workout, prescriptionFTP: 200, outdoorFTP: 250)
         let session = PlannedSession(day: day, kind: .endurance, title: "Endurance", targetMinutes: 40,
             status: .generated, workout: prepared.workout, intervalsEventID: 42, location: .outdoor)
-        _ = try await IntervalsClient(transport: transport, credential: .apiKey("k")).upsertPlannedWorkout(session, ftp: prepared.ftp)
+        _ = try await IntervalsClient(transport: transport, credential: IntervalsCredential(accessToken: "k")).upsertPlannedWorkout(session, ftp: prepared.ftp)
         let request = try XCTUnwrap(transport.requests.first)
         XCTAssertEqual(request.method, .put)
         XCTAssertEqual(request.url.path, "/api/v1/athlete/0/events/42")
@@ -89,7 +89,7 @@ final class OutdoorWorkoutTests: XCTestCase {
         fit.replaceSubrange(8..<12, with: Data(".FIT".utf8))
         let json = "[{\"id\":41,\"workout_file_base64\":\"bad\"},{\"id\":42,\"workout_file_base64\":\"\(fit.base64EncodedString())\"}]"
         let transport = FakeTransport(responses: [.init(status: 200, body: Data(json.utf8))])
-        let result = try await IntervalsClient(transport: transport, credential: .apiKey("k")).plannedWorkoutFIT(eventID: 42, day: day)
+        let result = try await IntervalsClient(transport: transport, credential: IntervalsCredential(accessToken: "k")).plannedWorkoutFIT(eventID: 42, day: day)
         XCTAssertEqual(result, fit)
         let url = try XCTUnwrap(transport.requests.first?.url)
         XCTAssertEqual(url.path, "/api/v1/athlete/0/events")
@@ -102,7 +102,7 @@ final class OutdoorWorkoutTests: XCTestCase {
         for json in [#"[{"id":41}]"#, #"[{"id":42,"workout_file_base64":"YmFk"}]"#] {
             let transport = FakeTransport(responses: [.init(status: 200, body: Data(json.utf8))])
             do {
-                _ = try await IntervalsClient(transport: transport, credential: .apiKey("k")).plannedWorkoutFIT(eventID: 42, day: day)
+                _ = try await IntervalsClient(transport: transport, credential: IntervalsCredential(accessToken: "k")).plannedWorkoutFIT(eventID: 42, day: day)
                 XCTFail("must not share a missing or corrupt workout")
             } catch { XCTAssertEqual(error as? HTTPError, .invalidResponse) }
         }

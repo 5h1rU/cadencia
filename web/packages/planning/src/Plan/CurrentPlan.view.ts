@@ -5,10 +5,11 @@ import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Weekday } from "@cadencia/kernel/Calendar/Week";
 import { PlanId } from "@cadencia/kernel/Plan.id";
-import { Title } from "@cadencia/kernel/Text";
+import { Paragraph, Title } from "@cadencia/kernel/Text";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
+import { CalendarProblem } from "./Calendar.external.ts";
 import { Plan } from "./Plan.aggregate.ts";
 import {
   DayRequirement,
@@ -18,12 +19,14 @@ import {
   type PlannedSession,
   PlannedSession as Session_,
 } from "./PlanShape.ts";
+import { SessionId } from "./Session.id.ts";
 
-const CurrentPlanState = Schema.Struct({
+export const CurrentPlanState = Schema.Struct({
   planId: Schema.NullOr(PlanId),
   status: Schema.Literals(["none", "active", "retired"]),
   title: Schema.NullOr(Title),
   goal: Schema.NullOr(GoalKind),
+  objective: Schema.NullOr(Paragraph),
   startDay: Schema.NullOr(Day),
   endDay: Schema.NullOr(Day),
   phases: Schema.Array(Phase),
@@ -31,6 +34,8 @@ const CurrentPlanState = Schema.Struct({
   event: Schema.NullOr(GoalEvent),
   sessions: Schema.Array(Session_),
   requirements: Schema.Array(DayRequirement),
+  /** Sessions the Intervals calendar refused, until one is published. */
+  calendarProblems: Schema.Array(Schema.Struct({ sessionId: SessionId, problem: CalendarProblem })),
 });
 type CurrentPlanState = typeof CurrentPlanState.Type;
 
@@ -62,11 +67,14 @@ export class CurrentPlan extends Domain.View("CurrentPlan", {
   rejects: [NotYours],
   keyOf: { Plan: ({ source }) => ownerOf(source.id) },
   state: CurrentPlanState,
+  // Bump when the state or how it folds changes, so the view is rebuilt from the plan's events.
+  version: 1,
   initial: {
     planId: null,
     status: "none",
     title: null,
     goal: null,
+    objective: null,
     startDay: null,
     endDay: null,
     phases: [],
@@ -74,6 +82,7 @@ export class CurrentPlan extends Domain.View("CurrentPlan", {
     event: null,
     sessions: [],
     requirements: [],
+    calendarProblems: [],
   },
   evolve: {
     PlanCreated: (_, e, { source }) => ({
@@ -81,6 +90,7 @@ export class CurrentPlan extends Domain.View("CurrentPlan", {
       status: "active" as const,
       title: e.title,
       goal: e.goal,
+      objective: e.objective,
       startDay: e.startDay,
       endDay: e.endDay,
       phases: e.phases,
@@ -88,6 +98,7 @@ export class CurrentPlan extends Domain.View("CurrentPlan", {
       event: e.event,
       sessions: e.sessions,
       requirements: [],
+      calendarProblems: [],
     }),
     SessionConcretized: forShownPlan((v, e) => replace(v, [e.session])),
     WeekRevised: forShownPlan((v, e) => replace(v, e.sessions)),
@@ -96,7 +107,17 @@ export class CurrentPlan extends Domain.View("CurrentPlan", {
       ...v,
       requirements: [...v.requirements.filter((r) => r.day !== e.requirement.day), e.requirement],
     })),
-    SessionPublished: withStatus("published"),
+    SessionPublished: forShownPlan((v, e) =>
+      withStatus("published")(
+        { ...v, calendarProblems: v.calendarProblems.filter((p) => p.sessionId !== e.sessionId) },
+        e,
+        { source: { id: v.planId ?? "" } },
+      ),
+    ),
+    SessionPublicationFailed: forShownPlan((v, e) => ({
+      ...v,
+      calendarProblems: [...v.calendarProblems.filter((p) => p.sessionId !== e.sessionId), e],
+    })),
     SessionChangedInIntervals: withStatus("changedInIntervals"),
     SessionRemovedInIntervals: withStatus("removedInIntervals"),
     PlanRetired: forShownPlan((v) => ({ ...v, status: "retired" as const })),

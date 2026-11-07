@@ -1,7 +1,6 @@
 import { system } from "@cadencia/identity/Actor";
 import type { AthleteId } from "@cadencia/identity/Athlete.id";
 import { addDays, type Day } from "@cadencia/kernel/Calendar/Day";
-import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
 import { IntervalsSyncApi } from "@cadencia/planning/IntervalsSyncApi.api";
 import type { PlannedSession } from "@cadencia/planning/Plan/PlanShape";
 import * as Effect from "effect/Effect";
@@ -25,15 +24,16 @@ export const changeOf = (session: PlannedSession, event: IntervalsEvent | undefi
 
 /**
  * Compare one athlete's published sessions with their Intervals calendar and
- * record what they changed or removed there. Intervals wins.
+ * record what they changed or removed there. Intervals wins. Intervals'
+ * CALENDAR_UPDATED webhook runs it; it reads the calendar again, so a repeated
+ * or late delivery changes nothing.
  */
 export const syncAthlete = (athleteId: AthleteId, today: Day) =>
   Effect.gen(function* () {
     const connection = yield* (yield* Connections).find(athleteId);
     if (Option.isNone(connection)) return;
-    const planning = yield* overPlanning(AthletePlanningApi.clientInProcess).pipe(Effect.provide(actingAs(system("IntervalsSync"))));
     const sync = yield* overPlanning(IntervalsSyncApi.clientInProcess).pipe(Effect.provide(actingAs(system("IntervalsSync"))));
-    const plan = yield* planning.CurrentPlan.get(athleteId).pipe(Effect.orDie);
+    const plan = yield* sync.CurrentPlan.get(athleteId).pipe(Effect.orDie);
     if (!plan || plan.status !== "active" || !plan.planId || !plan.endDay) return;
     const watched = plan.sessions.filter((s) => s.status === "published" && s.day >= addDays(today, -1));
     if (watched.length === 0) return;
@@ -45,21 +45,8 @@ export const syncAthlete = (athleteId: AthleteId, today: Day) =>
     for (const session of watched) {
       const change = changeOf(session, byExternalId.get(session.externalId));
       if (change === null) continue;
-      yield* sync.RecordExternalChange(
-        plan.planId,
-        { externalId: session.externalId, change },
-        { commandId: `sync:${session.externalId}:${change}` },
-      );
+      // Each observation is its own command: the plan ignores one that no longer applies (a session
+      // already taken over, or published again since this read), so it needs no id of its own.
+      yield* sync.RecordExternalChange(plan.planId, { externalId: session.externalId, change }).pipe(Effect.orDie);
     }
   }).pipe(Effect.scoped);
-
-/** Every connected athlete, one after another; one athlete's failure doesn't stop the rest. */
-export const syncAll = (today: Day) =>
-  Effect.gen(function* () {
-    const athletes = yield* (yield* Connections).athletes;
-    yield* Effect.forEach(
-      athletes,
-      (athleteId) => syncAthlete(athleteId, today).pipe(Effect.catchCause((cause) => Effect.logWarning("Intervals sync failed", athleteId, cause))),
-      { discard: true },
-    );
-  });

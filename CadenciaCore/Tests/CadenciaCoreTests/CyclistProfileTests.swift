@@ -96,7 +96,7 @@ final class CyclistProfileTests: XCTestCase {
             .init(status: 200, body: Data(#"[{"id":"ride","type":"Ride","start_date_local":"2026-10-28T08:00:00","moving_time":7200,"distance":60000,"total_elevation_gain":1350.5}]"#.utf8)),
             .init(status: 200, body: Data(#"{"list":[{"secs":[5,300],"values":[950,325]}]}"#.utf8))
         ])
-        let client = IntervalsClient(transport: transport, credential: .apiKey("existing"))
+        let client = IntervalsClient(transport: transport, credential: IntervalsCredential(accessToken: "existing"))
         let b = try await client.cyclistProfileBrief(newest: today, locale: "es")
         XCTAssertEqual(transport.requests.count, 3)
         XCTAssertTrue(transport.requests.allSatisfy { $0.method == .get })
@@ -117,11 +117,11 @@ final class CyclistProfileTests: XCTestCase {
                 .init(status: 200, body: Data("[]".utf8)), .init(status: status, body: Data())
             ])
         }
-        let b = try await IntervalsClient(transport: transport(status: 422), credential: .apiKey("k")).cyclistProfileBrief(newest: today, locale: "en")
+        let b = try await IntervalsClient(transport: transport(status: 422), credential: IntervalsCredential(accessToken: "k")).cyclistProfileBrief(newest: today, locale: "en")
         XCTAssertTrue(b.powerCurveUnavailable)
         XCTAssertTrue(b.powerCurve.isEmpty)
         do {
-            _ = try await IntervalsClient(transport: transport(status: 401), credential: .apiKey("k")).cyclistProfileBrief(newest: today, locale: "en")
+            _ = try await IntervalsClient(transport: transport(status: 401), credential: IntervalsCredential(accessToken: "k")).cyclistProfileBrief(newest: today, locale: "en")
             XCTFail("Authentication failure must require reconnection")
         } catch { XCTAssertEqual(error as? HTTPError, .unauthorized) }
     }

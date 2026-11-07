@@ -34,6 +34,8 @@
       button.primary, button.secondary { font: inherit; border-radius: 6px; padding: 7px 14px; cursor: pointer; }
       button.primary { background: var(--accent); color: var(--surface); border: 1px solid var(--accent); }
       button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+      button:disabled { opacity: 0.5; cursor: default; }
+      div.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
       form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
       label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); }

@@ -23,11 +23,11 @@ final class FakeTransport: HTTPTransport, @unchecked Sendable {
 }
 
 final class IntervalsClientTests: XCTestCase {
-    func testAPIKeyUsesBasicAuthWithLiteralUsername() async throws {
+    func testAccessTokenIsSentAsBearer() async throws {
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"id":"i1","name":"Felipe","sportSettings":[{"types":["Ride","VirtualRide"],"ftp":240,"indoor_ftp":235,"power_zones":[55,75,90,105,120,150]}]}"#.utf8))])
-        let client = IntervalsClient(transport: t, credential: .apiKey("secret"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "tok"))
         let athlete = try await client.athlete()
-        XCTAssertEqual(t.requests.first?.headers["Authorization"], "Basic " + Data("API_KEY:secret".utf8).base64EncodedString())
+        XCTAssertEqual(t.requests.first?.headers["Authorization"], "Bearer tok")
         XCTAssertEqual(t.requests.first?.url.absoluteString, "https://intervals.icu/api/v1/athlete/0")
         XCTAssertEqual(athlete.ftp, 240)
         XCTAssertEqual(athlete.workingFTP, 235, "indoor FTP wins for trainer prescriptions")
@@ -37,9 +37,8 @@ final class IntervalsClientTests: XCTestCase {
     func testWellnessDecodesIntervalsFieldNames() async throws {
         let json = #"[{"id":"2026-10-28","ctl":62.1,"atl":78.4,"restingHR":54,"hrv":48.2,"sleepSecs":22320,"sportInfo":[{"type":"Run","eftp":300},{"type":"Ride","eftp":202.18922}],"updated":"2026-10-28T09:37:12.000+0000"},{"id":"not-a-date"}]"#
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(json.utf8))])
-        let client = IntervalsClient(transport: t, credential: .oauth(accessToken: "tok", scopes: ["WELLNESS:READ"]))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let days = try await client.wellness(oldest: Day(year: 2026, month: 9, day: 1), newest: Day(year: 2026, month: 10, day: 28))
-        XCTAssertEqual(t.requests.first?.headers["Authorization"], "Bearer tok")
         XCTAssertEqual(t.requests.first?.url.query, "newest=2026-10-28&oldest=2026-09-01")
         XCTAssertEqual(days.count, 1, "rows without a valid day are dropped")
         XCTAssertEqual(days[0].hrvMs, 48.2)
@@ -53,7 +52,7 @@ final class IntervalsClientTests: XCTestCase {
         // Intervals rejects `curves=<date>` with 422 "Invalid curve"; ranges are `r.<from>.<to>`.
         let json = #"{"list":[{"secs":[5,60,1200],"values":[900.4,420,300.6]}]}"#
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(json.utf8))])
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let points = try await client.powerCurve(newest: Day(year: 2026, month: 10, day: 29))
         let items = URLComponents(url: t.requests[0].url, resolvingAgainstBaseURL: false)!.queryItems!
         let query = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
@@ -71,7 +70,7 @@ final class IntervalsClientTests: XCTestCase {
     func testActivitiesDecodeAndMapTrainerAndFTPFields() async throws {
         let json = #"[{"id":"i9","name":"Umbral","type":"VirtualRide","start_date_local":"2026-10-27T18:05:00","moving_time":3600,"icu_training_load":72,"icu_intensity":84.2,"icu_average_watts":198,"icu_weighted_avg_watts":210,"average_heartrate":152,"icu_ftp":240,"icu_pm_ftp":248,"trainer":true,"external_id":"cadencia-abc"}]"#
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(json.utf8))])
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let acts = try await client.activities(oldest: Day(year: 2026, month: 10, day: 1), newest: Day(year: 2026, month: 10, day: 28))
         XCTAssertEqual(acts.count, 1)
         XCTAssertEqual(acts[0].day, Day(year: 2026, month: 10, day: 27))
@@ -83,7 +82,7 @@ final class IntervalsClientTests: XCTestCase {
 
     func testUploadSendsBinaryFITWithExternalIDAndReturnsActivityID() async throws {
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"icu_athlete_id":"i1","activities":[{"icu_athlete_id":"i1","id":"i777"}]}"#.utf8))])
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let fit = FITActivityEncoder.encode(RideRecording(athleteID: "i1", workout: Workout(name: "Easy", kind: .endurance, steps: []),
                                                         startedAt: Date(timeIntervalSince1970: 1_700_000_000)))
         let result = try await client.uploadActivity(fit: fit, name: "Easy", externalID: "cadencia-1", pairedEventID: 42)
@@ -106,7 +105,7 @@ final class IntervalsClientTests: XCTestCase {
                                  startedAt: Date(timeIntervalSince1970: 1_700_000_000))
         let existing: [[String: Any]] = [["id": "i777", "external_id": ride.externalID, "start_date_local": "2023-11-14T17:13:20"]]
         let transport = FakeTransport(responses: [HTTPResponse(status: 200, body: try JSONSerialization.data(withJSONObject: existing))])
-        let client = IntervalsClient(transport: transport, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: transport, credential: IntervalsCredential(accessToken: "k"))
         let result = try await client.uploadActivity(ride)
         XCTAssertEqual(result.activityID, "i777")
         XCTAssertEqual(transport.requests.map(\.method), [.get], "do not POST a FIT copy of a previously uploaded TCX ride")
@@ -117,7 +116,7 @@ final class IntervalsClientTests: XCTestCase {
                                  intervalsEventID: 42, startedAt: Date(timeIntervalSince1970: 1_700_000_000))
         let transport = FakeTransport(responses: [HTTPResponse(status: 503, body: Data()), HTTPResponse(status: 200, body: Data("[]".utf8)),
             HTTPResponse(status: 200, body: Data(#"{"activities":[{"id":"i777"}]}"#.utf8))])
-        let client = IntervalsClient(transport: transport, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: transport, credential: IntervalsCredential(accessToken: "k"))
         do {
             _ = try await client.uploadActivity(ride)
             XCTFail("failed reconciliation must not upload")
@@ -136,7 +135,7 @@ final class IntervalsClientTests: XCTestCase {
 
     func testUnauthorizedBecomesTypedError() async {
         let t = FakeTransport(responses: [HTTPResponse(status: 401, body: Data())])
-        let client = IntervalsClient(transport: t, credential: .apiKey("bad"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "bad"))
         do {
             _ = try await client.athlete()
             XCTFail("expected throw")
@@ -149,7 +148,7 @@ final class IntervalsClientTests: XCTestCase {
 
     func testPlannedWorkoutUpsertRendersStructureAndUsesStableUID() async throws {
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"id":5,"uid":"cadencia-x","start_date_local":"2026-10-28T00:00:00"}"#.utf8))])
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let workout = Workout(name: "Easy endurance", kind: .endurance, steps: [WorkoutStep(name: "Warm-up", duration: 600, startIntensity: 0.45, endIntensity: 0.6), WorkoutStep(name: "Endurance", duration: 2700, intensity: 0.65, cadenceRPM: 88), WorkoutStep(name: "Cool-down", duration: 300, startIntensity: 0.6, endIntensity: 0.45)], intensityCeiling: 0.69, rationale: "Low HRV")
         let session = PlannedSession(day: Day(year: 2026, month: 10, day: 28), kind: .endurance, title: "Easy endurance", targetMinutes: 60, status: .generated, workout: workout)
         let event = try await client.upsertPlannedWorkout(session, ftp: 240)
@@ -211,7 +210,7 @@ final class IntervalsClientTests: XCTestCase {
 
     func testBulkDeletionSendsOnlySelectedServerIDsWithoutSharedExternalIDs() async throws {
         let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"eventsDeleted":2}"#.utf8))])
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         let count = try await client.deleteEvents(ids: [12, 11, 12])
         XCTAssertEqual(count, 2)
         let request = try XCTUnwrap(t.requests.first)
@@ -224,7 +223,7 @@ final class IntervalsClientTests: XCTestCase {
 
     func testEmptyBulkDeletionMakesNoRequest() async throws {
         let t = FakeTransport()
-        let count = try await IntervalsClient(transport: t, credential: .apiKey("k")).deleteEvents(ids: [])
+        let count = try await IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k")).deleteEvents(ids: [])
         XCTAssertEqual(count, 0)
         XCTAssertTrue(t.requests.isEmpty)
     }
@@ -237,7 +236,7 @@ final class IntervalsClientTests: XCTestCase {
             HTTPResponse(status: 200, body: Data("[\(event)]".utf8)),
             HTTPResponse(status: 200, body: Data(event.utf8)),
         ])
-        let client = IntervalsClient(transport: t, credential: .apiKey("k"))
+        let client = IntervalsClient(transport: t, credential: IntervalsCredential(accessToken: "k"))
         do { _ = try await client.upsertPlannedWorkout(session, ftp: 198); XCTFail("expected lost response") } catch {}
         let events = try await client.events(oldest: session.day, newest: session.day)
         let existing = try XCTUnwrap(PlanMirror.existingEvent(for: session, in: events))
@@ -262,7 +261,7 @@ final class WorkoutTextTests: XCTestCase {
     }
 }
 
-final class OAuthTests: XCTestCase {
+final class PKCETests: XCTestCase {
     func testPKCEChallengeMatchesRFC7636Vector() {
         // RFC 7636 appendix B: verifier "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk" → challenge "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
         let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
@@ -276,25 +275,6 @@ final class OAuthTests: XCTestCase {
         XCTAssertEqual(hex, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
         let empty = SHA256.hash([]).map { String(format: "%02x", $0) }.joined()
         XCTAssertEqual(empty, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-    }
-
-    func testAuthorizationURLAndExchangeOmitClientSecret() async throws {
-        let oauth = IntervalsOAuth(clientID: "cad", redirectURI: "cadencia://oauth")
-        let pkce = IntervalsOAuth.makePKCE(randomBytes: Array(repeating: 7, count: 64))
-        XCTAssertEqual(pkce.verifier.count, 64)
-        let url = oauth.authorizationURL(pkce: pkce, state: "s1")
-        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
-        XCTAssertEqual(items.first { $0.name == "scope" }?.value, "ACTIVITY:WRITE,WELLNESS:WRITE,CALENDAR:WRITE,SETTINGS:WRITE,CHATS:WRITE")
-        XCTAssertEqual(items.first { $0.name == "code_challenge_method" }?.value, "S256")
-        XCTAssertEqual(items.first { $0.name == "code_challenge" }?.value, pkce.challenge)
-
-        let t = FakeTransport(responses: [HTTPResponse(status: 200, body: Data(#"{"token_type":"Bearer","access_token":"abc","scope":"ACTIVITY:WRITE,WELLNESS:READ","athlete":{"id":"i1","name":"F"}}"#.utf8))])
-        let token = try await oauth.exchange(code: "c0de", pkce: pkce, transport: t)
-        XCTAssertEqual(token.access_token, "abc")
-        XCTAssertEqual(token.scopes, ["ACTIVITY:WRITE", "WELLNESS:READ"])
-        let form = String(data: t.requests[0].body!, encoding: .utf8)!
-        XCTAssertTrue(form.contains("code_verifier=\(pkce.verifier)"))
-        XCTAssertFalse(form.contains("client_secret"))
     }
 }
 

@@ -134,13 +134,13 @@ final class RideTimelineTests: XCTestCase {
         let old = IntervalsActivityNote(id: 7, content: IntervalsActivityNote.coachPrefix + "Earlier assessment")
         let transport = FakeTransport(responses: [.init(status: 200, body: try JSONEncoder().encode([old])),
                                                    .init(status: 200, body: Data(#"{"id":8}"#.utf8))])
-        let saved = try await IntervalsClient(transport: transport, credential: .apiKey("test")).saveDebriefNote(activityID: "i1", report: report)
+        let saved = try await IntervalsClient(transport: transport, credential: IntervalsCredential(accessToken: "test")).saveDebriefNote(activityID: "i1", report: report)
         XCTAssertEqual(saved.id, 8)
         XCTAssertEqual(saved.content, report.noteContent)
         XCTAssertTrue(saved.content.contains("Updated analysis."))
         XCTAssertEqual(transport.requests.map(\.method), [.get, .post])
         let retry = FakeTransport(responses: [.init(status: 200, body: try JSONEncoder().encode([old, saved]))])
-        let reconciled = try await IntervalsClient(transport: retry, credential: .apiKey("test")).saveDebriefNote(activityID: "i1", report: report)
+        let reconciled = try await IntervalsClient(transport: retry, credential: IntervalsCredential(accessToken: "test")).saveDebriefNote(activityID: "i1", report: report)
         XCTAssertEqual(reconciled, saved)
         XCTAssertEqual(retry.requests.count, 1, "a lost correction POST is reconciled, never blindly posted again")
     }

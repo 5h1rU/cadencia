@@ -9,16 +9,20 @@ import * as Schema from "effect/Schema";
 import { DayOutsidePlan } from "./DayOutsidePlan.rejection.ts";
 import { PlanNotActive } from "./PlanNotActive.rejection.ts";
 import { DayRequirement } from "./PlanShape.ts";
+import { WeekRevised } from "./ReviseWeek.command.ts";
 
 export class DayRequirementRecorded extends Domain.Event("DayRequirementRecorded", {
   requirement: DayRequirement,
 }) {}
 
-/** Record what the athlete needs from one day ("Thursday, 45 minutes at most"). */
+/**
+ * Record what the athlete needs from one day ("Thursday, 45 minutes at most").
+ * A limit applies to the planned session at once, as an accepted intent does.
+ */
 export class RecordDayRequirement extends Domain.Command("RecordDayRequirement", {
   target: PlanId,
   middleware: [Session],
   input: { day: Day, instructions: Paragraph, maxMinutes: Schema.NullOr(Minutes) },
-  events: [DayRequirementRecorded],
+  events: [DayRequirementRecorded, WeekRevised],
   rejects: [PlanNotActive, DayOutsidePlan, NotYours],
 }) {}

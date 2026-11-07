@@ -206,7 +206,7 @@ struct PlanView: View {
     @ViewBuilder private func planSections(_ plan: TrainingPlan) -> some View {
         Section {
             LabeledContent("Goal") {
-                if let objective = plan.consultation?.objective { Text(verbatim: objective) }
+                if let objective = plan.consultation?.objective ?? plan.objective { Text(verbatim: objective) }
                 else { Text(plan.goal.title) }
             }
             if let g = plan.secondaryGoal { LabeledContent("Also") { Text(g.title) } }

@@ -12,7 +12,6 @@
       }
     ],
     "draft": {
-      "athleteId": "i100",
       "title": "Base block",
       "goal": "endurance",
       "objective": "Build an aerobic base",
@@ -277,7 +276,9 @@
     "refusal": {
       "reason": "hardensPlan",
       "detail": "day=\"2026-11-10\", planned=\"endurance\", proposed=\"threshold\", peakIntensity=0.98"
-    }
+    },
+    "planHolds": null,
+    "awaiting": []
   },
   "decisionAccepted": {
     "athleteId": "i100",
@@ -366,7 +367,32 @@
     },
     "model": "gpt-5.5",
     "interpretedOn": "ios",
-    "refusal": null
+    "refusal": null,
+    "planHolds": {
+      "attempt": 2,
+      "workout": {
+        "name": "Easy endurance",
+        "kind": "endurance",
+        "steps": [
+          {
+            "name": "65%",
+            "durationSeconds": 3600,
+            "startIntensity": 0.65,
+            "endIntensity": 0.65,
+            "cadenceRpm": null
+          }
+        ],
+        "intensityCeiling": null,
+        "rationale": "Typical HRV."
+      },
+      "note": {
+        "headline": "Easy endurance",
+        "body": "Ready.",
+        "session": "One hour in Z2.",
+        "watch": null
+      }
+    },
+    "awaiting": []
   },
   "thread": {
     "messages": [
@@ -457,6 +483,7 @@
     "status": "active",
     "title": "Base block",
     "goal": "endurance",
+    "objective": "Build an aerobic base",
     "startDay": "2026-11-09",
     "endDay": "2026-12-20",
     "phases": [
@@ -695,7 +722,8 @@
         "externalId": "cadencia-i100-5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f-2026-12-20"
       }
     ],
-    "requirements": []
+    "requirements": [],
+    "calendarProblems": []
   },
   "profile": {
     "report": {
@@ -725,6 +753,7 @@
     "status": "active",
     "title": "Base block",
     "goal": "endurance",
+    "objective": "Build an aerobic base",
     "startDay": "2026-11-09",
     "endDay": "2026-12-20",
     "phases": [
@@ -969,13 +998,15 @@
         "instructions": "Thursday I only have 40 minutes.",
         "maxMinutes": null
       }
-    ]
+    ],
+    "calendarProblems": []
   },
   "planRetired": {
     "planId": "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
     "status": "retired",
     "title": "Base block",
     "goal": "endurance",
+    "objective": "Build an aerobic base",
     "startDay": "2026-11-09",
     "endDay": "2026-12-20",
     "phases": [
@@ -1220,6 +1251,7 @@
         "instructions": "Thursday I only have 40 minutes.",
         "maxMinutes": null
       }
-    ]
+    ],
+    "calendarProblems": []
   }
 }

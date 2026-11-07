@@ -27,7 +27,6 @@ export class Connections extends Context.Service<
   {
     readonly save: (connection: Connection) => Effect.Effect<void, never, RuntimeContext>;
     readonly find: (athleteId: AthleteId) => Effect.Effect<Option.Option<Connection>, never, RuntimeContext>;
-    readonly athletes: Effect.Effect<ReadonlyArray<AthleteId>, never, RuntimeContext>;
     readonly remove: (athleteId: AthleteId) => Effect.Effect<void, never, RuntimeContext>;
   }
 >()("Cadencia/Connections") {}
@@ -38,7 +37,6 @@ export const MemoryConnections = Layer.sync(Connections, () => {
   return {
     save: (connection) => Effect.sync(() => void rows.set(connection.athleteId, connection)),
     find: (athleteId) => Effect.sync(() => Option.fromNullishOr(rows.get(athleteId))),
-    athletes: Effect.sync(() => [...rows.values()].map((c) => c.athleteId)),
     remove: (athleteId) => Effect.sync(() => void rows.delete(athleteId)),
   };
 });
@@ -121,13 +119,6 @@ export const D1Connections = Layer.effect(
             Effect.orDie,
             Effect.flatMap((row) => (row ? Effect.map(toConnection(row), Option.some) : Effect.succeed(Option.none()))),
           ),
-      athletes: db
-        .prepare("SELECT athlete_id FROM intervals_connections")
-        .all<{ athlete_id: string }>()
-        .pipe(
-          Effect.orDie,
-          Effect.map((result) => result.results.map((r) => r.athlete_id as AthleteId)),
-        ),
       remove: (athleteId) =>
         db.prepare("DELETE FROM intervals_connections WHERE athlete_id = ?").bind(athleteId).run().pipe(Effect.orDie, Effect.asVoid),
     };

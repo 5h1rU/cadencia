@@ -19,7 +19,7 @@ public struct CadenciaAPI: Sendable {
         self.sessionToken = sessionToken
     }
 
-    /// The input of a command that takes none (`StartConsultation`, `RetirePlan`): `{}` on the wire.
+    /// The input of a command that takes none (`StartConsultation`): `{}` on the wire.
     public struct EmptyObject: Codable, Equatable, Sendable {
         public init() {}
     }
@@ -73,18 +73,26 @@ public struct CadenciaAPI: Sendable {
         return value
     }
 
-    /// Exchanges a handoff for a session token (`POST /auth/exchange`).
-    public func exchange(handoff: String) async throws -> String {
+    /// What a finished sign-in gives Cadencia iOS: the session for `/v1`, and the athlete's own Intervals.icu
+    /// OAuth access token, which the server saved at the callback, for the calls the app makes to Intervals.
+    public struct SignIn: Equatable, Sendable {
+        public let token: String
+        public let intervalsAccessToken: String
+    }
+
+    /// Exchanges a handoff for the session and the Intervals.icu token (`POST /auth/exchange`).
+    public func exchange(handoff: String) async throws -> SignIn {
         struct Body: Encodable { let handoff: String }
-        struct Answer: Decodable { let token: String }
+        struct Answer: Decodable { let token: String; let intervalsAccessToken: String }
         let request = HTTPRequest(method: .post, url: baseURL.appendingPathComponent("auth/exchange"),
                                   headers: ["Content-Type": "application/json", "Accept": "application/json"],
                                   body: try JSONEncoder().encode(Body(handoff: handoff)))
         let response = try await send(request)
-        guard let answer = try? JSONDecoder().decode(Answer.self, from: response.body), !answer.token.isEmpty else {
+        guard let answer = try? JSONDecoder().decode(Answer.self, from: response.body),
+              !answer.token.isEmpty, !answer.intervalsAccessToken.isEmpty else {
             throw CadenciaAPIError.invalidResponse
         }
-        return answer.token
+        return SignIn(token: answer.token, intervalsAccessToken: answer.intervalsAccessToken)
     }
 
     /// The athlete the session belongs to (`GET /api/session`): their Intervals.icu athlete id.

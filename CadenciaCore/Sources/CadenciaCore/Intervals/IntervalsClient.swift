@@ -1,20 +1,16 @@
 import Foundation
 
-/// How the app authenticates against Intervals.icu.
-public enum IntervalsCredential: Codable, Equatable, Sendable {
-    /// Personal use: HTTP basic auth, username "API_KEY".
-    case apiKey(String)
-    /// OAuth bearer token issued to the registered Cadencia app.
-    case oauth(accessToken: String, scopes: [String])
+/// The athlete's Intervals.icu OAuth access token for Cadencia's app, handed over by Cadencia's server at
+/// sign-in (`CadenciaAPI.exchange`) and sent as `Authorization: Bearer`. It is long-lived; a 401 or 403 means
+/// the athlete revoked it or the app lost access, and signing in again replaces it.
+public struct IntervalsCredential: Codable, Equatable, Sendable {
+    public var accessToken: String
 
-    var authorizationHeader: String {
-        switch self {
-        case .apiKey(let key):
-            return "Basic " + Data("API_KEY:\(key)".utf8).base64EncodedString()
-        case .oauth(let token, _):
-            return "Bearer \(token)"
-        }
+    public init(accessToken: String) {
+        self.accessToken = accessToken
     }
+
+    var authorizationHeader: String { "Bearer \(accessToken)" }
 }
 
 /// Thin, typed client for the parts of the Intervals.icu API Cadencia uses.
@@ -290,7 +286,7 @@ public struct IntervalsClient: Sendable {
 
     /// `PUT /events/bulk-delete`. A retired entry is named by its external id (Intervals then deletes every
     /// copy the app created, all of which belong to it) and, when known, by its server id: deletion by
-    /// external id only covers events created by this OAuth app, not ones created with an API key.
+    /// external id only covers events created by Cadencia's OAuth app, not ones earlier builds created with an API key.
     /// Missing events are ignored.
     @discardableResult
     public func deleteEvents(_ deletions: [CalendarSync.Deletion]) async throws -> Int {
@@ -304,8 +300,8 @@ public struct IntervalsClient: Sendable {
         return (try? Self.decoder.decode(Result.self, from: response.body).eventsDeleted) ?? 0
     }
 
-    /// `POST /events/bulk?upsert=true`: with OAuth, an existing event of this app with the same external id
-    /// is updated instead of duplicated. Callers read the calendar first, which covers API-key accounts.
+    /// `POST /events/bulk?upsert=true`: an existing event of Cadencia's OAuth app with the same external id is
+    /// updated instead of duplicated. Callers read the calendar first, which also covers events created otherwise.
     public func createCalendarEntries(_ entries: [CalendarEntry]) async throws -> [IntervalsEvent] {
         guard !entries.isEmpty else { return [] }
         let body = try JSONSerialization.data(withJSONObject: entries.map(\.body), options: [.sortedKeys])
@@ -321,14 +317,6 @@ public struct IntervalsClient: Sendable {
         let body = try JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])
         let response = try await send(.put, "/api/v1/athlete/\(athleteID)/events/\(eventID)", body: body, contentType: "application/json")
         return try Self.decoder.decode(IntervalsEvent.self, from: response.body)
-    }
-
-    // MARK: OAuth
-
-    /// Revokes the bearer token for this app. Only meaningful for `.oauth` credentials.
-    public func disconnectApp() async throws {
-        guard case .oauth = credential else { return }
-        _ = try await send(.delete, "/api/v1/disconnect-app")
     }
 
     // MARK: Plumbing
@@ -369,67 +357,5 @@ public struct IntervalsClient: Sendable {
             throw HTTPError.status(response.status, String(data: response.body.prefix(300), encoding: .utf8) ?? "")
         }
         return response
-    }
-}
-
-// MARK: - OAuth helpers (PKCE, public client)
-
-public struct IntervalsOAuth: Sendable {
-    public static let authorizeURL = URL(string: "https://intervals.icu/oauth/authorize")!
-    public static let tokenURL = URL(string: "https://intervals.icu/api/oauth/token")!
-    /// WRITE implies READ. Wellness and settings are written since Intervals became the source of truth for
-    /// feedback, weight, FTP, height, units and availability; tokens issued with the earlier READ scopes are
-    /// detected by `IntervalsCredential.missingScopes` and the athlete is asked to reconnect.
-    public static let defaultScopes = ["ACTIVITY:WRITE", "WELLNESS:WRITE", "CALENDAR:WRITE", "SETTINGS:WRITE", "CHATS:WRITE"]
-
-    public var clientID: String
-    public var redirectURI: String
-    public var scopes: [String]
-
-    public init(clientID: String, redirectURI: String, scopes: [String] = IntervalsOAuth.defaultScopes) {
-        self.clientID = clientID
-        self.redirectURI = redirectURI
-        self.scopes = scopes
-    }
-
-    public typealias PKCE = CadenciaCore.PKCE
-
-    public static func makePKCE(randomBytes: [UInt8]? = nil) -> PKCE { PKCE.make(randomBytes: randomBytes) }
-
-    public func authorizationURL(pkce: PKCE, state: String) -> URL {
-        var c = URLComponents(url: Self.authorizeURL, resolvingAgainstBaseURL: false)!
-        c.queryItems = [
-            .init(name: "client_id", value: clientID),
-            .init(name: "redirect_uri", value: redirectURI),
-            .init(name: "scope", value: scopes.joined(separator: ",")),
-            .init(name: "state", value: state),
-            .init(name: "code_challenge", value: pkce.challenge),
-            .init(name: "code_challenge_method", value: "S256"),
-        ]
-        return c.url!
-    }
-
-    public struct TokenResponse: Decodable, Equatable, Sendable {
-        public struct Athlete: Decodable, Equatable, Sendable {
-            public let id: String
-            public let name: String?
-        }
-        public let access_token: String
-        public let scope: String
-        public let athlete: Athlete
-        public var scopes: [String] { scope.split(separator: ",").map(String.init) }
-    }
-
-    /// Exchanges the code. Public client + PKCE: no client secret is ever shipped in the app.
-    public func exchange(code: String, pkce: PKCE, transport: any HTTPTransport) async throws -> TokenResponse {
-        let form = ["client_id": clientID, "code": code, "code_verifier": pkce.verifier, "redirect_uri": redirectURI]
-            .map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? $0.value)" }
-            .joined(separator: "&")
-        let request = HTTPRequest(method: .post, url: Self.tokenURL,
-                                  headers: ["Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"],
-                                  body: Data(form.utf8))
-        let response = try await transport.send(request)
-        guard response.isSuccess else { throw HTTPError.status(response.status, String(data: response.body, encoding: .utf8) ?? "") }
-        return try JSONDecoder().decode(TokenResponse.self, from: response.body)
     }
 }

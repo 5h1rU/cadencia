@@ -13,7 +13,12 @@ import { ModelName } from "../CoachText.ts";
 import { Attempt } from "../Counts.ts";
 import { DailyDecision } from "./DailyDecision.aggregate.ts";
 
-/** The day's decision as the athlete sees it: the latest proposal and the plan's answer. */
+const Proposal = Schema.Struct({ attempt: Attempt, workout: Workout, note: CoachNote });
+
+/**
+ * The day's decision as the athlete sees it: the latest proposal, the plan's
+ * answer to it, and the proposal the plan holds, which can be an earlier one.
+ */
 export class TodayDecision extends Domain.View("TodayDecision", {
   from: [DailyDecision],
   key: DailyDecision,
@@ -30,7 +35,13 @@ export class TodayDecision extends Domain.View("TodayDecision", {
     model: Schema.NullOr(ModelName),
     interpretedOn: Schema.NullOr(InterpretedOn),
     refusal: Schema.NullOr(Refusal),
+    /** The proposal the plan accepted last, if any. */
+    planHolds: Schema.NullOr(Proposal),
+    /** Proposals still waiting for the plan's answer. */
+    awaiting: Schema.Array(Proposal),
   }),
+  // Bump when the state or how it folds changes, so the view is rebuilt from the decision's events.
+  version: 1,
   initial: {
     athleteId: null,
     day: null,
@@ -42,9 +53,11 @@ export class TodayDecision extends Domain.View("TodayDecision", {
     model: null,
     interpretedOn: null,
     refusal: null,
+    planHolds: null,
+    awaiting: [],
   },
   evolve: {
-    DailyDecisionRecorded: (_, e) => ({
+    DailyDecisionRecorded: (v, e) => ({
       athleteId: e.athleteId,
       day: e.day,
       attempt: e.attempt,
@@ -55,13 +68,21 @@ export class TodayDecision extends Domain.View("TodayDecision", {
       model: e.model,
       interpretedOn: e.interpretedOn,
       refusal: null,
+      planHolds: v.planHolds,
+      awaiting: [...v.awaiting, { attempt: e.attempt, workout: e.workout, note: e.note }],
     }),
-    PlanVerdictRecorded: (v, e) =>
-      e.attempt !== v.attempt
-        ? v
-        : e.answer._tag === "Accepted"
-          ? { ...v, status: "accepted" as const, refusal: null }
-          : { ...v, status: "refused" as const, refusal: e.answer.refusal },
+    PlanVerdictRecorded: (v, e) => {
+      const proposal = v.awaiting.find((p) => p.attempt === e.attempt);
+      const answered = {
+        ...v,
+        awaiting: v.awaiting.filter((p) => p.attempt !== e.attempt),
+        planHolds: e.answer._tag === "Accepted" && proposal ? proposal : v.planHolds,
+      };
+      if (e.attempt !== v.attempt) return answered;
+      return e.answer._tag === "Accepted"
+        ? { ...answered, status: "accepted" as const, refusal: null }
+        : { ...answered, status: "refused" as const, refusal: e.answer.refusal };
+    },
   },
   validate: Effect.fn(function* (request) {
     yield* mustOwn(ownerOf(request.key.id));
