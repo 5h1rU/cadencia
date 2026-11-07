@@ -27,6 +27,16 @@
         }
       }
     },
+    "The coach drafted the plan again while you were reading it. Review the new draft before accepting it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El coach volvió a redactar el plan mientras lo leías. Revisa el nuevo borrador antes de aceptarlo."
+          }
+        }
+      }
+    },
     "Your accepted FTP is waiting to be saved to Intervals.icu." : {
       "localizations" : {
         "es" : {

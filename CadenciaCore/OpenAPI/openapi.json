@@ -275,6 +275,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "UnknownMessage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnknownMessageEncoded"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -823,7 +833,7 @@
             }
           },
           "409": {
-            "description": "ConsultationNotOpen | NoDraft",
+            "description": "ConsultationNotOpen | NoDraft | DraftChanged",
             "content": {
               "application/json": {
                 "schema": {
@@ -833,6 +843,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/NoDraftEncoded"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DraftChangedEncoded"
                     }
                   ]
                 }
@@ -864,10 +877,14 @@
                     "properties": {
                       "planId": {
                         "$ref": "#/components/schemas/PlanId"
+                      },
+                      "draftRevision": {
+                        "$ref": "#/components/schemas/Count"
                       }
                     },
                     "required": [
-                      "planId"
+                      "planId",
+                      "draftRevision"
                     ],
                     "additionalProperties": false
                   }
@@ -2474,6 +2491,9 @@
               }
             ]
           },
+          "draftRevision": {
+            "$ref": "#/components/schemas/Count"
+          },
           "planId": {
             "anyOf": [
               {
@@ -2499,6 +2519,7 @@
           "stage",
           "turns",
           "draft",
+          "draftRevision",
           "planId",
           "refusal"
         ],
@@ -2847,6 +2868,26 @@
         "required": [
           "_tag",
           "fingerprint"
+        ],
+        "additionalProperties": false
+      },
+      "DraftChangedEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "DraftChanged"
+            ]
+          },
+          "draftRevision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "_tag",
+          "draftRevision"
         ],
         "additionalProperties": false
       },
@@ -3913,6 +3954,25 @@
         },
         "required": [
           "_tag"
+        ],
+        "additionalProperties": false
+      },
+      "UnknownMessageEncoded": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": [
+              "UnknownMessage"
+            ]
+          },
+          "messageId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "_tag",
+          "messageId"
         ],
         "additionalProperties": false
       },

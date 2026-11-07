@@ -118,7 +118,7 @@ final class CoachStateTests: XCTestCase {
         take(&state)
         state.today?.decidedAt = day.date() // whole seconds survive ISO 8601
         state.coachThread = .init(.init(messages: [.init(messageId: TestIDs.message(1), role: .athlete, text: "Hi", at: "2028-03-17T08:00:00.000Z")]))
-        state.consultation = .init(id: TestIDs.consultation, startedOn: day, view: .init(.init(stage: .open, turns: [.init(role: .coach, text: "Goal?")])))
+        state.consultation = .init(id: TestIDs.consultation, startedOn: day, view: .init(.init(stage: .open, turns: [.init(role: .coach, text: "Goal?")], draftRevision: CadenciaAPI.Count(rawValue: 0)!)))
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
         XCTAssertEqual(try decoder.decode(AppState.self, from: encoder.encode(state)), state)

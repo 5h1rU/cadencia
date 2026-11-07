@@ -1,3 +1,4 @@
+import { Count } from "@cadencia/coach/Count";
 import { EvidenceSnapshot } from "@cadencia/athlete/Evidence";
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
 import { CoachNote } from "@cadencia/coach/CoachNote";
@@ -146,7 +147,7 @@ describe("Cadencia: iOS runs the AI, the backend records it and the plan decides
         const ios = yield* device();
         yield* ios.StartConsultation(consultation, {});
         yield* ios.RecordDraft(consultation, { draft, model, interpretedOn: "ios" });
-        yield* ios.AcceptDraft(consultation, { planId });
+        yield* ios.AcceptDraft(consultation, { planId, draftRevision: Count.make(1) });
 
         const web = yield* planning();
         const plan = yield* until(web.CurrentPlan.watch(anaId), (p) => p.sessions.every((s) => s.status === "published"));
@@ -162,7 +163,7 @@ describe("Cadencia: iOS runs the AI, the backend records it and the plan decides
         const ios = yield* device();
         yield* ios.StartConsultation(consultation, {});
         yield* ios.RecordDraft(consultation, { draft, model, interpretedOn: "ios" });
-        yield* ios.AcceptDraft(consultation, { planId });
+        yield* ios.AcceptDraft(consultation, { planId, draftRevision: Count.make(1) });
         const web = yield* planning();
         yield* until(web.CurrentPlan.watch(anaId), (p) => p.status === "active");
 
@@ -213,7 +214,7 @@ describe("Cadencia: iOS runs the AI, the backend records it and the plan decides
         expect(decide._tag).toBe("NotYours");
         yield* ios.StartConsultation(consultation, {});
         yield* ios.RecordDraft(consultation, { draft, model, interpretedOn: "ios" });
-        const accept = yield* ios.AcceptDraft(consultation, { planId: bobsPlan }).pipe(Effect.flip);
+        const accept = yield* ios.AcceptDraft(consultation, { planId: bobsPlan, draftRevision: Count.make(1) }).pipe(Effect.flip);
         expect(accept._tag).toBe("NotYours");
         const bobs = yield* planning(bob);
         expect((yield* bobs.CurrentPlan.get(AthleteId.make("i200")))?.status ?? "none").toBe("none");

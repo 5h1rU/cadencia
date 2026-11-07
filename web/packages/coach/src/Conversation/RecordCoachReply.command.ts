@@ -7,6 +7,7 @@ import { ConversationId } from "./Conversation.id.ts";
 import { Intent } from "./Intent.ts";
 import { MessageId } from "./Message.id.ts";
 import { MessageText } from "./MessageText.ts";
+import { UnknownMessage } from "./UnknownMessage.rejection.ts";
 
 export class CoachReplied extends Domain.Event("CoachReplied", {
   messageId: MessageId,
@@ -30,5 +31,5 @@ export class RecordCoachReply extends Domain.Command("RecordCoachReply", {
     interpretedOn: InterpretedOn,
   },
   events: [CoachReplied],
-  rejects: [NotYours],
+  rejects: [NotYours, UnknownMessage],
 }) {}

@@ -53,6 +53,17 @@ public struct CadenciaAPI: Sendable {
         return (try? regex.wholeMatch(in: value)) != nil
     }
 
+    /// Whether `value` (`YYYY-MM-DD`) is a day the calendar has, as the domain's `Day` checks: `2026-02-31` isn't.
+    static func isCalendarDay(_ value: String) -> Bool {
+        let parts = value.split(separator: "-", omittingEmptySubsequences: false).map { Int($0) }
+        guard parts.count == 3, let year = parts[0], let month = parts[1], let day = parts[2] else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) else { return false }
+        let back = calendar.dateComponents([.year, .month, .day], from: date)
+        return back.year == year && back.month == month && back.day == day
+    }
+
     // MARK: Sign-in
 
     /// The callback Cadencia iOS registers: the server redirects there with `?handoff=…`.

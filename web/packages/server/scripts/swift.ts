@@ -7,8 +7,9 @@
  * A key the schema requires is always sent, as `null` when Swift has no
  * value: Effect refuses a missing `NullOr` field. Each domain brand
  * (`x-brand`: `PlanId`, `Day`, `Minutes`, `Title`, …) becomes a type that
- * checks the brand's pattern, length or range when it is made or decoded, so
- * Swift cannot build a value the domain would refuse. The transport, the session
+ * checks the brand's pattern, length or range when it is made or decoded, and
+ * the domain checks listed in `PORTABLE_CHECKS`, so Swift cannot build a value
+ * those checks would refuse. The transport, the session
  * and the errors are hand-written in `CadenciaAPI.swift` next to the output.
  */
 import { readFileSync, writeFileSync } from "node:fs";
@@ -134,6 +135,21 @@ const rawString = (text: string) => {
   return `#"${text}"#`;
 };
 
+/**
+ * Domain checks JSON Schema can't carry, that Swift repeats. Patterns, lengths
+ * and ranges come from the document. A check beyond them is portable only when
+ * it is listed here, with its Swift; any other one (the order of a phase's
+ * weeks, of a report's days) is the server's alone. The server's answer is
+ * authoritative either way: Swift only refuses earlier what it would refuse.
+ */
+const PORTABLE_CHECKS: Record<string, { readonly swift: string; readonly description: string }> = {
+  Day: { swift: "CadenciaAPI.isCalendarDay(value)", description: "a calendar day that exists" },
+  DailyDecisionId: {
+    swift: `CadenciaAPI.isCalendarDay(String(value.split(separator: ":").last ?? ""))`,
+    description: "on a calendar day that exists",
+  },
+};
+
 /** A domain brand: a `RawRepresentable` that only holds values the domain accepts. */
 const brandDecl = (name: string, schema: Obj, indent: string): string => {
   const raw = schema.type === "string" ? "String" : schema.type === "integer" ? "Int" : schema.type === "number" ? "Double" : null;
@@ -155,6 +171,11 @@ const brandDecl = (name: string, schema: Obj, indent: string): string => {
   for (const pattern of patterns) {
     conditions.push(`CadenciaAPI.matches(value, ${rawString(pattern)})`);
     described.push(`\`${pattern}\``);
+  }
+  const portable = PORTABLE_CHECKS[name];
+  if (portable) {
+    conditions.push(portable.swift);
+    described.push(portable.description);
   }
   const numeric = raw !== "String";
   const lines = [

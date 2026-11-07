@@ -96,7 +96,7 @@ final class BackendContractTests: XCTestCase {
     func sendContractCommands() async throws -> [(String, [String: Any])] {
         let transport = BackendTransport()
         transport.views = [
-            "ConsultationView": [#"{"stage":"created","turns":[],"draft":null,"planId":"\#(TestIDs.plan)","refusal":null}"#],
+            "ConsultationView": [#"{"stage":"created","turns":[],"draft":null,"draftRevision":1,"planId":"\#(TestIDs.plan)","refusal":null}"#],
             "TodayDecision": [#"{"athleteId":"i100","day":"2026-11-10","attempt":1,"status":"accepted","workout":null,"note":null,"evidence":null,"model":null,"interpretedOn":null,"refusal":null,"planHolds":null,"awaiting":[]}"#],
             "ConversationThread": [#"{"messages":[]}"#],
         ]
@@ -113,7 +113,7 @@ final class BackendContractTests: XCTestCase {
         _ = try await backend.answer("Six weeks of base, three rides a week.", in: consultation); label("answerQuestion")
         _ = try await backend.recordDraft(try CadenciaAPI.PlanDraft(draft(), today: today), model: "gpt-5.5", in: consultation)
         label("recordDraft")
-        _ = try await backend.acceptDraft(planId: plan, in: consultation); label("acceptDraft")
+        _ = try await backend.acceptDraft(planId: plan, draftRevision: CadenciaAPI.Count(rawValue: 1)!, in: consultation); label("acceptDraft")
         _ = try await backend.recordDecision(on: tuesday, planId: plan, workout: threshold, note: note, evidence: evidence(TestIDs.fingerprint("1")), model: "gpt-5.5")
         label("recordDailyDecisionRefused")
         _ = try await backend.recordDecision(on: tuesday, planId: plan, workout: easy, note: note, evidence: evidence(TestIDs.fingerprint("1")), model: "gpt-5.5")
@@ -233,6 +233,11 @@ final class BackendContractTests: XCTestCase {
         XCTAssertNil(CadenciaAPI.Fingerprint(rawValue: "invalid-brief"))
         XCTAssertNil(CadenciaAPI.Day(rawValue: "2026-11-10\n"))
         XCTAssertNil(CadenciaAPI.Day(rawValue: "٢٠٢٦-١١-١٠"), "only ASCII digits, as in JavaScript")
+        XCTAssertNil(CadenciaAPI.Day(rawValue: "2026-02-31"), "a day the calendar doesn't have")
+        XCTAssertNil(CadenciaAPI.Day(rawValue: "2027-02-29"))
+        XCTAssertNotNil(CadenciaAPI.Day(rawValue: "2028-02-29"), "a leap day")
+        XCTAssertNil(CadenciaAPI.DailyDecisionId(rawValue: "i100:2026-02-31"))
+        XCTAssertNotNil(CadenciaAPI.DailyDecisionId(rawValue: "i100:2026-11-10"))
         XCTAssertNil(CadenciaAPI.Title(rawValue: " Padded"))
         XCTAssertNil(CadenciaAPI.Title(rawValue: ""))
         XCTAssertNil(CadenciaAPI.Title(rawValue: "Two lines\n"))
@@ -519,10 +524,10 @@ final class PlanAnswerTests: XCTestCase {
     func testARefusedDraftReopensTheConsultationWithTheReason() async throws {
         let transport = BackendTransport()
         transport.views["ConsultationView"] = [
-            #"{"stage":"accepted","turns":[],"draft":null,"planId":"\#(TestIDs.plan)","refusal":null}"#,
-            #"{"stage":"open","turns":[],"draft":null,"planId":null,"refusal":{"reason":"invalidPlan","detail":"A plan needs at least one session."}}"#,
+            #"{"stage":"accepted","turns":[],"draft":null,"draftRevision":1,"planId":"\#(TestIDs.plan)","refusal":null}"#,
+            #"{"stage":"open","turns":[],"draft":null,"draftRevision":1,"planId":null,"refusal":{"reason":"invalidPlan","detail":"A plan needs at least one session."}}"#,
         ]
-        let answer = try await backend(transport).acceptDraft(planId: TestIDs.plan, in: TestIDs.consultation)
+        let answer = try await backend(transport).acceptDraft(planId: TestIDs.plan, draftRevision: CadenciaAPI.Count(rawValue: 1)!, in: TestIDs.consultation)
         XCTAssertEqual(answer?.stage, .open)
         XCTAssertEqual(answer?.refusal?.reason, .invalidPlan)
         XCTAssertEqual(answer?.refusal?.detail, "A plan needs at least one session.")

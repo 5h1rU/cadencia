@@ -10,7 +10,9 @@ import { expect, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
 import { Coach, CoachHandlers } from "../src/Coach.model.ts";
 import { CoachTimeline } from "../src/CoachTimeline.view.ts";
-import { AcceptDraft, DraftAccepted, NoDraft } from "../src/Consultation/AcceptDraft.command.ts";
+import { AcceptDraft, DraftAccepted, DraftChanged, NoDraft } from "../src/Consultation/AcceptDraft.command.ts";
+import { Count } from "../src/Count.ts";
+import { Title } from "@cadencia/kernel/Text";
 import { AnswerQuestion, AthleteAnswered } from "../src/Consultation/AnswerQuestion.command.ts";
 import { Consultation } from "../src/Consultation/Consultation.aggregate.ts";
 import { ConsultationNotOpen } from "../src/Consultation/ConsultationNotOpen.rejection.ts";
@@ -35,6 +37,7 @@ import { NoOpenIntent } from "../src/Conversation/NoOpenIntent.rejection.ts";
 import { CoachReplied, RecordCoachReply } from "../src/Conversation/RecordCoachReply.command.ts";
 import { IntentApplied, IntentRefused, RecordIntentOutcome } from "../src/Conversation/RecordIntentOutcome.command.ts";
 import { MessageSent, SendMessage } from "../src/Conversation/SendMessage.command.ts";
+import { UnknownMessage } from "../src/Conversation/UnknownMessage.rejection.ts";
 import { Attempt } from "../src/DailyDecision/Attempt.ts";
 import { DailyDecision } from "../src/DailyDecision/DailyDecision.aggregate.ts";
 import {
@@ -191,6 +194,28 @@ it.effect("an intent changes the plan only after the athlete accepts it", () =>
   ),
 );
 
+it.effect("each message id names one message, and a reply answers one the athlete sent", () =>
+  story(
+    as(ana),
+    when(thread, new RecordCoachReply(reply())),
+    rejected(new UnknownMessage({ messageId: asked })),
+    when(thread, new SendMessage({ messageId: asked, text: text("Thursday I only have 45 minutes") })),
+    then(thread, new MessageSent({ athleteId: anaId, messageId: asked, text: text("Thursday I only have 45 minutes") })),
+    // The same message sent again, under another command, is the same message.
+    when(thread, new SendMessage({ messageId: asked, text: text("Thursday I only have 45 minutes") })),
+    then(thread),
+    when(thread, new RecordCoachReply(reply())),
+    then(thread, new CoachReplied(reply())),
+    // A second answer under the same id keeps the first, whose intent may already be answered.
+    when(thread, new RecordCoachReply({ ...reply(), text: text("Let's make Thursday rest.") })),
+    then(thread),
+    // A reply answers the athlete, not another reply.
+    when(thread, new RecordCoachReply({ ...reply(later), inReplyTo: answered })),
+    rejected(new UnknownMessage({ messageId: answered })),
+    view(ConversationThread, thread, (v) => expect(v.messages.map((m) => m.messageId)).toEqual([asked, answered])),
+  ),
+);
+
 it.effect("a dismissed intent never reaches the plan; a refused one keeps the reason", () =>
   story(
     given(thread, new CoachReplied(reply()), new CoachReplied(reply(later))),
@@ -214,10 +239,10 @@ it.effect("a consultation ends with a plan, or reopens with the plan's reason", 
     then(consultation, new ConsultationStarted()),
     when(consultation, new RecordCoachQuestion(question)),
     when(consultation, new AnswerQuestion({ text: text("A gran fondo in January") })),
-    when(consultation, new AcceptDraft({ planId })),
+    when(consultation, new AcceptDraft({ planId, draftRevision: revision(1) })),
     rejected(new NoDraft()),
     when(consultation, new RecordDraft({ draft, model, interpretedOn: "ios" })),
-    when(consultation, new AcceptDraft({ planId })),
+    when(consultation, new AcceptDraft({ planId, draftRevision: revision(1) })),
     then(
       consultation,
       new CoachAsked(question),
@@ -229,9 +254,33 @@ it.effect("a consultation ends with a plan, or reopens with the plan's reason", 
     succeed(Planner.createPlan, { answer: { _tag: "Refused", refusal: invalid } }),
     then(consultation, new DraftRefusedByPlan({ refusal: invalid })),
     view(ConsultationView, consultation, (v) => expect(v).toMatchObject({ stage: "open", refusal: invalid })),
-    when(consultation, new AcceptDraft({ planId })),
+    when(consultation, new AcceptDraft({ planId, draftRevision: revision(1) })),
     then(consultation, new DraftAccepted({ planId, draft })),
     call(Planner.createPlan, { requestId: request(`Consultation/${consultationId}`, 7), athleteId: anaId, planId, draft }),
+    succeed(Planner.createPlan, { answer: accepted }),
+    then(consultation, new PlanCreatedFromDraft({ planId })),
+  );
+});
+
+const revision = (n: number) => Count.make(n);
+
+it.effect("the athlete accepts the draft they read, not one the coach recorded since", () => {
+  const second = { ...draft, title: Title.make("Gran fondo, take two") };
+  return story(
+    as(ana),
+    when(consultation, new StartConsultation({})),
+    then(consultation, new ConsultationStarted()),
+    when(consultation, new RecordDraft({ draft, model, interpretedOn: "ios" })),
+    then(consultation, new DraftProposed({ draft, model, interpretedOn: "ios" })),
+    view(ConsultationView, consultation, (v) => expect(v.draftRevision).toBe(1)),
+    // Another device drafts again while the athlete reads the first draft.
+    when(consultation, new RecordDraft({ draft: second, model, interpretedOn: "ios" })),
+    then(consultation, new DraftProposed({ draft: second, model, interpretedOn: "ios" })),
+    when(consultation, new AcceptDraft({ planId, draftRevision: revision(1) })),
+    rejected(new DraftChanged({ draftRevision: revision(2) })),
+    when(consultation, new AcceptDraft({ planId, draftRevision: revision(2) })),
+    then(consultation, new DraftAccepted({ planId, draft: second })),
+    call(Planner.createPlan, { requestId: request(`Consultation/${consultationId}`, 4), athleteId: anaId, planId, draft: second }),
     succeed(Planner.createPlan, { answer: accepted }),
     then(consultation, new PlanCreatedFromDraft({ planId })),
   );
@@ -262,7 +311,7 @@ it.effect("a consultation starts once and takes questions, answers and drafts on
     when(consultation, new StartConsultation({})),
     rejected(new ConsultationAlreadyStarted()),
     when(consultation, new RecordDraft({ draft, model, interpretedOn: "ios" })),
-    when(consultation, new AcceptDraft({ planId })),
+    when(consultation, new AcceptDraft({ planId, draftRevision: revision(1) })),
     call(Planner.createPlan, { requestId: request(`Consultation/${consultationId}`, 3), athleteId: anaId, planId, draft }),
     succeed(Planner.createPlan, { answer: accepted }),
     then(
@@ -275,7 +324,7 @@ it.effect("a consultation starts once and takes questions, answers and drafts on
     rejected(new ConsultationNotOpen()),
     when(consultation, new RecordDraft({ draft, model, interpretedOn: "ios" })),
     rejected(new ConsultationNotOpen()),
-    when(consultation, new AcceptDraft({ planId })),
+    when(consultation, new AcceptDraft({ planId, draftRevision: revision(1) })),
     rejected(new ConsultationNotOpen()),
   );
 });
@@ -292,7 +341,7 @@ it.effect("only the athlete works on their consultation", () =>
     rejected(new NotYours()),
     when(consultation, new RecordDraft({ draft, model, interpretedOn: "ios" })),
     rejected(new NotYours()),
-    when(consultation, new AcceptDraft({ planId })),
+    when(consultation, new AcceptDraft({ planId, draftRevision: revision(1) })),
     rejected(new NotYours()),
   ),
 );
@@ -352,7 +401,7 @@ it.effect("an athlete's decisions, intents and drafts can only name their own pl
     when(thread, new RecordCoachReply({ ...reply(), intent: { ...intent, planId: bobsPlan } })),
     rejected(new NotYours()),
     given(consultation, new ConsultationStarted(), new DraftProposed({ draft, model, interpretedOn: "ios" })),
-    when(consultation, new AcceptDraft({ planId: bobsPlan })),
+    when(consultation, new AcceptDraft({ planId: bobsPlan, draftRevision: revision(1) })),
     rejected(new NotYours()),
   ),
 );

@@ -127,19 +127,21 @@ extension CadenciaAPI {
         public var stage: Stage
         public var turns: [ConsultationTurn]
         public var draft: PlanDraft?
+        public var draftRevision: Count
         public var planId: PlanId?
         public var refusal: Refusal?
 
-        public init(stage: Stage, turns: [ConsultationTurn], draft: PlanDraft? = nil, planId: PlanId? = nil, refusal: Refusal? = nil) {
+        public init(stage: Stage, turns: [ConsultationTurn], draft: PlanDraft? = nil, draftRevision: Count, planId: PlanId? = nil, refusal: Refusal? = nil) {
             self.stage = stage
             self.turns = turns
             self.draft = draft
+            self.draftRevision = draftRevision
             self.planId = planId
             self.refusal = refusal
         }
 
         private enum CodingKeys: String, CodingKey {
-            case stage, turns, draft, planId, refusal
+            case stage, turns, draft, draftRevision, planId, refusal
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -147,6 +149,7 @@ extension CadenciaAPI {
             try container.encode(stage, forKey: .stage)
             try container.encode(turns, forKey: .turns)
             try container.encode(draft, forKey: .draft)
+            try container.encode(draftRevision, forKey: .draftRevision)
             try container.encode(planId, forKey: .planId)
             try container.encode(refusal, forKey: .refusal)
         }
@@ -286,7 +289,7 @@ extension CadenciaAPI {
         }
     }
 
-    /// The domain's `DailyDecisionId`: `^i[1-9][0-9]*:\d{4}-\d{2}-\d{2}$`.
+    /// The domain's `DailyDecisionId`: `^i[1-9][0-9]*:\d{4}-\d{2}-\d{2}$`, on a calendar day that exists.
     public struct DailyDecisionId: CadenciaAPI.Branded {
         public let rawValue: String
 
@@ -296,11 +299,11 @@ extension CadenciaAPI {
         }
 
         public static func accepts(_ value: String) -> Bool {
-            CadenciaAPI.matches(value, #"^i[1-9][0-9]*:\d{4}-\d{2}-\d{2}$"#)
+            CadenciaAPI.matches(value, #"^i[1-9][0-9]*:\d{4}-\d{2}-\d{2}$"#) && CadenciaAPI.isCalendarDay(String(value.split(separator: ":").last ?? ""))
         }
     }
 
-    /// The domain's `Day`: `^\d{4}-\d{2}-\d{2}$`.
+    /// The domain's `Day`: `^\d{4}-\d{2}-\d{2}$`, a calendar day that exists.
     public struct Day: CadenciaAPI.Branded {
         public let rawValue: String
 
@@ -310,7 +313,7 @@ extension CadenciaAPI {
         }
 
         public static func accepts(_ value: String) -> Bool {
-            CadenciaAPI.matches(value, #"^\d{4}-\d{2}-\d{2}$"#)
+            CadenciaAPI.matches(value, #"^\d{4}-\d{2}-\d{2}$"#) && CadenciaAPI.isCalendarDay(value)
         }
     }
 
@@ -1479,18 +1482,21 @@ extension CadenciaAPI {
 
     public struct AcceptDraftInput: Codable, Equatable, Sendable {
         public var planId: PlanId
+        public var draftRevision: Count
 
-        public init(planId: PlanId) {
+        public init(planId: PlanId, draftRevision: Count) {
             self.planId = planId
+            self.draftRevision = draftRevision
         }
 
         private enum CodingKeys: String, CodingKey {
-            case planId
+            case planId, draftRevision
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(planId, forKey: .planId)
+            try container.encode(draftRevision, forKey: .draftRevision)
         }
     }
 
@@ -1637,7 +1643,7 @@ extension CadenciaAPI {
         try await command("SendMessage", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/RecordCoachReply`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403).
+    /// `POST /v1/RecordCoachReply`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), UnknownMessage (409).
     public func recordCoachReply(_ target: ConversationId, _ input: RecordCoachReplyInput, commandId: String? = nil) async throws -> Receipt {
         try await command("RecordCoachReply", target: target.rawValue, input: input, commandId: commandId)
     }
@@ -1662,7 +1668,7 @@ extension CadenciaAPI {
         try await command("RecordDraft", target: target.rawValue, input: input, commandId: commandId)
     }
 
-    /// `POST /v1/AcceptDraft`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsultationNotOpen | NoDraft (409).
+    /// `POST /v1/AcceptDraft`. Rejections: BadRequest (400), Unauthorized (401), NotYours (403), ConsultationNotOpen | NoDraft | DraftChanged (409).
     public func acceptDraft(_ target: ConsultationId, _ input: AcceptDraftInput, commandId: String? = nil) async throws -> Receipt {
         try await command("AcceptDraft", target: target.rawValue, input: input, commandId: commandId)
     }

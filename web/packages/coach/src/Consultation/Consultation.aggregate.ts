@@ -6,7 +6,8 @@ import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { inputOf } from "../inputOf.ts";
-import { AcceptDraft, DraftAccepted, NoDraft } from "./AcceptDraft.command.ts";
+import { Count } from "../Count.ts";
+import { AcceptDraft, DraftAccepted, DraftChanged, NoDraft } from "./AcceptDraft.command.ts";
 import { AnswerQuestion, AthleteAnswered } from "./AnswerQuestion.command.ts";
 import { ConsultationId } from "./Consultation.id.ts";
 import { ConsultationNotOpen } from "./ConsultationNotOpen.rejection.ts";
@@ -19,6 +20,8 @@ import { ConsultationAlreadyStarted, ConsultationStarted, StartConsultation } fr
 const ConsultationState = Schema.Struct({
   stage: Schema.Literals(["new", "open", "accepted", "created"]),
   draft: Schema.NullOr(PlanDraft),
+  /** How many drafts the coach recorded: the current one's revision. Absent for a consultation recorded before it was kept. */
+  draftRevision: Schema.optional(Count),
   planId: Schema.NullOr(PlanId),
 });
 type ConsultationState = typeof ConsultationState.Type;
@@ -32,7 +35,7 @@ const openOnly = Effect.fn(function* (state: ConsultationState, id: Consultation
 export class Consultation extends Domain.Aggregate("Consultation", {
   id: ConsultationId,
   state: ConsultationState,
-  initial: { stage: "new", draft: null, planId: null },
+  initial: { stage: "new", draft: null, draftRevision: Count.make(0), planId: null },
   commands: [StartConsultation, RecordCoachQuestion, AnswerQuestion, RecordDraft, AcceptDraft, RecordPlanCreation],
   decide: {
     StartConsultation: Effect.fn(function* (state, _cmd, { id }) {
@@ -57,6 +60,10 @@ export class Consultation extends Domain.Aggregate("Consultation", {
       if (state.draft === null) return yield* new NoDraft();
       // The new plan is the athlete's own; the plan id names its athlete.
       if (ownerOf(cmd.planId) !== ownerOf(id)) return yield* new NotYours();
+      // The athlete accepts the draft they read, not one the coach recorded since.
+      if (state.draftRevision !== undefined && cmd.draftRevision !== state.draftRevision) {
+        return yield* new DraftChanged({ draftRevision: state.draftRevision });
+      }
       return [new DraftAccepted({ planId: cmd.planId, draft: state.draft })];
     }),
     RecordPlanCreation: (state, cmd) =>
@@ -70,7 +77,11 @@ export class Consultation extends Domain.Aggregate("Consultation", {
     ConsultationStarted: (s) => ({ ...s, stage: "open" as const }),
     CoachAsked: (s) => s,
     AthleteAnswered: (s) => s,
-    DraftProposed: (s, e) => ({ ...s, draft: e.draft }),
+    DraftProposed: (s, e) => ({
+      ...s,
+      draft: e.draft,
+      draftRevision: s.draftRevision === undefined ? undefined : Count.make(s.draftRevision + 1),
+    }),
     DraftAccepted: (s, e) => ({ ...s, stage: "accepted" as const, planId: e.planId }),
     PlanCreatedFromDraft: (s) => ({ ...s, stage: "created" as const }),
     // A refused draft reopens the consultation, so the AI can draft again with the reason.

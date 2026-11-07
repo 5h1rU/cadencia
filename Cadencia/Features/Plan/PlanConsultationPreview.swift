@@ -34,7 +34,8 @@ struct PlanConsultationPreview: View {
             question: String(localized: "What other training would you like to include?"), topic: .otherTraining)
         let athlete = state.athlete.flatMap { CadenciaAPI.AthleteId(rawValue: $0.id) } ?? CadenciaAPI.AthleteId(rawValue: "i12345")!
         state.consultation = .init(id: BackendID.newConsultation(athlete: athlete), startedOn: session.startedOn,
-                                   view: .init(.init(stage: .open, turns: [.init(role: .coach, text: try! .init(fitting: session.reply!.question))])))
+                                   view: .init(.init(stage: .open, turns: [.init(role: .coach, text: try! .init(fitting: session.reply!.question))],
+                                                     draftRevision: CadenciaAPI.Count(rawValue: 0)!)))
         let transport = ConsultationPreviewTransport()
         let coach = LLMCoach(transport: transport, endpoint: URL(string: "https://example.invalid/chat/completions")!, apiKey: "preview")
         let backend = CoachBackend(api: CadenciaAPI(baseURL: URL(string: "https://cadencia.invalid")!, transport: transport, sessionToken: "preview"),

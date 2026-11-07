@@ -3,6 +3,7 @@
     "acceptDraft" : {
       "body" : {
         "input" : {
+          "draftRevision" : 1,
           "planId" : "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f"
         },
         "target" : "i100:c0ffee00-1234-4abc-9def-0123456789ab"

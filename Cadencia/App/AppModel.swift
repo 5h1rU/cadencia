@@ -503,6 +503,8 @@ final class AppModel {
             message = String(localized: "This session can't be moved any more: it was changed in Intervals.icu or skipped.")
         case .rejected(tag: "IntentExpired", _, _)?:
             message = String(localized: "The days this change was for have passed, so your plan can't apply it.")
+        case .rejected(tag: "DraftChanged", _, _)?:
+            message = String(localized: "The coach drafted the plan again while you were reading it. Review the new draft before accepting it.")
         case .rejected(tag: "ImplausibleToday", _, _)?:
             message = String(localized: "Your device's date doesn't match today's. Check the date and time in your device settings.")
         case .rejected(let tag, _, _)?:
@@ -1383,19 +1385,26 @@ final class AppModel {
         guard isSignedIn, !consultationBusy, !Task.isCancelled, let open = state.consultation, StableID.uuid(open.id.rawValue) == sessionID,
               planConsultation?.reply?.draft == draft else { throw PlanConsultation.ValidationError.invalidDraft }
         let preview = try draft.makePlan(today: today)
-        try await acceptDraft(in: open.id, context: { planId in
+        // The draft the athlete read, by the revision the consultation showed with it.
+        guard let revision = open.view.value?.draftRevision else { throw PlanConsultation.ValidationError.invalidDraft }
+        try await acceptDraft(in: open.id, draftRevision: revision, context: { planId in
             PlanContext(planId: planId, availability: preview.availability, details: draft.details, event: preview.event)
         })
     }
 
     /// Accepts the consultation's draft as a new plan and adopts it once Planning created it.
-    private func acceptDraft(in consultation: CadenciaAPI.ConsultationId, context: (CadenciaAPI.PlanId) -> PlanContext) async throws {
+    private func acceptDraft(in consultation: CadenciaAPI.ConsultationId, draftRevision: CadenciaAPI.Count,
+                             context: (CadenciaAPI.PlanId) -> PlanContext) async throws {
         guard let backend else { throw CadenciaAPIError.signedOut }
         let planId = BackendID.newPlan(athlete: backend.athleteId)
         let completedToday = isTodayWorkoutCompleted
         let answer: CadenciaAPI.ConsultationViewState?
-        do { answer = try await backend.acceptDraft(planId: planId, in: consultation) } catch {
+        do { answer = try await backend.acceptDraft(planId: planId, draftRevision: draftRevision, in: consultation) } catch {
             _ = backendFailure(error)
+            // The coach drafted again since: show the athlete the draft they would be accepting.
+            if (error as? CadenciaAPIError)?.rejection == "DraftChanged", let view = try? await backend.consultation(consultation) {
+                mutate { if $0.consultation?.id == consultation { $0.consultation?.view = .init(view) } }
+            }
             throw error
         }
         switch answer?.stage {
@@ -1484,6 +1493,7 @@ final class AppModel {
         guard let backend else { throw CadenciaAPIError.signedOut }
         let template = PlanBuilder().build(request)
         let consultation: CadenciaAPI.ConsultationId
+        let templateRevision: CadenciaAPI.Count
         do {
             let objective = request.event?.objective.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let rationale = template.phases.map(\.summary).joined(separator: " ")
@@ -1491,7 +1501,9 @@ final class AppModel {
                                                   objective: objective.isEmpty ? template.title : objective,
                                                   rationale: rationale.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? template.title : rationale)
             consultation = try await backend.startConsultation()
-            _ = try await backend.recordDraft(draft, model: PlanBuilder.templateModel, in: consultation)
+            let recorded = try await backend.recordDraft(draft, model: PlanBuilder.templateModel, in: consultation)
+            guard let revision = recorded?.draftRevision else { throw PlanCreationError.notConfirmed }
+            templateRevision = revision
         } catch {
             _ = backendFailure(error)
             throw error
@@ -1501,7 +1513,7 @@ final class AppModel {
         if planConsultation?.messages.contains(where: { $0.role == .athlete }) != true {
             mutate { $0.consultation = nil }
         }
-        try await acceptDraft(in: consultation) { planId in
+        try await acceptDraft(in: consultation, draftRevision: templateRevision) { planId in
             PlanContext(planId: planId, availability: request.availability, event: request.event)
         }
     }

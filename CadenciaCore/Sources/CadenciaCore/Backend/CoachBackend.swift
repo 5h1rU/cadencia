@@ -138,11 +138,14 @@ public struct CoachBackend: Sendable {
         return try await api.getConsultationView(consultation, after: receipt)
     }
 
-    /// Accepts the consultation's draft as plan `planId` and returns the consultation once Planning answered:
-    /// `created`, or `open` again with the reason it refused the plan. Still `accepted` if it did not answer
-    /// within `answerTimeout`.
-    public func acceptDraft(planId: CadenciaAPI.PlanId, in consultation: CadenciaAPI.ConsultationId) async throws -> CadenciaAPI.ConsultationViewState? {
-        let receipt = try await send { try await api.acceptDraft(consultation, .init(planId: planId), commandId: $0) }
+    /// Accepts the consultation's draft the athlete read, `draftRevision` as the consultation showed it, as plan
+    /// `planId`, and returns the consultation once Planning answered: `created`, or `open` again with the reason
+    /// it refused the plan. Still `accepted` if it did not answer within `answerTimeout`. The backend refuses with
+    /// `DraftChanged` when the coach drafted again since.
+    public func acceptDraft(planId: CadenciaAPI.PlanId, draftRevision: CadenciaAPI.Count,
+                            in consultation: CadenciaAPI.ConsultationId) async throws -> CadenciaAPI.ConsultationViewState? {
+        let input = CadenciaAPI.AcceptDraftInput(planId: planId, draftRevision: draftRevision)
+        let receipt = try await send { try await api.acceptDraft(consultation, input, commandId: $0) }
         return try await answer(read: { try await api.getConsultationView(consultation, after: $0) }, after: receipt) {
             $0.stage != .accepted
         }
