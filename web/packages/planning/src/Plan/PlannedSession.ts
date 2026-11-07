@@ -35,3 +35,17 @@ export const PlannedSession = Schema.Struct({
   externalId: ExternalId,
 });
 export type PlannedSession = typeof PlannedSession.Type;
+
+/** Sessions the athlete has taken over in Intervals stay as they are: Intervals wins. */
+export const isOwnedByCadencia = (session: PlannedSession) =>
+  session.status !== "changedInIntervals" && session.status !== "removedInIntervals";
+
+/** Whether the session is still the same version as `published`, whatever its status. */
+export const isAsPublished = (session: PlannedSession, published: PlannedSession) =>
+  session.externalId === published.externalId &&
+  session.day === published.day &&
+  session.kind === published.kind &&
+  session.title === published.title &&
+  session.targetMinutes === published.targetMinutes &&
+  session.purpose === published.purpose &&
+  JSON.stringify(session.workout) === JSON.stringify(published.workout);

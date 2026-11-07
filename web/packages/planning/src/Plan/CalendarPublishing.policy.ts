@@ -9,7 +9,7 @@ import { SessionConcretized } from "./ConcretizeSession.command.ts";
 import { PlanCreated } from "./CreatePlan.command.ts";
 import { SessionMoved } from "./MoveSession.command.ts";
 import { Plan } from "./Plan.aggregate.ts";
-import type { PlannedSession } from "./PlannedSession.ts";
+import { isAsPublished, isOwnedByCadencia, type PlannedSession } from "./PlannedSession.ts";
 import { RecordCalendarFailure } from "./RecordCalendarFailure.command.ts";
 import { RecordCalendarPublication } from "./RecordCalendarPublication.command.ts";
 import { PlanRetired } from "./RetirePlan.command.ts";
@@ -37,7 +37,25 @@ export const CalendarPublishingLive = CalendarPublishing.toLayer(
       const athleteId = ownerOf(source.id);
       const record = (command: RecordCalendarPublication | RecordCalendarFailure) =>
         plans.send(source, command).pipe(Effect.provideService(CurrentActor, system("CalendarPublishing")));
+      /**
+       * Whether the plan still holds this version of the session, as Cadencia's. A delivery can
+       * be retried or arrive late: by then the athlete may have taken the session over in
+       * Intervals, or the plan changed it or was retired, and the old version must not be
+       * written over what Intervals shows now.
+       */
+      const stillHolds = Effect.fn(function* (session: PlannedSession) {
+        const plan = yield* plans.state(source);
+        if (plan._tag !== "Active") return false;
+        const current = plan.sessions.find((s) => s.sessionId === session.sessionId);
+        return (
+          current !== undefined &&
+          isOwnedByCadencia(current) &&
+          isAsPublished(current, session) &&
+          (current.status === "skipped") === (session.status === "skipped")
+        );
+      });
       const publish = Effect.fn(function* (session: PlannedSession) {
+        if (!(yield* stillHolds(session))) return;
         if (session.status === "skipped") {
           yield* calendar.withdrawSession({ athleteId, externalId: session.externalId });
           return;

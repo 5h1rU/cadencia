@@ -36,7 +36,7 @@ import { DayRequirement } from "./DayRequirement.ts";
 import { GoalEvent } from "./GoalEvent.ts";
 import { ImplausibleToday } from "./ImplausibleToday.rejection.ts";
 import { DayTaken, MoveSession, SessionMoved, SessionNotFound, SessionNotMovable } from "./MoveSession.command.ts";
-import { type PlannedSession, PlannedSession as PlannedSessionSchema } from "./PlannedSession.ts";
+import { isAsPublished, isOwnedByCadencia, type PlannedSession, PlannedSession as PlannedSessionSchema } from "./PlannedSession.ts";
 import { PlanNotActive } from "./PlanNotActive.rejection.ts";
 import { isSoftened, problemWith } from "./PrescriptionRules.ts";
 import { RecordCalendarFailure, SessionPublicationFailed } from "./RecordCalendarFailure.command.ts";
@@ -111,10 +111,6 @@ const setStatus = (plan: PlanState, sessionId: SessionId, status: PlannedSession
   };
 };
 
-/** Sessions the athlete has taken over in Intervals stay as they are. */
-const isOwnedByCadencia = (session: PlannedSession) =>
-  session.status !== "changedInIntervals" && session.status !== "removedInIntervals";
-
 /**
  * A session within one day's limit, or `null` when the limit leaves it as it
  * is. A limit only removes riding: an unavailable day is skipped, and a
@@ -183,16 +179,6 @@ const invalidReason = (cmd: CreatePlanCommand): InvalidPlan["reason"] | null => 
   if (cmd.goal === "event" && cmd.event === null) return "eventGoalWithoutEvent";
   return null;
 };
-
-/** Whether the session is still exactly what was published. */
-const isAsPublished = (session: PlannedSession, published: PlannedSession) =>
-  session.externalId === published.externalId &&
-  session.day === published.day &&
-  session.kind === published.kind &&
-  session.title === published.title &&
-  session.targetMinutes === published.targetMinutes &&
-  session.purpose === published.purpose &&
-  JSON.stringify(session.workout) === JSON.stringify(published.workout);
 
 /**
  * A training plan: its intent (goal, phases, purpose of each session) and the
