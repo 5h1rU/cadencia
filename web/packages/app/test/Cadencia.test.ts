@@ -28,6 +28,8 @@ import {
   init,
   IntervalsHistory,
   intervalsProblemOf,
+  LiveDecision,
+  LivePlan,
   isMovable,
   LoadIntervals,
   localDayOf,
@@ -80,7 +82,7 @@ const plan = Schema.decodeUnknownSync(CurrentPlanState)({
   calendarProblems: [{ sessionId: "2026-11-13", problem: "notConnected" }],
 });
 const planId = Option.getOrThrow(Option.fromNullishOr(plan.planId));
-const withPlan: Model = { ...signedIn, plan: Option.some(plan) };
+const withPlan: Model = { ...signedIn, plan: LivePlan.Success({ data: Option.some(plan) }) };
 
 const move = Write.MoveSession({
   target: planId,
@@ -180,7 +182,7 @@ describe("sending a write", () => {
     ).model;
     expect(next.athleteId).toBeNull();
     expect(Option.isNone(next.inFlight)).toBe(true);
-    expect(Option.isNone(next.plan)).toBe(true);
+    expect(next.plan).toEqual(AsyncData.Idle());
     expect(Option.getOrNull(next.error)).toBe("Tu sesión ha terminado. Vuelve a conectar con Intervals.icu.");
   });
 
@@ -285,7 +287,7 @@ describe("live reads", () => {
   });
 
   it("pause after a transport failure and come back after a backoff", () => {
-    const lost = update(signedIn, readFailed(new RpcClientError({ reason: new RpcClientDefect({ message: "socket closed", cause: null }) })));
+    const lost = update(signedIn, readFailed("plan")(new RpcClientError({ reason: new RpcClientDefect({ message: "socket closed", cause: null }) })));
     expect(lost.model.readsOnline).toBe(false);
     expect(lost.commands?.map((c) => [c.name, c.args])).toEqual([["WaitToReconnect", { seconds: 1 }]]);
     expect(subscriptions.plan.modelToDependencies(lost.model).isEnabled).toBe(false);
@@ -300,11 +302,63 @@ describe("live reads", () => {
     expect(WaitToReconnect.name).toBe("WaitToReconnect");
   });
 
-  it("treat Unauthorized as signed out, and NotYours as a refusal", () => {
-    expect(readFailed(new Unauthorized())).toEqual(Message.SignedOut());
-    expect(update(signedIn, readFailed(new Unauthorized())).model.athleteId).toBeNull();
-    expect(readFailed(new NotYours())).toEqual(Message.RefusedRead());
+  it("treat Unauthorized as signed out, and NotYours as a refusal of that view only", () => {
+    expect(readFailed("plan")(new Unauthorized())).toEqual(Message.SignedOut());
+    expect(update(signedIn, readFailed("plan")(new Unauthorized())).model.athleteId).toBeNull();
+    expect(readFailed("plan")(new NotYours())).toEqual(Message.RefusedRead({ view: "plan" }));
+    const refused = update(signedIn, Message.RefusedRead({ view: "plan" })).model;
+    expect(refused.plan).toEqual(AsyncData.fail("notYours"));
+    expect(refused.decision).toEqual(AsyncData.Loading());
+    expect(Option.isNone(refused.error)).toBe(true);
   });
+
+  it("wait for their first snapshot when signed in, and aren't watched when signed out", () => {
+    for (const view of [signedIn.plan, signedIn.decision, signedIn.thread, signedIn.profile]) {
+      expect(view).toEqual(AsyncData.Loading());
+    }
+    for (const view of [signedOut.plan, signedOut.decision, signedOut.thread, signedOut.profile]) {
+      expect(view).toEqual(AsyncData.Idle());
+    }
+  });
+
+  it('take "no plan" as a snapshot, not as a wait', () => {
+    expect(update(signedIn, Message.ReceivedPlan({ plan: Option.none() })).model.plan).toEqual(
+      LivePlan.Success({ data: Option.none() }),
+    );
+  });
+
+  it("wait again for the decision of a new day, and for the conversation of a new month", () => {
+    const shown = (model: Model): Model => ({
+      ...model,
+      decision: LiveDecision.Success({ data: Option.none() }),
+      thread: update(model, Message.ReceivedThread({ thread: { conversationId: conversationIdFor(ana, YearMonth.make("2026-11")), messages: [] } })).model.thread,
+    });
+    const tomorrow = update(shown(signedIn), Message.ChangedDay({ today: Day.make("2026-11-10") })).model;
+    expect(tomorrow.decision).toEqual(AsyncData.Loading());
+    expect(AsyncData.isSuccess(tomorrow.thread)).toBe(true);
+    const december = update(shown(signedIn), Message.ChangedDay({ today: Day.make("2026-12-01") })).model;
+    expect(december.thread).toEqual(AsyncData.Loading());
+    // A last snapshot of November, arriving after the month changed, is ignored.
+    const late = Message.ReceivedThread({ thread: { conversationId: conversationIdFor(ana, YearMonth.make("2026-11")), messages: [] } });
+    expect(update(december, late).model).toBe(december);
+  });
+
+  it("say they are loading where the content will be, until the snapshot comes", () =>
+    Scene.scene(
+      { update, view },
+      Scene.given(signedIn),
+      Scene.click(Scene.role("button", { name: "Plan" })),
+      Scene.expect(Scene.text("Cargando…")).toExist(),
+      Scene.expect(Scene.text("Sin plan")).not.toExist(),
+    ));
+
+  it('show "no plan" once the snapshot says so', () =>
+    Scene.scene(
+      { update, view },
+      Scene.given({ ...signedIn, section: "plan", plan: LivePlan.Success({ data: Option.none() }) }),
+      Scene.expect(Scene.text("Sin plan")).toExist(),
+      Scene.expect(Scene.text("Cargando…")).not.toExist(),
+    ));
 });
 
 describe("the local day", () => {

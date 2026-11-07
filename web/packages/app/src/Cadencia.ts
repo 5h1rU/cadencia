@@ -28,10 +28,12 @@ import type * as Domain from "@alchemy.run/domain";
 import * as DomainFoldkit from "@alchemy.run/domain/Foldkit";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Function from "effect/Function";
 import * as Data from "effect/Data";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import * as Match from "effect/Match";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import type * as RpcClientError from "effect/rpc/RpcClientError";
@@ -58,6 +60,23 @@ const ProfileState = RiderProfileCard.State;
 
 /** A month of conversation, with the id it was read under: an intent's answer goes back to it. */
 const Thread = Schema.Struct({ conversationId: ConversationId, messages: Schema.Array(ThreadMessage) });
+
+/** The domain views the app watches live, each over its own WebSocket. */
+export const LiveView = Schema.Literals(["plan", "decision", "thread", "profile"]);
+export type LiveView = typeof LiveView.Type;
+
+/** Why a live view can't be shown: the domain refused it to this athlete. */
+export const ReadProblem = Schema.Literal("notYours");
+
+/**
+ * Each live view as the app holds it: not watched (signed out), waiting for its
+ * first snapshot, the snapshot, or refused. A view that can be absent keeps
+ * its `Option` as the data, so "no plan" is a snapshot, not a wait.
+ */
+export const LivePlan = AsyncData.Schema(Schema.Option(CurrentPlanState), ReadProblem);
+export const LiveDecision = AsyncData.Schema(Schema.Option(DecisionState), ReadProblem);
+export const LiveThread = AsyncData.Schema(Thread, ReadProblem);
+export const LiveProfile = AsyncData.Schema(Schema.Option(ProfileState), ReadProblem);
 
 /**
  * A write the web sends, as the Api command's target and input. It is kept
@@ -131,10 +150,10 @@ export const Model = Schema.Struct({
   readsOnline: Schema.Boolean,
   /** Transport failures since the last read that worked, for the backoff. */
   readRetries: Schema.Number,
-  plan: Schema.Option(CurrentPlanState),
-  decision: Schema.Option(DecisionState),
-  thread: Schema.Option(Thread),
-  profile: Schema.Option(ProfileState),
+  plan: LivePlan.schema,
+  decision: LiveDecision.schema,
+  thread: LiveThread.schema,
+  profile: LiveProfile.schema,
   history: History.schema,
   move: Schema.Struct({ sessionId: Schema.String, toDay: Schema.String }),
   requirement: Schema.Struct({ day: Schema.String, maxMinutes: Schema.String, instructions: Schema.String }),
@@ -158,7 +177,7 @@ export const Message = defineMessageUnion({
   ReceivedDecision: { decision: Schema.Option(DecisionState) },
   ReceivedThread: { thread: Thread },
   ReceivedProfile: { profile: Schema.Option(ProfileState) },
-  RefusedRead: {},
+  RefusedRead: { view: LiveView },
   LostReads: {},
   ReconnectedReads: {},
   SignedOut: {},
@@ -369,10 +388,10 @@ const clearMessages = { error: () => Option.none(), notice: () => Option.none() 
 const signedOut = (model: Model): Return => ({
   model: modifyFields(model, {
     athleteId: () => null,
-    plan: () => Option.none(),
-    decision: () => Option.none(),
-    thread: () => Option.none(),
-    profile: () => Option.none(),
+    plan: () => AsyncData.Idle(),
+    decision: () => AsyncData.Idle(),
+    thread: () => AsyncData.Idle(),
+    profile: () => AsyncData.Idle(),
     history: () => AsyncData.Idle(),
     inFlight: () => Option.none(),
     savingDeclaration: () => false,
@@ -430,7 +449,11 @@ const failed = <R>(model: Model, commandId: string, failure: Failure<R>, text: (
 };
 
 const planIdOf = (model: Model) =>
-  Option.flatMap(model.plan, (plan) => (plan.status === "active" ? Option.fromNullishOr(plan.planId) : Option.none()));
+  AsyncData.getData(model.plan).pipe(
+    Option.flatten,
+    Option.filter((plan) => plan.status === "active"),
+    Option.flatMap((plan) => Option.fromNullishOr(plan.planId)),
+  );
 
 const showsHistory = (section: Section) => section === "history" || section === "profile";
 
@@ -479,6 +502,18 @@ const historyChanged = refreshHistory(isSignedIn, AsyncData.revalidate);
  */
 const historyMoved = refreshHistory((m) => historyOnScreen(m) || (isSignedIn(m) && AsyncData.isPending(m.history)), reload);
 
+/** The domain refused a live view to this athlete: that view shows why, the others are untouched. */
+const REFUSE: { readonly [View in LiveView]: (model: Model) => Model } = {
+  plan: (model) => modifyFields(model, { plan: () => AsyncData.fail("notYours") }),
+  decision: (model) => modifyFields(model, { decision: () => AsyncData.fail("notYours") }),
+  thread: (model) => modifyFields(model, { thread: () => AsyncData.fail("notYours") }),
+  profile: (model) => modifyFields(model, { profile: () => AsyncData.fail("notYours") }),
+};
+
+/** A watched view whose key changed: what it holds is for the old key until the new snapshot comes. */
+const awaitingNext = <A, E>(view: AsyncData.AsyncData<A, E>): AsyncData.AsyncData<A, E> =>
+  AsyncData.isIdle(view) ? view : AsyncData.Loading();
+
 const sameRange = (a: HistoryRange, b: HistoryRange) => a.oldest === b.oldest && a.newest === b.newest;
 
 /** A read worked: the reads are healthy again. */
@@ -499,12 +534,26 @@ const declarationFailed = (model: Model, problem: IntervalsProblem): Return =>
 export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
     ClickedSection: ({ section }) => historyOpened(modifyFields(model, { ...clearMessages, section: () => section })),
-    ChangedDay: ({ today }) => (today === model.today ? { model } : historyMoved(modifyFields(model, { today: () => today }))),
-    ReceivedPlan: ({ plan }) => read(modifyFields(model, { plan: () => plan })),
-    ReceivedDecision: ({ decision }) => read(modifyFields(model, { decision: () => decision })),
-    ReceivedThread: ({ thread }) => read(modifyFields(model, { thread: () => Option.some(thread) })),
-    ReceivedProfile: ({ profile }) => read(modifyFields(model, { profile: () => profile })),
-    RefusedRead: () => ({ model: modifyFields(model, { error: () => Option.some(notYours()) }) }),
+    ChangedDay: ({ today }) =>
+      today === model.today
+        ? { model }
+        : historyMoved(
+            modifyFields(model, {
+              today: () => today,
+              // Today's decision, and a new month's thread, are other snapshots: wait for them.
+              decision: awaitingNext,
+              thread: monthOf(today) === monthOf(model.today) ? Function.identity : awaitingNext,
+            }),
+          ),
+    ReceivedPlan: ({ plan }) => read(modifyFields(model, { plan: () => LivePlan.Success({ data: plan }) })),
+    ReceivedDecision: ({ decision }) => read(modifyFields(model, { decision: () => LiveDecision.Success({ data: decision }) })),
+    // A month that is no longer shown is ignored: its watch has already been replaced.
+    ReceivedThread: ({ thread }) =>
+      thread.conversationId === conversationOf(model)
+        ? read(modifyFields(model, { thread: () => LiveThread.Success({ data: thread }) }))
+        : { model },
+    ReceivedProfile: ({ profile }) => read(modifyFields(model, { profile: () => LiveProfile.Success({ data: profile }) })),
+    RefusedRead: ({ view }) => ({ model: REFUSE[view](model) }),
     LostReads: () =>
       // The first failure takes the reads offline and schedules one reconnection; the others wait for it.
       model.readsOnline && model.athleteId !== null
@@ -650,6 +699,9 @@ export const update = (model: Model, message: Message): Return =>
 
 // INIT
 
+/** A live view at start: waiting for its first snapshot when signed in, not watched otherwise. */
+const watching = (flags: Flags) => (flags.athleteId === null ? AsyncData.Idle() : AsyncData.Loading());
+
 export const init = (flags: Flags): Return => ({
   model: Model.make({
     athleteId: flags.athleteId,
@@ -658,10 +710,10 @@ export const init = (flags: Flags): Return => ({
     commandIds: { session: flags.session, sent: 0 },
     readsOnline: true,
     readRetries: 0,
-    plan: Option.none(),
-    decision: Option.none(),
-    thread: Option.none(),
-    profile: Option.none(),
+    plan: watching(flags),
+    decision: watching(flags),
+    thread: watching(flags),
+    profile: watching(flags),
     history: AsyncData.Idle(),
     move: { sessionId: "", toDay: "" },
     requirement: { day: flags.today, maxMinutes: "", instructions: "" },
@@ -691,17 +743,15 @@ const reading = (model: Model) => model.athleteId !== null && model.readsOnline;
 
 type ReadFailure = NotYours | Unauthorized | RpcClientError.RpcClientError;
 
-/** A read ended: refused, signed out, or the connection dropped. */
-export const readFailed = (error: ReadFailure): Message => {
-  switch (error._tag) {
-    case "Unauthorized":
-      return Message.SignedOut();
-    case "NotYours":
-      return Message.RefusedRead();
-    case "RpcClientError":
-      return Message.LostReads();
-  }
-};
+/** A live view's read ended: signed out, refused to this athlete, or the connection dropped. */
+export const readFailed =
+  (view: LiveView) =>
+  (error: ReadFailure): Message =>
+    Match.valueTags(error, {
+      Unauthorized: () => Message.SignedOut(),
+      NotYours: () => Message.RefusedRead({ view }),
+      RpcClientError: () => Message.LostReads(),
+    });
 
 const lostReads = (): Message => Message.LostReads();
 
@@ -734,7 +784,7 @@ const threadWatch = (conversationId: ConversationId) =>
       Message.ReceivedThread({
         thread: { conversationId, messages: Option.match(state, { onNone: () => [], onSome: (t) => t.messages }) },
       }),
-    onFailure: readFailed,
+    onFailure: readFailed("thread"),
     onDefect: lostReads,
   });
 
@@ -756,14 +806,14 @@ export const subscriptions = Subscription.make<Model, Message, Clients>()((entry
     isEnabled: reading,
     toMessage: ({ state }): Message =>
       Message.ReceivedPlan({ plan: Option.filter(state, (p) => p.planId !== null) }),
-    onFailure: readFailed,
+    onFailure: readFailed("plan"),
     onDefect: lostReads,
   }),
   decision: CoachClient.TodayDecision.watch({
     key: (model: Model) => dailyDecisionIdFor(ownerOf(model), model.today),
     isEnabled: reading,
     toMessage: ({ state }): Message => Message.ReceivedDecision({ decision: state }),
-    onFailure: readFailed,
+    onFailure: readFailed("decision"),
     onDefect: lostReads,
   }),
   // The watch is rebuilt for each conversation, so every snapshot names the
@@ -777,7 +827,7 @@ export const subscriptions = Subscription.make<Model, Message, Clients>()((entry
     key: ownerOf,
     isEnabled: reading,
     toMessage: ({ state }): Message => Message.ReceivedProfile({ profile: state }),
-    onFailure: readFailed,
+    onFailure: readFailed("profile"),
     onDefect: lostReads,
   }),
 }));
@@ -850,52 +900,81 @@ const reconnectLink = (h: HtmlBuilder<Message>, text: string) => h.a([h.Href("/a
 /** Whether a write is waiting: every write control is disabled until it settles. */
 const busy = (model: Model) => Option.isSome(model.inFlight);
 
-const homeView = (model: Model, h: HtmlBuilder<Message>) => {
-  const decision = Option.getOrNull(model.decision);
-  const upcoming = Option.match(model.plan, {
-    onNone: () => [],
-    onSome: (plan) => plan.sessions.filter((s) => s.day >= model.today && s.day <= addDays(model.today, 6)),
+/**
+ * What a live view shows in each of its states: until its first snapshot comes,
+ * or when it is refused, a line says so where its content would be.
+ */
+const liveContent = <A>(
+  h: HtmlBuilder<Message>,
+  view: AsyncData.AsyncData<A, typeof ReadProblem.Type>,
+  content: (data: A) => ReadonlyArray<Html>,
+): ReadonlyArray<Html> =>
+  AsyncData.matchData(view, {
+    onEmpty: () => [h.p([h.Class("muted"), h.AriaLive("polite")], ["Cargando…"])],
+    onFailure: () => [h.p([h.Class("error")], [notYours()])],
+    onData: content,
   });
-  const problems = Option.match(model.plan, { onNone: () => [], onSome: (plan) => plan.calendarProblems });
-  const decisionCard =
-    decision === null || decision.status === "none" || decision.note === null
-      ? h.div([h.Class("card")], [
-          h.h2([], ["Hoy"]),
+
+/** Today's decision, once iOS has made one: the card with its note, or a card saying it will come. */
+const decisionCard = (model: Model, h: HtmlBuilder<Message>) => {
+  const made = AsyncData.getData(model.decision).pipe(
+    Option.flatten,
+    Option.flatMap((decision) =>
+      decision.status === "none" ? Option.none() : Option.map(Option.fromNullishOr(decision.note), (note) => ({ decision, note })),
+    ),
+  );
+  return Option.match(made, {
+    onNone: () =>
+      h.div([h.Class("card")], [
+        h.h2([], ["Hoy"]),
+        ...liveContent(h, model.decision, () => [
           h.p([h.Class("muted")], ["La decisión de hoy aparecerá cuando abras Cadencia en el iPhone."]),
-        ])
-      : h.div([h.Class("card")], [
-          h.h2([], [decision.note.headline]),
-          decision.status === "accepted"
-            ? pill(h, "Aceptada por el plan", "good")
-            : decision.status === "refused"
-              ? pill(h, `El plan la rechazó: ${refusalText(decision.refusal)}`, "bad")
-              : pill(h, "Esperando al plan", "info"),
-          h.p([], [decision.note.body]),
-          h.p([], [decision.note.session]),
-          ...(decision.note.watch ? [h.p([h.Class("muted")], [decision.note.watch])] : []),
-          ...(decision.workout ? [h.p([h.Class("muted")], [workoutLine(decision.workout)])] : []),
-          // The plan keeps the last proposal it accepted, which can be an earlier attempt.
-          ...(decision.planHolds !== null && decision.planHolds.attempt !== decision.attempt
-            ? [h.p([], [`El plan mantiene: ${decision.planHolds.note.headline} (${workoutLine(decision.planHolds.workout)})`])]
-            : []),
-          ...(decision.awaiting.length > 0 && decision.status !== "pending"
-            ? [h.p([h.Class("muted")], ["Hay otra propuesta esperando la respuesta del plan."])]
-            : []),
-          ...(decision.evidence
-            ? [h.p([h.Class("muted")], [`Readiness: ${decision.evidence.readiness.summary} (${decision.evidence.readiness.score}/100)`])]
-            : []),
-          h.p([h.Class("muted")], [`Interpretado en iOS con ${decision.model ?? "?"}.`]),
-        ]);
-  return [
-    decisionCard,
-    h.div([h.Class("card")], [
-      h.h2([], ["Próximos 7 días"]),
-      upcoming.length === 0
-        ? h.p([h.Class("muted")], ["No hay sesiones planificadas esta semana."])
-        : sessionsTable(h, upcoming, problems),
-    ]),
-  ];
+        ]),
+      ]),
+    onSome: ({ decision, note }) =>
+      h.div([h.Class("card")], [
+        h.h2([], [note.headline]),
+        decision.status === "accepted"
+          ? pill(h, "Aceptada por el plan", "good")
+          : decision.status === "refused"
+            ? pill(h, `El plan la rechazó: ${refusalText(decision.refusal)}`, "bad")
+            : pill(h, "Esperando al plan", "info"),
+        h.p([], [note.body]),
+        h.p([], [note.session]),
+        ...(note.watch ? [h.p([h.Class("muted")], [note.watch])] : []),
+        ...(decision.workout ? [h.p([h.Class("muted")], [workoutLine(decision.workout)])] : []),
+        // The plan keeps the last proposal it accepted, which can be an earlier attempt.
+        ...(decision.planHolds !== null && decision.planHolds.attempt !== decision.attempt
+          ? [h.p([], [`El plan mantiene: ${decision.planHolds.note.headline} (${workoutLine(decision.planHolds.workout)})`])]
+          : []),
+        ...(decision.awaiting.length > 0 && decision.status !== "pending"
+          ? [h.p([h.Class("muted")], ["Hay otra propuesta esperando la respuesta del plan."])]
+          : []),
+        ...(decision.evidence
+          ? [h.p([h.Class("muted")], [`Readiness: ${decision.evidence.readiness.summary} (${decision.evidence.readiness.score}/100)`])]
+          : []),
+        h.p([h.Class("muted")], [`Interpretado en iOS con ${decision.model ?? "?"}.`]),
+      ]),
+  });
 };
+
+const homeView = (model: Model, h: HtmlBuilder<Message>) => [
+  decisionCard(model, h),
+  h.div([h.Class("card")], [
+    h.h2([], ["Próximos 7 días"]),
+    ...liveContent(h, model.plan, (plan) => {
+      const upcoming = Option.match(plan, {
+        onNone: () => [],
+        onSome: ({ sessions }) => sessions.filter((s) => s.day >= model.today && s.day <= addDays(model.today, 6)),
+      });
+      return [
+        upcoming.length === 0
+          ? h.p([h.Class("muted")], ["No hay sesiones planificadas esta semana."])
+          : sessionsTable(h, upcoming, Option.match(plan, { onNone: () => [], onSome: (p) => p.calendarProblems })),
+      ];
+    }),
+  ]),
+];
 
 const sessionsTable = (
   h: HtmlBuilder<Message>,
@@ -931,63 +1010,67 @@ const sessionsTable = (
     ]),
   ]);
 
-const coachView = (model: Model, h: HtmlBuilder<Message>) => {
-  const thread = Option.getOrNull(model.thread);
-  const messages = thread?.messages ?? [];
-  return [
-    h.div([h.Class("card")], [
-      h.h2([], ["Conversación de este mes"]),
-      h.p([h.Class("muted")], [
-        "Para escribir al coach usa Cadencia en el iPhone: la respuesta necesita la IA. Aquí puedes aceptar o descartar lo que te propone.",
-      ]),
-      ...(thread === null || messages.length === 0
-        ? [h.p([h.Class("muted")], ["Todavía no hay mensajes este mes."])]
-        : messages.map((m) =>
-            h.keyed("div")(m.messageId, [h.Class(`message ${m.role}`)], [
-              h.p([], [m.text]),
-              ...(m.intent
-                ? [
-                    h.p([h.Class("muted")], [`Propuesta: ${m.intent.summary}`]),
-                    m.intentStatus === "proposed"
-                      ? h.div([h.Class("row")], [
-                          h.button(
-                            [
-                              h.Class("primary"),
-                              h.Disabled(busy(model)),
-                              h.OnClick(Message.ClickedAcceptIntent({ conversationId: thread.conversationId, messageId: m.messageId })),
-                            ],
-                            ["Aceptar"],
-                          ),
-                          h.button(
-                            [
-                              h.Class("secondary"),
-                              h.Disabled(busy(model)),
-                              h.OnClick(Message.ClickedDismissIntent({ conversationId: thread.conversationId, messageId: m.messageId })),
-                            ],
-                            ["Descartar"],
-                          ),
-                        ])
-                      : pill(
-                          h,
-                          m.intentStatus === "applied"
-                            ? "Aplicada al plan"
-                            : m.intentStatus === "refused"
-                              ? `El plan la rechazó: ${refusalText(m.refusal)}`
-                              : m.intentStatus === "dismissed"
-                                ? "Descartada"
-                                : "Aceptada",
-                          m.intentStatus === "applied" ? "good" : m.intentStatus === "refused" ? "bad" : "info",
-                        ),
-                  ]
-                : []),
-            ]),
-          )),
+const coachView = (model: Model, h: HtmlBuilder<Message>) => [
+  h.div([h.Class("card")], [
+    h.h2([], ["Conversación de este mes"]),
+    h.p([h.Class("muted")], [
+      "Para escribir al coach usa Cadencia en el iPhone: la respuesta necesita la IA. Aquí puedes aceptar o descartar lo que te propone.",
     ]),
-  ];
-};
+    ...liveContent(h, model.thread, (thread) =>
+      thread.messages.length === 0
+        ? [h.p([h.Class("muted")], ["Todavía no hay mensajes este mes."])]
+        : thread.messages.map((m) =>
+          h.keyed("div")(m.messageId, [h.Class(`message ${m.role}`)], [
+            h.p([], [m.text]),
+            ...(m.intent
+              ? [
+                  h.p([h.Class("muted")], [`Propuesta: ${m.intent.summary}`]),
+                  m.intentStatus === "proposed"
+                    ? h.div([h.Class("row")], [
+                        h.button(
+                          [
+                            h.Class("primary"),
+                            h.Disabled(busy(model)),
+                            h.OnClick(Message.ClickedAcceptIntent({ conversationId: thread.conversationId, messageId: m.messageId })),
+                          ],
+                          ["Aceptar"],
+                        ),
+                        h.button(
+                          [
+                            h.Class("secondary"),
+                            h.Disabled(busy(model)),
+                            h.OnClick(Message.ClickedDismissIntent({ conversationId: thread.conversationId, messageId: m.messageId })),
+                          ],
+                          ["Descartar"],
+                        ),
+                      ])
+                    : pill(
+                        h,
+                        m.intentStatus === "applied"
+                          ? "Aplicada al plan"
+                          : m.intentStatus === "refused"
+                            ? `El plan la rechazó: ${refusalText(m.refusal)}`
+                            : m.intentStatus === "dismissed"
+                              ? "Descartada"
+                              : "Aceptada",
+                        m.intentStatus === "applied" ? "good" : m.intentStatus === "refused" ? "bad" : "info",
+                      ),
+                ]
+              : []),
+          ]),
+        ),
+    ),
+  ]),
+];
 
 const planView = (model: Model, h: HtmlBuilder<Message>) =>
-  Option.match(model.plan, {
+  Option.match(AsyncData.getData(model.plan), {
+    onNone: () => [h.div([h.Class("card")], [h.h2([], ["Plan"]), ...liveContent(h, model.plan, () => [])])],
+    onSome: (plan) => planCards(model, h, plan),
+  });
+
+const planCards = (model: Model, h: HtmlBuilder<Message>, plan: Option.Option<typeof CurrentPlanState.Type>) =>
+  Option.match(plan, {
     onNone: () => [
       h.div([h.Class("card")], [
         h.h2([], ["Sin plan"]),
@@ -1160,7 +1243,6 @@ const scale = (h: HtmlBuilder<Message>, label: string, field: "mood" | "motivati
   ]);
 
 const profileView = (model: Model, h: HtmlBuilder<Message>) => {
-  const report = Option.getOrNull(Option.flatMap(model.profile, (p) => Option.fromNullishOr(p.report)));
   return [
     ...historyCards(model, h, "Tu perfil", ({ athlete }) => [
       h.div([h.Class("card")], [
@@ -1198,15 +1280,19 @@ const profileView = (model: Model, h: HtmlBuilder<Message>) => {
     ]),
     h.div([h.Class("card")], [
       h.h2([], ["Perfil de ciclista"]),
-      report === null
-        ? h.p([h.Class("muted")], ["Se genera con la IA desde Cadencia para iPhone."])
-        : h.div([], [
-            h.p([], [h.strong([], [report.headline])]),
-            h.p([], [report.summary]),
-            h.p([h.Class("muted")], [
-              `Basado en ${report.rideCount} salidas, ${report.oldest} → ${report.newest}. Confianza: ${report.confidence}.`,
+      ...liveContent(h, model.profile, (profile) => [
+        Option.match(Option.flatMap(profile, (p) => Option.fromNullishOr(p.report)), {
+          onNone: () => h.p([h.Class("muted")], ["Se genera con la IA desde Cadencia para iPhone."]),
+          onSome: (report) =>
+            h.div([], [
+              h.p([], [h.strong([], [report.headline])]),
+              h.p([], [report.summary]),
+              h.p([h.Class("muted")], [
+                `Basado en ${report.rideCount} salidas, ${report.oldest} → ${report.newest}. Confianza: ${report.confidence}.`,
+              ]),
             ]),
-          ]),
+        }),
+      ]),
     ]),
   ];
 };
