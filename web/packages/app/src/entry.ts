@@ -42,6 +42,11 @@ Runtime.run(
     view,
     subscriptions,
     resources: Clients,
+    // Each section is a page with its own URL: links move between them, and Back and reload keep the page.
+    routing: {
+      onUrlRequest: (request) => Message.ClickedLink({ request }),
+      onUrlChange: (url) => Message.ChangedUrl({ url }),
+    },
     container: document.getElementById("root"),
     // In development only. The Message schema lets the DevTools MCP dispatch Messages; the Model holds
     // no secrets (the session cookie is HttpOnly).

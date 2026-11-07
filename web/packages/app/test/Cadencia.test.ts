@@ -17,7 +17,7 @@ import * as Option from "effect/Option";
 import { RpcClientDefect, RpcClientError } from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
 import * as Result from "effect/Result";
-import { AsyncData, FieldValidation } from "foldkit";
+import { AsyncData, FieldValidation, Navigation, Url } from "foldkit";
 import * as Scene from "foldkit/scene";
 import * as Story from "foldkit/story";
 import {
@@ -33,6 +33,8 @@ import {
   LivePlan,
   isMovable,
   LoadIntervals,
+  LoadPage,
+  NavigateInternal,
   localDayOf,
   Message,
   type Model,
@@ -46,6 +48,7 @@ import {
   WaitToReconnect,
   Write,
 } from "../src/Cadencia.ts";
+import { AppRoute, historyRouter, routeOf } from "../src/Route.ts";
 
 const ana = AthleteId.make("i100");
 
@@ -53,8 +56,15 @@ const ana = AthleteId.make("i100");
 const errorsOf = (field: FieldValidation.Field<string>) =>
   field._tag === "Invalid" ? Option.some(field.errors) : Option.none();
 const today = Day.make("2026-11-09");
-const signedIn = init({ athleteId: ana, today, session: "s" }).model;
-const signedOut = init({ athleteId: null, today, session: "s" }).model;
+/** A URL on the web's own origin. */
+const urlOf = (path: string) => Option.getOrThrow(Url.fromString(`http://localhost${path}`));
+const home = urlOf("/");
+
+const signedIn = init({ athleteId: ana, today, session: "s" }, home).model;
+const signedOut = init({ athleteId: null, today, session: "s" }, home).model;
+
+/** The athlete moving to one of the web's pages. */
+const visit = (path: string) => Message.ChangedUrl({ url: urlOf(path) });
 
 const plan = Schema.decodeUnknownSync(CurrentPlanState)({
   planId: "i100:0b6f5a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b",
@@ -271,7 +281,7 @@ describe("sending a write", () => {
   it("shows each field's reason under it", () =>
     Scene.scene(
       { update, view },
-      Scene.given({ ...withPlan, section: "plan" }),
+      Scene.given({ ...withPlan, route: AppRoute.Plan() }),
       Scene.click(Scene.role("button", { name: "Mover" })),
       Scene.expect(Scene.text("Elige una sesión.")).toExist(),
       Scene.expect(Scene.text("Elige el día nuevo.")).toExist(),
@@ -385,8 +395,7 @@ describe("live reads", () => {
   it("say they are loading where the content will be, until the snapshot comes", () =>
     Scene.scene(
       { update, view },
-      Scene.given(signedIn),
-      Scene.click(Scene.role("button", { name: "Plan" })),
+      Scene.given({ ...signedIn, route: AppRoute.Plan() }),
       Scene.expect(Scene.text("Cargando…")).toExist(),
       Scene.expect(Scene.text("Sin plan")).not.toExist(),
     ));
@@ -394,7 +403,7 @@ describe("live reads", () => {
   it('show "no plan" once the snapshot says so', () =>
     Scene.scene(
       { update, view },
-      Scene.given({ ...signedIn, section: "plan", plan: LivePlan.Success({ data: Option.none() }) }),
+      Scene.given({ ...signedIn, route: AppRoute.Plan(), plan: LivePlan.Success({ data: Option.none() }) }),
       Scene.expect(Scene.text("Sin plan")).toExist(),
       Scene.expect(Scene.text("Cargando…")).not.toExist(),
     ));
@@ -407,6 +416,43 @@ describe("the local day", () => {
     expect(Duration.toMillis(untilNextMidnight(evening))).toBe(61_000);
     expect(localDayOf(new Date(evening.getTime() + Duration.toMillis(untilNextMidnight(evening))))).toBe("2026-11-10");
   });
+});
+
+describe("the web's pages", () => {
+  it("each have a URL, and any other path is not found", () => {
+    expect(["/", "/coach", "/plan", "/historial", "/perfil"].map((path) => routeOf(urlOf(path))._tag)).toEqual([
+      "Home",
+      "Coach",
+      "Plan",
+      "History",
+      "Profile",
+    ]);
+    expect(routeOf(urlOf("/otra"))).toEqual(AppRoute.NotFound({ path: "/otra" }));
+    expect(historyRouter()).toBe("/historial");
+  });
+
+  it("move between pages without reloading, and leave the server's pages to the server", () => {
+    const internal = (path: string) => Message.ClickedLink({ request: Navigation.UrlRequest.Internal({ url: urlOf(path) }) });
+    const sent = (message: Message) => update(signedIn, message).commands?.map((c) => [c.name, c.args]);
+    expect(sent(internal("/plan"))).toEqual([[NavigateInternal.name, { url: "http://localhost/plan" }]]);
+    expect(sent(internal("/auth/intervals/start"))).toEqual([[LoadPage.name, { href: "http://localhost/auth/intervals/start" }]]);
+    expect(update(signedIn, visit("/plan")).model.route).toEqual(AppRoute.Plan());
+  });
+
+  it("say so when a page doesn't exist, with a way back", () =>
+    Scene.scene(
+      { update, view },
+      Scene.given(update(signedIn, visit("/otra")).model),
+      Scene.expect(Scene.text("Esta página no existe")).toExist(),
+      Scene.expect(Scene.role("link", { name: "Volver a hoy" })).toExist(),
+    ));
+
+  it("mark the page you are on in the navigation", () =>
+    Scene.scene(
+      { update, view },
+      Scene.given(update(signedIn, visit("/perfil")).model),
+      Scene.expect(Scene.role("link", { name: "Perfil" })).toHaveAttr("aria-current", "page"),
+    ));
 });
 
 describe("the Intervals.icu history", () => {
@@ -424,13 +470,13 @@ describe("the Intervals.icu history", () => {
     Story.story(
       update,
       Story.given(signedIn),
-      Story.message(Message.ClickedSection({ section: "history" })),
+      Story.message(visit("/historial")),
       Story.Command.expectExact(load),
       Story.model((model) => expect(model.history).toEqual(AsyncData.Loading())),
       Story.Command.resolve(load, settled(Result.succeed(read))),
       Story.model((model) => expect(model.history).toEqual(History.Success({ data: read }))),
       // Opening the profile reads it again, keeping what's on screen.
-      Story.message(Message.ClickedSection({ section: "profile" })),
+      Story.message(visit("/perfil")),
       Story.Command.expectExact(load),
       Story.model((model) => expect(model.history).toEqual(History.Refreshing({ data: read }))),
       // A refresh that fails keeps the data and says why.
@@ -442,20 +488,20 @@ describe("the Intervals.icu history", () => {
   // Story answers each Command before the next Message, so what happens while a read is under way is
   // stepped through update directly.
   it("isn't read again while a read is under way", () => {
-    const loading = update(signedIn, Message.ClickedSection({ section: "history" })).model;
-    const again = update(loading, Message.ClickedSection({ section: "profile" }));
+    const loading = update(signedIn, visit("/historial")).model;
+    const again = update(loading, visit("/perfil"));
     expect(again.commands ?? []).toEqual([]);
     expect(again.model.history).toEqual(AsyncData.Loading());
   });
 
   it("isn't read for a signed-out visitor, nor for a section that doesn't show it", () => {
-    expect(update(signedOut, Message.ClickedSection({ section: "profile" })).commands ?? []).toEqual([]);
-    expect(update(signedIn, Message.ClickedSection({ section: "plan" })).commands ?? []).toEqual([]);
+    expect(update(signedOut, visit("/perfil")).commands ?? []).toEqual([]);
+    expect(update(signedIn, visit("/plan")).commands ?? []).toEqual([]);
   });
 
   it("ignores a late answer for four weeks that are no longer shown", () => {
     const tomorrow = { oldest: Day.make("2026-10-14"), newest: Day.make("2026-11-10") };
-    const loading = update(signedIn, Message.ClickedSection({ section: "history" })).model;
+    const loading = update(signedIn, visit("/historial")).model;
     const moved = update(loading, Message.ChangedDay({ today: Day.make("2026-11-10") }));
     expect(moved.commands?.map((c) => [c.name, c.args])).toEqual([["LoadIntervals", { range: tomorrow }]]);
     const late = update(moved.model, settled(Result.succeed(read)));
@@ -464,7 +510,7 @@ describe("the Intervals.icu history", () => {
   });
 
   it("signs out when the session is gone, and ignores an answer that arrives after", () => {
-    const loading = update(signedIn, Message.ClickedSection({ section: "history" })).model;
+    const loading = update(signedIn, visit("/historial")).model;
     const gone = update(loading, settled(Result.fail("signedOut"))).model;
     expect(gone.athleteId).toBeNull();
     expect(gone.history).toEqual(AsyncData.Idle());
@@ -478,20 +524,26 @@ describe("the Intervals.icu history", () => {
     expect(saved.model.history).toEqual(History.Refreshing({ data: read }));
   });
 
-  it("shows that it is reading, then why it couldn't, with a way to connect again", () =>
+  it("shows that it is reading, then why it couldn't, with a way to connect again", () => {
+    const reading = update(signedIn, visit("/historial")).model;
+    Scene.scene({ update, view }, Scene.given(reading), Scene.expect(Scene.text("Leyendo Intervals.icu…")).toExist());
     Scene.scene(
       { update, view },
-      Scene.given(signedIn),
-      Scene.click(Scene.role("button", { name: "Historial" })),
-      Scene.expect(Scene.text("Leyendo Intervals.icu…")).toExist(),
-      Scene.Command.resolve(load, settled(Result.fail("notConnected"))),
+      Scene.given(update(reading, settled(Result.fail("notConnected"))).model),
       Scene.expect(Scene.text("Leyendo Intervals.icu…")).not.toExist(),
       Scene.expect(Scene.role("link", { name: "Conectar de nuevo" })).toExist(),
-    ));
+    );
+  });
+
+  it("is read at once when the app opens on Historial", () => {
+    const opened = init({ athleteId: ana, today, session: "s" }, urlOf("/historial"));
+    expect(opened.model.route).toEqual(AppRoute.History());
+    expect(opened.commands?.map((c) => [c.name, c.args])).toEqual([["LoadIntervals", { range }]]);
+  });
 });
 
 describe("the wellness form", () => {
-  const onProfile: Model = { ...signedIn, section: "profile" };
+  const onProfile: Model = { ...signedIn, route: AppRoute.Profile() };
   const fill = (fields: Partial<Record<"mood" | "motivation" | "soreness" | "fatigue" | "weight" | "comments", string>>) =>
     Object.entries(fields).reduce(
       (m, [field, value]) =>

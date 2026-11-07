@@ -42,12 +42,13 @@ import * as Result from "effect/Result";
 import type * as RpcClientError from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { AsyncData, Command, FieldValidation, Http, Subscription, Update } from "foldkit";
+import { AsyncData, Command, FieldValidation, Http, Navigation, Subscription, Update, Url } from "foldkit";
 import { Rule } from "foldkit/fieldValidation";
 import type { Attribute, Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { defineTaggedUnion } from "foldkit/schema";
 import { modifyFields } from "foldkit/struct";
+import { AppRoute, coachRouter, historyRouter, homeRouter, planRouter, profileRouter, routeOf } from "./Route.ts";
 
 type Clients = Domain.Api.ClientKey<"AthletePlanningApi"> | Domain.Api.ClientKey<"AthleteCoachApi">;
 export const PlanningClient = DomainFoldkit.make(AthletePlanningApi);
@@ -55,8 +56,6 @@ export const CoachClient = DomainFoldkit.make(AthleteCoachApi);
 
 // MODEL
 
-export const Section = Schema.Literals(["home", "coach", "plan", "history", "profile"]);
-export type Section = typeof Section.Type;
 
 /** The views' own state schemas: the app keeps exactly what the domain shows. */
 const DecisionState = TodayDecision.State;
@@ -262,7 +261,7 @@ export const Model = Schema.Struct({
   athleteId: Schema.NullOr(AthleteId),
   /** The athlete's local day; it advances at local midnight. */
   today: Day,
-  section: Section,
+  route: AppRoute,
   commandIds: DomainFoldkit.CommandIds,
   /** Whether the live reads may run: false after a transport failure, until the backoff ends. */
   readsOnline: Schema.Boolean,
@@ -289,7 +288,10 @@ export type Model = typeof Model.Type;
 // MESSAGE
 
 export const Message = defineMessageUnion({
-  ClickedSection: { section: Section },
+  ClickedLink: { request: Navigation.UrlRequest },
+  ChangedUrl: { url: Url.Url },
+  CompletedNavigateInternal: {},
+  CompletedLoadPage: {},
   ChangedDay: { today: Day },
   ReceivedPlan: { plan: Schema.Option(CurrentPlanState) },
   ReceivedDecision: { decision: Schema.Option(DecisionState) },
@@ -382,6 +384,20 @@ export const LoadIntervals = Command.define("LoadIntervals", {
       Effect.map((result) => Message.SettledLoadIntervals({ range, result })),
       Effect.provide(Http.layer),
     ),
+});
+
+/** Moves to another of the web's pages without reloading it. */
+export const NavigateInternal = Command.define("NavigateInternal", {
+  args: { url: Schema.String },
+  messages: [Message.CompletedNavigateInternal],
+  execute: ({ url }) => Navigation.pushUrl(url).pipe(Effect.as(Message.CompletedNavigateInternal())),
+});
+
+/** Loads a page the server serves, such as signing in with Intervals.icu or the privacy policy. */
+export const LoadPage = Command.define("LoadPage", {
+  args: { href: Schema.String },
+  messages: [Message.CompletedLoadPage],
+  execute: ({ href }) => Navigation.load(href).pipe(Effect.as(Message.CompletedLoadPage())),
 });
 
 export const SaveDeclaration = Command.define("SaveDeclaration", {
@@ -556,12 +572,12 @@ const planIdOf = (model: Model) =>
     Option.flatMap((plan) => Option.fromNullishOr(plan.planId)),
   );
 
-const showsHistory = (section: Section) => section === "history" || section === "profile";
+const showsHistory = AppRoute.isAnyOf(["History", "Profile"]);
 
 const isSignedIn = (model: Model) => model.athleteId !== null;
 
-/** A signed-in athlete is looking at a section that shows the history. */
-const historyOnScreen = (model: Model) => isSignedIn(model) && showsHistory(model.section);
+/** A signed-in athlete is on a page that shows the history. */
+const historyOnScreen = (model: Model) => isSignedIn(model) && showsHistory(model.route);
 
 /** Read again whatever the state: data on screen stays there while it reloads. */
 const reload = (history: HistoryData): Option.Option<HistoryData> =>
@@ -590,7 +606,7 @@ const refreshHistory =
       load: LoadIntervals({ range: historyOf(model.today) }),
     })(model);
 
-/** A section that shows the history opened: load it, or refresh it with the data on screen. A read under way isn't started again. */
+/** A page that shows the history opened: load it, or refresh it with the data on screen. A read under way isn't started again. */
 const historyOpened = refreshHistory(historyOnScreen, AsyncData.revalidateOrLoad);
 
 /** The history changed in Intervals: refresh it if it holds data. */
@@ -634,7 +650,18 @@ const declarationFailed = (model: Model, problem: IntervalsProblem): Return =>
 
 export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
-    ClickedSection: ({ section }) => historyOpened(modifyFields(model, { ...clearMessages, section: () => section })),
+    // A link to one of the web's pages moves there; any other is the server's (signing in, the privacy policy).
+    ClickedLink: ({ request }) =>
+      Navigation.UrlRequest.match<Return>(request, {
+        Internal: ({ url }) =>
+          AppRoute.guards.NotFound(routeOf(url))
+            ? { model, commands: [LoadPage({ href: Url.toString(url) })] }
+            : { model, commands: [NavigateInternal({ url: Url.toString(url) })] },
+        External: ({ href }) => ({ model, commands: [LoadPage({ href })] }),
+      }),
+    ChangedUrl: ({ url }) => historyOpened(modifyFields(model, { ...clearMessages, route: () => routeOf(url) })),
+    CompletedNavigateInternal: () => ({ model }),
+    CompletedLoadPage: () => ({ model }),
     ChangedDay: ({ today }) =>
       today === model.today
         ? { model }
@@ -786,30 +813,32 @@ export const update = (model: Model, message: Message): Return =>
 /** A live view at start: waiting for its first snapshot when signed in, not watched otherwise. */
 const watching = (flags: Flags) => (flags.athleteId === null ? AsyncData.Idle() : AsyncData.Loading());
 
-export const init = (flags: Flags): Return => ({
-  model: Model.make({
-    athleteId: flags.athleteId,
-    today: flags.today,
-    section: "home",
-    commandIds: { session: flags.session, sent: 0 },
-    readsOnline: true,
-    readRetries: 0,
-    plan: watching(flags),
-    decision: watching(flags),
-    thread: watching(flags),
-    profile: watching(flags),
-    history: AsyncData.Idle(),
-    move: emptyMove,
-    requirement: emptyRequirement(flags.today),
-    declaration: emptyDeclaration,
-    savingDeclaration: false,
-    confirmRetire: false,
-    inFlight: Option.none(),
-    needsReconnect: false,
-    notice: Option.none(),
-    error: Option.none(),
-  }),
-});
+/** The app as it opens on `url`: a reload or a link to Historial or Perfil reads the history at once. */
+export const init = (flags: Flags, url: Url.Url): Return =>
+  historyOpened(
+    Model.make({
+      athleteId: flags.athleteId,
+      today: flags.today,
+      route: routeOf(url),
+      commandIds: { session: flags.session, sent: 0 },
+      readsOnline: true,
+      readRetries: 0,
+      plan: watching(flags),
+      decision: watching(flags),
+      thread: watching(flags),
+      profile: watching(flags),
+      history: AsyncData.Idle(),
+      move: emptyMove,
+      requirement: emptyRequirement(flags.today),
+      declaration: emptyDeclaration,
+      savingDeclaration: false,
+      confirmRetire: false,
+      inFlight: Option.none(),
+      needsReconnect: false,
+      notice: Option.none(),
+      error: Option.none(),
+    }),
+  );
 
 // SUBSCRIPTION
 
@@ -918,12 +947,13 @@ export const subscriptions = Subscription.make<Model, Message, Clients>()((entry
 
 // VIEW
 
-const SECTIONS: ReadonlyArray<readonly [Section, string]> = [
-  ["home", "Hoy"],
-  ["coach", "Coach"],
-  ["plan", "Plan"],
-  ["history", "Historial"],
-  ["profile", "Perfil"],
+/** The pages in the navigation: where each lives and what it is called. */
+const PAGES: ReadonlyArray<readonly [AppRoute["_tag"], string, string]> = [
+  ["Home", homeRouter(), "Hoy"],
+  ["Coach", coachRouter(), "Coach"],
+  ["Plan", planRouter(), "Plan"],
+  ["History", historyRouter(), "Historial"],
+  ["Profile", profileRouter(), "Perfil"],
 ];
 
 const KIND: Record<SessionKind, string> = {
@@ -1395,6 +1425,14 @@ const profileView = (model: Model, h: HtmlBuilder<Message>) => {
   ];
 };
 
+const notFoundView = (h: HtmlBuilder<Message>, path: string) => [
+  h.div([h.Class("card")], [
+    h.h2([], ["Esta página no existe"]),
+    h.p([h.Class("muted")], [`No hay nada en ${path}.`]),
+    h.a([h.Href(homeRouter())], ["Volver a hoy"]),
+  ]),
+];
+
 /** The write in flight, or the one whose outcome is unknown, with what can be done about it. */
 const writeStatus = (model: Model, h: HtmlBuilder<Message>) =>
   Option.match(model.inFlight, {
@@ -1420,11 +1458,8 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
         : [
             h.nav(
               [h.Class("sections"), h.AriaLabel("Secciones")],
-              SECTIONS.map(([section, label]) =>
-                h.button(
-                  [h.OnClick(Message.ClickedSection({ section })), ...(model.section === section ? [h.AriaCurrent("page")] : [])],
-                  [label],
-                ),
+              PAGES.map(([tag, href, label]) =>
+                h.a([h.Href(href), ...(model.route._tag === tag ? [h.AriaCurrent("page")] : [])], [label]),
               ),
             ),
           ]),
@@ -1451,15 +1486,14 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           }),
           ...writeStatus(model, h),
           ...Option.match(model.notice, { onNone: () => [], onSome: (n) => [h.p([h.Class("muted"), h.AriaLive("polite")], [n])] }),
-          ...(model.section === "home"
-            ? homeView(model, h)
-            : model.section === "coach"
-              ? coachView(model, h)
-              : model.section === "plan"
-                ? planView(model, h)
-                : model.section === "history"
-                  ? historyView(model, h)
-                  : profileView(model, h)),
+          ...AppRoute.match(model.route, {
+            Home: () => homeView(model, h),
+            Coach: () => coachView(model, h),
+            Plan: () => planView(model, h),
+            History: () => historyView(model, h),
+            Profile: () => profileView(model, h),
+            NotFound: ({ path }) => notFoundView(h, path),
+          }),
         ]),
   ]),
 });
