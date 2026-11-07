@@ -420,15 +420,15 @@ describe("the local day", () => {
 
 describe("the web's pages", () => {
   it("each have a URL, and any other path is not found", () => {
-    expect(["/", "/coach", "/plan", "/historial", "/perfil"].map((path) => routeOf(urlOf(path))._tag)).toEqual([
+    expect(["/", "/coach", "/plan", "/history", "/profile"].map((path) => routeOf(urlOf(path))._tag)).toEqual([
       "Home",
       "Coach",
       "Plan",
       "History",
       "Profile",
     ]);
-    expect(routeOf(urlOf("/otra"))).toEqual(AppRoute.NotFound({ path: "/otra" }));
-    expect(historyRouter()).toBe("/historial");
+    expect(routeOf(urlOf("/elsewhere"))).toEqual(AppRoute.NotFound({ path: "/elsewhere" }));
+    expect(historyRouter()).toBe("/history");
   });
 
   it("move between pages without reloading, and leave the server's pages to the server", () => {
@@ -442,7 +442,7 @@ describe("the web's pages", () => {
   it("say so when a page doesn't exist, with a way back", () =>
     Scene.scene(
       { update, view },
-      Scene.given(update(signedIn, visit("/otra")).model),
+      Scene.given(update(signedIn, visit("/elsewhere")).model),
       Scene.expect(Scene.text("Esta página no existe")).toExist(),
       Scene.expect(Scene.role("link", { name: "Volver a hoy" })).toExist(),
     ));
@@ -450,7 +450,7 @@ describe("the web's pages", () => {
   it("mark the page you are on in the navigation", () =>
     Scene.scene(
       { update, view },
-      Scene.given(update(signedIn, visit("/perfil")).model),
+      Scene.given(update(signedIn, visit("/profile")).model),
       Scene.expect(Scene.role("link", { name: "Perfil" })).toHaveAttr("aria-current", "page"),
     ));
 });
@@ -470,13 +470,13 @@ describe("the Intervals.icu history", () => {
     Story.story(
       update,
       Story.given(signedIn),
-      Story.message(visit("/historial")),
+      Story.message(visit("/history")),
       Story.Command.expectExact(load),
       Story.model((model) => expect(model.history).toEqual(AsyncData.Loading())),
       Story.Command.resolve(load, settled(Result.succeed(read))),
       Story.model((model) => expect(model.history).toEqual(History.Success({ data: read }))),
       // Opening the profile reads it again, keeping what's on screen.
-      Story.message(visit("/perfil")),
+      Story.message(visit("/profile")),
       Story.Command.expectExact(load),
       Story.model((model) => expect(model.history).toEqual(History.Refreshing({ data: read }))),
       // A refresh that fails keeps the data and says why.
@@ -488,20 +488,20 @@ describe("the Intervals.icu history", () => {
   // Story answers each Command before the next Message, so what happens while a read is under way is
   // stepped through update directly.
   it("isn't read again while a read is under way", () => {
-    const loading = update(signedIn, visit("/historial")).model;
-    const again = update(loading, visit("/perfil"));
+    const loading = update(signedIn, visit("/history")).model;
+    const again = update(loading, visit("/profile"));
     expect(again.commands ?? []).toEqual([]);
     expect(again.model.history).toEqual(AsyncData.Loading());
   });
 
   it("isn't read for a signed-out visitor, nor for a section that doesn't show it", () => {
-    expect(update(signedOut, visit("/perfil")).commands ?? []).toEqual([]);
+    expect(update(signedOut, visit("/profile")).commands ?? []).toEqual([]);
     expect(update(signedIn, visit("/plan")).commands ?? []).toEqual([]);
   });
 
   it("ignores a late answer for four weeks that are no longer shown", () => {
     const tomorrow = { oldest: Day.make("2026-10-14"), newest: Day.make("2026-11-10") };
-    const loading = update(signedIn, visit("/historial")).model;
+    const loading = update(signedIn, visit("/history")).model;
     const moved = update(loading, Message.ChangedDay({ today: Day.make("2026-11-10") }));
     expect(moved.commands?.map((c) => [c.name, c.args])).toEqual([["LoadIntervals", { range: tomorrow }]]);
     const late = update(moved.model, settled(Result.succeed(read)));
@@ -510,7 +510,7 @@ describe("the Intervals.icu history", () => {
   });
 
   it("signs out when the session is gone, and ignores an answer that arrives after", () => {
-    const loading = update(signedIn, visit("/historial")).model;
+    const loading = update(signedIn, visit("/history")).model;
     const gone = update(loading, settled(Result.fail("signedOut"))).model;
     expect(gone.athleteId).toBeNull();
     expect(gone.history).toEqual(AsyncData.Idle());
@@ -525,7 +525,7 @@ describe("the Intervals.icu history", () => {
   });
 
   it("shows that it is reading, then why it couldn't, with a way to connect again", () => {
-    const reading = update(signedIn, visit("/historial")).model;
+    const reading = update(signedIn, visit("/history")).model;
     Scene.scene({ update, view }, Scene.given(reading), Scene.expect(Scene.text("Leyendo Intervals.icu…")).toExist());
     Scene.scene(
       { update, view },
@@ -535,8 +535,8 @@ describe("the Intervals.icu history", () => {
     );
   });
 
-  it("is read at once when the app opens on Historial", () => {
-    const opened = init({ athleteId: ana, today, session: "s" }, urlOf("/historial"));
+  it("is read at once when the app opens on the history page", () => {
+    const opened = init({ athleteId: ana, today, session: "s" }, urlOf("/history"));
     expect(opened.model.route).toEqual(AppRoute.History());
     expect(opened.commands?.map((c) => [c.name, c.args])).toEqual([["LoadIntervals", { range }]]);
   });

@@ -813,7 +813,7 @@ export const update = (model: Model, message: Message): Return =>
 /** A live view at start: waiting for its first snapshot when signed in, not watched otherwise. */
 const watching = (flags: Flags) => (flags.athleteId === null ? AsyncData.Idle() : AsyncData.Loading());
 
-/** The app as it opens on `url`: a reload or a link to Historial or Perfil reads the history at once. */
+/** The app as it opens on `url`: a reload or a link to the history or profile page reads the history at once. */
 export const init = (flags: Flags, url: Url.Url): Return =>
   historyOpened(
     Model.make({

@@ -34,7 +34,7 @@ export default Alchemy.Stack(
       memo: { workspaces: appWorkspaces },
       main: "src/worker.ts",
       env: { CADENCIA: api },
-      // Every page (`/plan`, `/historial`, …) is the app itself: a path that is no file serves index.html.
+      // Every page (`/plan`, `/history`, …) is the app itself: a path that is no file serves index.html.
       assets: { runWorkerFirst: ["/api", "/api/*", "/auth/*", "/v1/*"], notFoundHandling: "single-page-application" },
       // Locally the sign-in returns to <app origin>/auth/intervals/callback, which Intervals must
       // know: keep the origin fixed rather than taking the next free port.
