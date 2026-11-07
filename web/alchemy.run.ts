@@ -35,6 +35,9 @@ export default Alchemy.Stack(
       main: "src/worker.ts",
       env: { CADENCIA: api },
       assets: { runWorkerFirst: ["/api", "/api/*", "/auth/*", "/v1/*"] },
+      // Locally the sign-in returns to <app origin>/auth/intervals/callback, which Intervals must
+      // know: keep the origin fixed rather than taking the next free port.
+      dev: { port: 1338, strictPort: true },
     });
     return { api: api.url.as<string>(), app: app.url.as<string>() };
   }),

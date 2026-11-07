@@ -10,7 +10,7 @@ import * as Schema from "effect/Schema";
 import * as Layer from "effect/Layer";
 import * as Socket from "effect/socket/Socket";
 import { Http, Runtime } from "foldkit";
-import { Flags, init, localDayOf, Model, subscriptions, update, view } from "./Cadencia.ts";
+import { Flags, init, localDayOf, Message, Model, subscriptions, update, view } from "./Cadencia.ts";
 
 /** Who is signed in: the session cookie is HttpOnly, so ask the server. Anything unexpected is signed out. */
 const signedIn = HttpClient.get("/api/session").pipe(
@@ -43,6 +43,9 @@ Runtime.run(
     subscriptions,
     resources: Clients,
     container: document.getElementById("root"),
+    // In development only. The Message schema lets the DevTools MCP dispatch Messages; the Model holds
+    // no secrets (the session cookie is HttpOnly).
+    devTools: { Message },
   }),
   {
     flags: Effect.gen(function* () {

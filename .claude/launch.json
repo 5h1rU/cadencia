@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cadencia-local",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["pnpm@10", "--dir", "web", "dev"],
+      "port": 1338
+    }
+  ]
+}

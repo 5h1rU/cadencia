@@ -51,7 +51,11 @@ Events and views are versioned by their schemas. A view rebuilds itself when
 its `version` goes up; an event whose shape changes must still decode its old
 shape, unless the stage is destroyed and deployed again.
 
-`npx pnpm@10 dev` runs everything locally in workerd.
+`npx pnpm@10 dev` runs everything locally in workerd: the app at
+`http://localhost:1338` (fixed, so Intervals can send the sign-in back to
+`http://localhost:1338/auth/intervals/callback`) and the API Worker at
+`http://localhost:1337`. Running the app's Vite alone serves no API and no
+sign-in.
 
 Cadencia iOS signs in through `/auth/intervals/start?client=ios`, receives a
 one-minute handoff at `cadencia://auth/callback?handoff=…`, and exchanges it at

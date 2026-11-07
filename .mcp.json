@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "foldkit-devtools": {
+      "command": "web/packages/app/node_modules/.bin/foldkit-devtools-mcp",
+      "args": []
+    }
+  }
+}
