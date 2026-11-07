@@ -37,7 +37,7 @@ import * as Result from "effect/Result";
 import type * as RpcClientError from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { AsyncData, Command, Http, Subscription, type Update } from "foldkit";
+import { AsyncData, Command, Http, Subscription, Update } from "foldkit";
 import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { defineTaggedUnion } from "foldkit/schema";
@@ -97,6 +97,7 @@ export type IntervalsHistory = typeof IntervalsHistory.Type;
 
 /** The history as the app holds it: not asked for, loading, loaded, refreshing, or why it couldn't be read. */
 export const History = AsyncData.Schema(IntervalsHistory, IntervalsProblem);
+type HistoryData = typeof History.schema.Type;
 
 /**
  * The day's declaration as the form holds it: what the athlete typed, not yet
@@ -433,39 +434,50 @@ const planIdOf = (model: Model) =>
 
 const showsHistory = (section: Section) => section === "history" || section === "profile";
 
-/** Move the history to `next` and read it for the current four weeks. */
-const loadHistory = (model: Model, next: typeof History.schema.Type): Return => ({
-  model: modifyFields(model, { history: () => next }),
-  commands: [LoadIntervals({ range: historyOf(model.today) })],
-});
+const isSignedIn = (model: Model) => model.athleteId !== null;
+
+/** A signed-in athlete is looking at a section that shows the history. */
+const historyOnScreen = (model: Model) => isSignedIn(model) && showsHistory(model.section);
+
+/** Read again whatever the state: data on screen stays there while it reloads. */
+const reload = (history: HistoryData): Option.Option<HistoryData> =>
+  Option.some(
+    AsyncData.getData(history).pipe(
+      Option.map((data) => History.Refreshing({ data })),
+      Option.getOrElse(() => AsyncData.Loading()),
+    ),
+  );
 
 /**
- * Read the history when a section shows it: loaded data stays on screen while
- * it refreshes, and a read already under way isn't started again.
+ * The history as a cache Foldkit revalidates: considered only when `when`
+ * holds, moved on by `revalidate`, and read for the four weeks ending on the
+ * model's day. When there is nothing to do, the model is returned unchanged.
  */
-const revalidateHistory = (model: Model): Return =>
-  model.athleteId === null || !showsHistory(model.section)
-    ? { model }
-    : Option.match(AsyncData.revalidateOrLoad(model.history), {
-        onNone: () => ({ model }),
-        onSome: (next) => loadHistory(model, next),
-      });
+const refreshHistory =
+  (
+    when: (model: Model) => boolean,
+    revalidate: (history: HistoryData) => Option.Option<HistoryData>,
+  ): Update.Step<Model, Message, Clients> =>
+  (model) =>
+    Update.refresh({
+      read: (m: Model) => Option.some(m.history).pipe(Option.filter(() => when(m))),
+      revalidate,
+      write: (m, history) => modifyFields(m, { history: () => history }),
+      load: LoadIntervals({ range: historyOf(model.today) }),
+    })(model);
+
+/** A section that shows the history opened: load it, or refresh it with the data on screen. A read under way isn't started again. */
+const historyOpened = refreshHistory(historyOnScreen, AsyncData.revalidateOrLoad);
+
+/** The history changed in Intervals: refresh it if it holds data. */
+const historyChanged = refreshHistory(isSignedIn, AsyncData.revalidate);
 
 /**
  * The four weeks moved: read them again now if they're on screen, or if a read
  * of the old ones is under way (its answer will be ignored, so nothing else
  * would end it). Otherwise the next visit reads them.
  */
-const historyMoved = (model: Model): Return =>
-  model.athleteId !== null && (showsHistory(model.section) || AsyncData.isPending(model.history))
-    ? loadHistory(
-        model,
-        Option.match(AsyncData.getData(model.history), {
-          onNone: () => AsyncData.Loading(),
-          onSome: (data) => History.Refreshing({ data }),
-        }),
-      )
-    : { model };
+const historyMoved = refreshHistory((m) => historyOnScreen(m) || (isSignedIn(m) && AsyncData.isPending(m.history)), reload);
 
 const sameRange = (a: HistoryRange, b: HistoryRange) => a.oldest === b.oldest && a.newest === b.newest;
 
@@ -486,7 +498,7 @@ const declarationFailed = (model: Model, problem: IntervalsProblem): Return =>
 
 export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
-    ClickedSection: ({ section }) => revalidateHistory(modifyFields(model, { ...clearMessages, section: () => section })),
+    ClickedSection: ({ section }) => historyOpened(modifyFields(model, { ...clearMessages, section: () => section })),
     ChangedDay: ({ today }) => (today === model.today ? { model } : historyMoved(modifyFields(model, { today: () => today }))),
     ReceivedPlan: ({ plan }) => read(modifyFields(model, { plan: () => plan })),
     ReceivedDecision: ({ decision }) => read(modifyFields(model, { decision: () => decision })),
@@ -624,18 +636,15 @@ export const update = (model: Model, message: Message): Return =>
               commands: [SaveDeclaration({ day: model.today, declaration })],
             }),
           }),
-    SavedDeclaration: () => {
-      const saved = modifyFields(model, {
-        savingDeclaration: () => false,
-        declaration: () => emptyDeclaration,
-        notice: () => Option.some("Guardado en Intervals.icu."),
-      });
-      // Today's wellness changed: refresh the history if it holds data.
-      return Option.match(AsyncData.revalidate(saved.history), {
-        onNone: () => ({ model: saved }),
-        onSome: (next) => loadHistory(saved, next),
-      });
-    },
+    // Today's wellness is part of the history.
+    SavedDeclaration: () =>
+      historyChanged(
+        modifyFields(model, {
+          savingDeclaration: () => false,
+          declaration: () => emptyDeclaration,
+          notice: () => Option.some("Guardado en Intervals.icu."),
+        }),
+      ),
     FailedDeclaration: ({ problem }) => declarationFailed(model, problem),
   });
 
