@@ -31,13 +31,20 @@ export class WebhookRefused extends Schema.TaggedError<WebhookRefused>()(
   { httpApiStatus: 401, description: "The webhook secret doesn't match." },
 ) {}
 
+/** Intervals.icu couldn't be read just now: the delivery should come again. */
+export class CalendarSyncUnavailable extends Schema.TaggedError<CalendarSyncUnavailable>()(
+  "CalendarSyncUnavailable",
+  {},
+  { httpApiStatus: 503, description: "Intervals.icu could not be read. Deliver again later." },
+) {}
+
 /** Intervals.icu tells Cadencia what athletes changed there; Cadencia then reads it again. */
 export const IntervalsWebhookGroup = HttpApiGroup.make("intervalsWebhook")
   .add(
     HttpApiEndpoint.post("receive", "/intervals", {
       payload: IntervalsWebhook,
       success: Schema.Struct({ received: Schema.Int }).annotate({ description: "How many events were read." }),
-      error: WebhookRefused,
+      error: [WebhookRefused, CalendarSyncUnavailable],
     }).annotate(OpenApi.Description, "Receive Intervals.icu webhooks (CALENDAR_UPDATED)."),
   )
   .prefix("/webhooks")

@@ -6,24 +6,25 @@ import { Plan } from "../Plan/Plan.aggregate.ts";
 import { RetirePlan } from "../Plan/RetirePlan.command.ts";
 import { utcDayOf } from "../Plan/Today.ts";
 import { ActivePlan } from "./ActivePlan.aggregate.ts";
-import { ActivePlanSwitched } from "./SwitchActivePlan.command.ts";
+import { ActivePlanSwitched, PlanSuperseded } from "./SwitchActivePlan.command.ts";
 
 /**
- * Whenever a plan replaces another, retire the one it replaced, so its
- * upcoming sessions leave the Intervals calendar. A policy has no local day:
- * it retires from the UTC date the switch happened.
+ * Whenever a plan replaces another, or turns out to be older than the active
+ * one, retire it, so its upcoming sessions leave the Intervals calendar. A
+ * policy has no local day: it retires from the UTC date of the switch.
  */
 export class PlanReplacement extends Domain.Policy("PlanReplacement", {
   from: ActivePlan,
-  on: [ActivePlanSwitched],
+  on: [ActivePlanSwitched, PlanSuperseded],
 }) {}
 
 export const PlanReplacementLive = PlanReplacement.toLayer(
   Effect.gen(function* () {
     const plans = yield* Plan;
     return Effect.fn(function* ({ event, envelope }) {
-      if (event.previous === null) return;
-      yield* plans.send(event.previous, new RetirePlan({ today: utcDayOf(envelope.at) })).pipe(
+      const retired = event._tag === "PlanSuperseded" ? event.planId : event.previous;
+      if (retired === null) return;
+      yield* plans.send(retired, new RetirePlan({ today: utcDayOf(envelope.at) })).pipe(
         Effect.provideService(CurrentActor, system("PlanReplacement")),
         // Already retired, or retired by the athlete in between: nothing left to do.
         Effect.catchTag("PlanNotActive", () => Effect.void),

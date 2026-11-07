@@ -244,8 +244,9 @@ extension CadenciaAPI {
         public var sessions: [PlannedSession]
         public var requirements: [DayRequirement]
         public var calendarProblems: [CalendarProblem]
+        public var createdAt: String?
 
-        public init(planId: PlanId? = nil, status: Status, title: Title? = nil, goal: GoalKind? = nil, objective: Paragraph? = nil, startDay: Day? = nil, endDay: Day? = nil, phases: [PlanPhase], longRideWeekday: Weekday? = nil, event: GoalEvent? = nil, sessions: [PlannedSession], requirements: [DayRequirement], calendarProblems: [CalendarProblem]) {
+        public init(planId: PlanId? = nil, status: Status, title: Title? = nil, goal: GoalKind? = nil, objective: Paragraph? = nil, startDay: Day? = nil, endDay: Day? = nil, phases: [PlanPhase], longRideWeekday: Weekday? = nil, event: GoalEvent? = nil, sessions: [PlannedSession], requirements: [DayRequirement], calendarProblems: [CalendarProblem], createdAt: String? = nil) {
             self.planId = planId
             self.status = status
             self.title = title
@@ -259,10 +260,11 @@ extension CadenciaAPI {
             self.sessions = sessions
             self.requirements = requirements
             self.calendarProblems = calendarProblems
+            self.createdAt = createdAt
         }
 
         private enum CodingKeys: String, CodingKey {
-            case planId, status, title, goal, objective, startDay, endDay, phases, longRideWeekday, event, sessions, requirements, calendarProblems
+            case planId, status, title, goal, objective, startDay, endDay, phases, longRideWeekday, event, sessions, requirements, calendarProblems, createdAt
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -280,6 +282,7 @@ extension CadenciaAPI {
             try container.encode(sessions, forKey: .sessions)
             try container.encode(requirements, forKey: .requirements)
             try container.encode(calendarProblems, forKey: .calendarProblems)
+            try container.encode(createdAt, forKey: .createdAt)
         }
     }
 

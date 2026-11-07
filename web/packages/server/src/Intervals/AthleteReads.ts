@@ -8,12 +8,12 @@ import type { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Paragraph, Title } from "@cadencia/kernel/Text";
 import { Kilometers, Seconds } from "@cadencia/kernel/Training/Units";
-import { IntervalsUnavailable } from "../WebApi/IntervalsGroup.ts";
+import { IntervalsNotConnected, IntervalsUnavailable } from "../WebApi/IntervalsGroup.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
-import { athletePath, callIntervals } from "./IntervalsHttp.ts";
+import { athletePath, callIntervals, type IntervalsError, kindOf } from "./IntervalsHttp.ts";
 
 // The edge between Intervals.icu and the web: each row Intervals returns is
 // decoded here into Cadencia's read models (`@cadencia/athlete`), and only
@@ -94,8 +94,13 @@ export const wellnessForIntervals = (day: Day, declaration: WellnessDeclaration)
   ...Schema.encodeSync(WellnessDeclaration)(declaration),
 });
 
-/** Intervals' error as the web's: whatever went wrong, it didn't answer. */
-const unavailable = Effect.mapError(() => new IntervalsUnavailable());
+/**
+ * Intervals' error as the web's: a revoked authorization asks the athlete to
+ * connect again, anything else is Intervals not answering as it should.
+ */
+const unavailable = Effect.mapError((error: IntervalsError) =>
+  kindOf(error) === "notConnected" ? new IntervalsNotConnected() : new IntervalsUnavailable(),
+);
 
 /** The athlete's wellness in a range, from Intervals. */
 export const readWellness = (token: Redacted.Redacted<string>, athleteId: AthleteId, range: HistoryRange) =>

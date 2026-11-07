@@ -261,10 +261,21 @@ describe("Intervals adapter", () => {
 
   it("notices when the athlete moved, edited or deleted a session in Intervals", () => {
     const entry = calendarEntry(session);
-    const event = { id: IntervalsEventId.make(1), external_id: entry.external_id, start_date_local: entry.start_date_local, name: entry.name, moving_time: entry.moving_time };
+    const event = {
+      id: IntervalsEventId.make(1),
+      external_id: entry.external_id,
+      start_date_local: entry.start_date_local,
+      name: entry.name,
+      moving_time: entry.moving_time,
+      description: entry.description,
+    };
     expect(changeOf(session, event)).toBeNull();
+    // Line endings and trailing spaces aren't an edit.
+    expect(changeOf(session, { ...event, description: `${entry.description.replace(/\n/g, "\r\n")}  \n` })).toBeNull();
     expect(changeOf(session, { ...event, start_date_local: "2026-11-10T00:00:00" })).toBe("changed");
     expect(changeOf(session, { ...event, moving_time: 1800 })).toBe("changed");
+    // Same name and duration, different workout: the athlete edited it.
+    expect(changeOf(session, { ...event, description: `${entry.description}\n- 5m 110%` })).toBe("changed");
     expect(changeOf(session, undefined)).toBe("removed");
   });
 });

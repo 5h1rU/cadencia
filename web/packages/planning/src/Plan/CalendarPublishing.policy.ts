@@ -4,7 +4,7 @@ import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
-import { Calendar } from "./Calendar.external.ts";
+import { Calendar, CalendarUnavailable } from "./Calendar.external.ts";
 import { SessionConcretized } from "./ConcretizeSession.command.ts";
 import { PlanCreated } from "./CreatePlan.command.ts";
 import { SessionMoved } from "./MoveSession.command.ts";
@@ -42,7 +42,9 @@ export const CalendarPublishingLive = CalendarPublishing.toLayer(
           yield* calendar.withdrawSession({ athleteId, externalId: session.externalId });
           return;
         }
-        yield* calendar.publishSession({ athleteId, session });
+        const { published } = yield* calendar.publishSession({ athleteId, session });
+        // Only a publication the calendar confirms is recorded; anything else is tried again.
+        if (!published) return yield* new CalendarUnavailable();
         yield* record(new RecordCalendarPublication({ published: session }));
       });
       const publishOrRecord = (session: PlannedSession) =>

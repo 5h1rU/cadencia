@@ -100,6 +100,52 @@ describe("Intervals.icu webhooks", () => {
         // A repeated delivery reads Intervals again and finds nothing new.
         expect((yield* deliver([{ athlete_id: "i100", type: "CALENDAR_UPDATED" }])).status).toBe(200);
         expect(yield* statuses).toEqual(["published", "changedInIntervals", "removedInIntervals"]);
+
+        // The session the athlete took over is still watched: deleting it later is noticed too.
+        vi.restoreAllMocks();
+        intervalsShows([easy]);
+        expect((yield* deliver([{ athlete_id: "i100", type: "CALENDAR_UPDATED" }])).status).toBe(200);
+        expect(yield* statuses).toEqual(["published", "removedInIntervals", "removedInIntervals"]);
+      }),
+    ),
+  );
+
+  it.live("an edited workout is the athlete's, even with the same name and duration", () =>
+    inWorker(
+      Effect.gen(function* () {
+        yield* connect;
+        yield* createPlan;
+        const [easy, threshold, long] = (yield* published).map((s) => ({ id: 1, ...calendarEntry(s) }));
+        intervalsShows([easy, { ...threshold, description: "4x8m 105%" }, long]);
+        expect((yield* deliver([{ athlete_id: "i100", type: "CALENDAR_UPDATED" }])).status).toBe(200);
+        expect(yield* statuses).toEqual(["published", "changedInIntervals", "published"]);
+      }),
+    ),
+  );
+
+  it.live("a revoked authorization reads nothing and takes nothing over; an outage asks Intervals to deliver again", () =>
+    inWorker(
+      Effect.gen(function* () {
+        yield* connect;
+        yield* createPlan;
+        yield* published;
+        const revoked = vi
+          .spyOn(globalThis, "fetch")
+          .mockImplementation(async () => new Response("unauthorized", { status: 401 }));
+        expect((yield* deliver([{ athlete_id: "i100", type: "CALENDAR_UPDATED" }])).status).toBe(200);
+        expect(revoked).toHaveBeenCalledTimes(1);
+        expect(yield* statuses).toEqual(["published", "published", "published"]);
+
+        vi.restoreAllMocks();
+        vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("down", { status: 503 }));
+        expect((yield* deliver([{ athlete_id: "i100", type: "CALENDAR_UPDATED" }])).status).toBe(503);
+        expect(yield* statuses).toEqual(["published", "published", "published"]);
+
+        // An answer that isn't a calendar says nothing was removed.
+        vi.restoreAllMocks();
+        vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ error: "x" }), { status: 200 }));
+        expect((yield* deliver([{ athlete_id: "i100", type: "CALENDAR_UPDATED" }])).status).toBe(200);
+        expect(yield* statuses).toEqual(["published", "published", "published"]);
       }),
     ),
   );

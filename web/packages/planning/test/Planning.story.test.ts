@@ -9,8 +9,9 @@ import { EntityKey } from "@cadencia/kernel/EntityKey";
 import { planIdFor } from "@cadencia/kernel/Plan.id";
 import { Story } from "@alchemy.run/domain/Story";
 import { expect, it } from "@effect/vitest";
+import * as DateTime from "effect/DateTime";
 import { ActivePlan } from "../src/ActivePlan/ActivePlan.aggregate.ts";
-import { ActivePlanSwitched, SwitchActivePlan } from "../src/ActivePlan/SwitchActivePlan.command.ts";
+import { ActivePlanSwitched, PlanSuperseded, SwitchActivePlan } from "../src/ActivePlan/SwitchActivePlan.command.ts";
 import { Calendar, CalendarRefused } from "../src/Plan/Calendar.external.ts";
 import {
   AvailabilityExceeded,
@@ -79,9 +80,13 @@ import {
 const { call, clock, fail, given, provide, rejected, succeed, then, view, when } = Story;
 
 const as = (actor: Actor) => provide(CurrentActor, actor);
+const at = (iso: string) => DateTime.makeUnsafe(iso);
 const story = Story.make(Planning, { layer: PlanningHandlers, stub: [Calendar] });
 
 const published = (s: PlannedSession) => new SessionPublished({ sessionId: s.sessionId, externalId: s.externalId });
+/** What the Intervals sync records about a session, as it compared it. */
+const seen = (session: PlannedSession, change: "changed" | "removed") =>
+  new RecordExternalChange({ externalId: session.externalId, change, observed: session });
 const draftOf = ({ day, kind, title, targetMinutes, purpose }: PlannedSession) => ({ day, kind, title, targetMinutes, purpose });
 const fingerprint = Fingerprint.make(FINGERPRINT);
 const anaPlans = ActivePlan.ref(anaId);
@@ -117,7 +122,8 @@ it.effect("creating a plan publishes every session to the Intervals calendar", (
       }),
     ),
     then(plan, planCreated([endurance, threshold])),
-    then(anaPlans, new ActivePlanSwitched({ planId, previous: null })),
+    // Stories start their clock at 2026-01-01.
+    then(anaPlans, new ActivePlanSwitched({ planId, previous: null, createdAt: at("2026-01-01T00:00:00Z") })),
     call(Calendar.publishSession, { athleteId: anaId, session: endurance }),
     succeed(Calendar.publishSession, { published: true }),
     call(Calendar.publishSession, { athleteId: anaId, session: threshold }),
@@ -306,7 +312,7 @@ it.effect("a session the athlete changed in Intervals is theirs: Cadencia stops 
   story(
     given(plan, planCreated(), published(endurance)),
     as(system("IntervalsSync")),
-    when(plan, new RecordExternalChange({ externalId: endurance.externalId, change: "changed" })),
+    when(plan, seen(endurance, "changed")),
     then(plan, new SessionChangedInIntervals({ sessionId: endurance.sessionId })),
     as(ana),
     when(plan, new ConcretizeSession({ day: monday, workout: easyHour, evidence: evidence() })),
@@ -340,6 +346,69 @@ it.effect("an unavailable day is skipped and taken off the calendar", () =>
   ),
 );
 
+it.effect("a session moved onto a day with a requirement keeps to it", () =>
+  story(
+    given(plan, planCreated()),
+    as(ana),
+    when(plan, new RecordDayRequirement({ day: day("2026-11-11"), instructions: paragraph("Short day"), maxMinutes: minutes(30) })),
+    then(
+      plan,
+      new DayRequirementRecorded({
+        requirement: { day: day("2026-11-11"), instructions: paragraph("Short day"), maxMinutes: minutes(30) },
+      }),
+    ),
+    when(plan, new MoveSession({ sessionId: threshold.sessionId, toDay: day("2026-11-11") })),
+    then(plan, new SessionMoved({ session: { ...threshold, day: day("2026-11-11"), targetMinutes: minutes(30) }, fromDay: tuesday })),
+    call(Calendar.publishSession, {
+      athleteId: anaId,
+      session: { ...threshold, day: day("2026-11-11"), targetMinutes: minutes(30) },
+    }),
+    succeed(Calendar.publishSession, { published: true }),
+    then(plan, published(threshold)),
+  ),
+);
+
+it.effect("two limits for one day keep the strictest, in either order", () =>
+  story(
+    clock("2026-11-09T08:00:00Z"),
+    given(plan, planCreated()),
+    as(ana),
+    when(
+      plan,
+      new ReviseWeek({
+        limits: [
+          { day: tuesday, maxMinutes: null, unavailable: true },
+          { day: tuesday, maxMinutes: minutes(60), unavailable: false },
+          { day: saturday, maxMinutes: minutes(120), unavailable: false },
+          { day: saturday, maxMinutes: minutes(90), unavailable: false },
+        ],
+        today: monday,
+      }),
+    ),
+    then(
+      plan,
+      new WeekRevised({
+        sessions: [
+          { ...threshold, status: "skipped", targetMinutes: minutes(0), workout: null },
+          { ...longRide, targetMinutes: minutes(90) },
+        ],
+      }),
+    ),
+    call(Calendar.withdrawSession, { athleteId: anaId, externalId: threshold.externalId }),
+    succeed(Calendar.withdrawSession, { withdrawn: true }),
+    call(Calendar.publishSession, { athleteId: anaId, session: { ...longRide, targetMinutes: minutes(90) } }),
+    succeed(Calendar.publishSession, { published: true }),
+    then(plan, published(longRide)),
+    view(CurrentPlan, anaId, (v) => {
+      expect(v.sessions.map((s) => [s.day, s.status, s.targetMinutes])).toEqual([
+        [monday, "provisional", 60],
+        [tuesday, "skipped", 0],
+        [saturday, "published", 90],
+      ]);
+    }),
+  ),
+);
+
 it.effect("retiring a plan withdraws its upcoming sessions", () =>
   story(
     clock("2026-11-12T08:00:00Z"),
@@ -362,16 +431,30 @@ it.effect("a plan the athlete creates replaces their previous one, which is reti
     given(plan, planCreated()),
     given(anaPlans, new ActivePlanSwitched({ planId, previous: null })),
     as(systemActor("PlanReplacement")),
-    when(anaPlans, new SwitchActivePlan({ planId: nextPlanId })),
-    then(anaPlans, new ActivePlanSwitched({ planId: nextPlanId, previous: planId })),
+    when(anaPlans, new SwitchActivePlan({ planId: nextPlanId, createdAt: at("2026-11-12T07:00:00Z") })),
+    then(anaPlans, new ActivePlanSwitched({ planId: nextPlanId, previous: planId, createdAt: at("2026-11-12T07:00:00Z") })),
     // From the day of the switch: the long ride on Saturday leaves the calendar, Monday and Tuesday stay.
     then(plan, new PlanRetired({ withdrawn: [longRide.externalId] })),
     call(Calendar.withdrawSession, { athleteId: anaId, externalId: longRide.externalId }),
     succeed(Calendar.withdrawSession, { withdrawn: true }),
     // The policy runs again: the switch already happened, nothing else is retired.
-    when(anaPlans, new SwitchActivePlan({ planId: nextPlanId })),
+    when(anaPlans, new SwitchActivePlan({ planId: nextPlanId, createdAt: at("2026-11-12T07:00:00Z") })),
     then(anaPlans),
     view(CurrentPlan, anaId, (v) => expect(v.status).toBe("retired")),
+  ),
+);
+
+it.effect("a plan created before the active one is retired, whenever its creation arrives", () =>
+  story(
+    clock("2026-11-12T08:00:00Z"),
+    given(plan, planCreated()),
+    given(anaPlans, new ActivePlanSwitched({ planId: nextPlanId, previous: null, createdAt: at("2026-11-12T07:00:00Z") })),
+    as(systemActor("PlanReplacement")),
+    when(anaPlans, new SwitchActivePlan({ planId, createdAt: at("2026-11-11T07:00:00Z") })),
+    then(anaPlans, new PlanSuperseded({ planId, by: nextPlanId })),
+    then(plan, new PlanRetired({ withdrawn: [longRide.externalId] })),
+    call(Calendar.withdrawSession, { athleteId: anaId, externalId: longRide.externalId }),
+    succeed(Calendar.withdrawSession, { withdrawn: true }),
   ),
 );
 
@@ -434,20 +517,40 @@ it.effect("only the Intervals sync takes over sessions, and only as Cadencia pub
   story(
     given(plan, planCreated(), published(endurance)),
     as(ana),
-    when(plan, new RecordExternalChange({ externalId: endurance.externalId, change: "changed" })),
+    when(plan, seen(endurance, "changed")),
     rejected(new NotYours()),
     as(systemActor("IntervalsSync")),
     // Threshold isn't published yet: what Intervals shows can't be the athlete's change.
-    when(plan, new RecordExternalChange({ externalId: threshold.externalId, change: "removed" })),
+    when(plan, seen(threshold, "removed")),
     then(plan),
-    when(plan, new RecordExternalChange({ externalId: endurance.externalId, change: "changed" })),
+    when(plan, seen(endurance, "changed")),
     then(plan, new SessionChangedInIntervals({ sessionId: endurance.sessionId })),
-    when(plan, new RecordExternalChange({ externalId: endurance.externalId, change: "changed" })),
+    when(plan, seen(endurance, "changed")),
     then(plan),
-    when(plan, new RecordExternalChange({ externalId: endurance.externalId, change: "removed" })),
+    when(plan, seen(endurance, "removed")),
     then(plan, new SessionRemovedInIntervals({ sessionId: endurance.sessionId })),
-    when(plan, new RecordExternalChange({ externalId: endurance.externalId, change: "removed" })),
+    when(plan, seen(endurance, "removed")),
     then(plan),
+  ),
+);
+
+it.effect("an observation of a session that was moved since is stale, and is ignored", () =>
+  story(
+    given(
+      plan,
+      planCreated(),
+      published(longRide),
+      new SessionMoved({ session: { ...longRide, day: day("2026-11-15") }, fromDay: saturday }),
+      published(longRide),
+    ),
+    as(systemActor("IntervalsSync")),
+    // The sync read Saturday's version before the move: Intervals now shows Sunday, which isn't the athlete's doing.
+    when(plan, seen(longRide, "changed")),
+    then(plan),
+    when(plan, seen(longRide, "removed")),
+    then(plan),
+    when(plan, seen({ ...longRide, day: day("2026-11-15") }, "changed")),
+    then(plan, new SessionChangedInIntervals({ sessionId: longRide.sessionId })),
   ),
 );
 

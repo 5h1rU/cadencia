@@ -71,7 +71,9 @@ const inCadencia = <A, E>(
 
 /** Times are when the test ran; the fixture keeps one fixed instant. */
 const normalized = (view: unknown): unknown =>
-  JSON.parse(JSON.stringify(view), (key, value) => (key === "at" && typeof value === "string" ? "2026-11-10T07:00:00.000Z" : value));
+  JSON.parse(JSON.stringify(view), (key, value) =>
+    (key === "at" || key === "createdAt") && typeof value === "string" ? "2026-11-10T07:00:00.000Z" : value,
+  );
 
 describe("Cadencia iOS contract", () => {
   it.live("the commands iOS sends are accepted, and the views answer as iOS decodes them", () =>

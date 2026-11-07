@@ -1,14 +1,19 @@
 import { ActivitySummary } from "@cadencia/athlete/ActivitySummary";
 import { WellnessScale } from "@cadencia/athlete/Measures";
 import { WellnessDay } from "@cadencia/athlete/Wellness";
+import { HistoryRange } from "@cadencia/athlete/HistoryRange";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Paragraph } from "@cadencia/kernel/Text";
-import { describe, expect, it } from "@effect/vitest";
+import { afterEach, describe, expect, it, vi } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as Redacted from "effect/Redacted";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import {
   activityFromIntervals,
   measuresFromIntervals,
+  readWellness,
   rowsFromIntervals,
   wellnessFromIntervals,
   wellnessForIntervals,
@@ -164,4 +169,35 @@ describe("the athlete's Intervals record, at the edge", () => {
     expect(measuresFromIntervals({ name: 42, weight: 1000, sportSettings: "none" })).toEqual({ name: null, weight: null, ftp: null });
     expect(measuresFromIntervals(undefined)).toEqual({ name: null, weight: null, ftp: null });
   });
+});
+
+describe("Intervals reads that fail", () => {
+  afterEach(() => vi.restoreAllMocks());
+  const range = Schema.decodeUnknownSync(HistoryRange)({ oldest: "2026-10-13", newest: "2026-11-09" });
+  const answer = (status: number) =>
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("", { status }));
+  const read = readWellness(Redacted.make("token"), AthleteId.make("i100"), range).pipe(
+    Effect.flip,
+    Effect.map((error) => error._tag),
+  );
+
+  it.effect("ask the athlete to connect again when Intervals no longer accepts them", () =>
+    Effect.gen(function* () {
+      answer(401);
+      expect(yield* read).toBe("IntervalsNotConnected");
+      vi.restoreAllMocks();
+      answer(403);
+      expect(yield* read).toBe("IntervalsNotConnected");
+    }),
+  );
+
+  it.effect("are an outage otherwise", () =>
+    Effect.gen(function* () {
+      answer(503);
+      expect(yield* read).toBe("IntervalsUnavailable");
+      vi.restoreAllMocks();
+      answer(429);
+      expect(yield* read).toBe("IntervalsUnavailable");
+    }),
+  );
 });

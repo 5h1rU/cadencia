@@ -723,7 +723,8 @@
       }
     ],
     "requirements": [],
-    "calendarProblems": []
+    "calendarProblems": [],
+    "createdAt": "2026-11-10T07:00:00.000Z"
   },
   "profile": {
     "report": {
@@ -999,7 +1000,8 @@
         "maxMinutes": null
       }
     ],
-    "calendarProblems": []
+    "calendarProblems": [],
+    "createdAt": "2026-11-10T07:00:00.000Z"
   },
   "planRetired": {
     "planId": "i100:5f0c6a1e-2b3d-4c5e-8f60-7a8b9c0d1e2f",
@@ -1252,6 +1254,7 @@
         "maxMinutes": null
       }
     ],
-    "calendarProblems": []
+    "calendarProblems": [],
+    "createdAt": "2026-11-10T07:00:00.000Z"
   }
 }

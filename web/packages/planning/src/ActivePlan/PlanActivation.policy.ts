@@ -6,7 +6,7 @@ import { Plan } from "../Plan/Plan.aggregate.ts";
 import { ActivePlan } from "./ActivePlan.aggregate.ts";
 import { SwitchActivePlan } from "./SwitchActivePlan.command.ts";
 
-/** Whenever a plan is created, it becomes the athlete's active plan. */
+/** Whenever a plan is created, it becomes the athlete's active plan, unless a newer one already is. */
 export class PlanActivation extends Domain.Policy("PlanActivation", {
   from: Plan,
   on: [PlanCreated],
@@ -15,8 +15,8 @@ export class PlanActivation extends Domain.Policy("PlanActivation", {
 export const PlanActivationLive = PlanActivation.toLayer(
   Effect.gen(function* () {
     const activePlans = yield* ActivePlan;
-    return Effect.fn(function* ({ source }) {
-      yield* activePlans.send(ownerOf(source.id), new SwitchActivePlan({ planId: source.id }));
+    return Effect.fn(function* ({ source, envelope }) {
+      yield* activePlans.send(ownerOf(source.id), new SwitchActivePlan({ planId: source.id, createdAt: envelope.at }));
     });
   }),
 );

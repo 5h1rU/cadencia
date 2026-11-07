@@ -14,12 +14,13 @@ import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
+import * as Result from "effect/Result";
 import { Connections } from "./Connections.ts";
 import { declareWellness, readActivities, readMeasures, readWellness } from "./Intervals/AthleteReads.ts";
 import { PlanningInternals } from "./Hosting.ts";
 import { syncAthlete } from "./Intervals/ChangeSync.ts";
 import { exchangeHandoff, finishSignIn, startSignIn } from "./Intervals/IntervalsOAuth.ts";
-import { calendarsChanged, sameSecret, WebhookRefused } from "./Intervals/IntervalsWebhook.ts";
+import { CalendarSyncUnavailable, calendarsChanged, sameSecret, WebhookRefused } from "./Intervals/IntervalsWebhook.ts";
 import { SessionKey, verifySession, withoutSessionCookie } from "./Session.ts";
 import { RequestValidationLive, respondToFailures, WorkerHttpPlatform } from "./WorkerHttpPlatform.ts";
 
@@ -117,14 +118,18 @@ export const IntervalsWebhookHttp = HttpApiBuilder.group(
       Effect.gen(function* () {
         if (!sameSecret(payload.secret, secret)) return yield* new WebhookRefused();
         const today = Day.make(DateTime.formatIsoDate(yield* DateTime.now));
-        yield* Effect.forEach(calendarsChanged(payload.events), (athleteId) =>
+        // Every athlete is synced, even after one whose calendar couldn't be read; then the delivery
+        // is asked again if any couldn't. Syncing again changes nothing for the others.
+        const results = yield* Effect.forEach(calendarsChanged(payload.events), (athleteId) =>
           perRequest(
             syncAthlete(athleteId, today).pipe(
               Effect.provideService(Connections, connections),
               Effect.provideService(PlanningInternals, planning),
+              Effect.result,
             ),
           ),
         );
+        if (results.some(Result.isFailure)) return yield* new CalendarSyncUnavailable();
         return { received: payload.events.length };
       }),
     );

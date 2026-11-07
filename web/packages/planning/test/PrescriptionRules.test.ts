@@ -1,6 +1,8 @@
 import { describe, expect, it } from "@effect/vitest";
 import { openerProblem, problemWith } from "../src/Plan/PrescriptionRules.ts";
-import { endurance, evidence, longRide, minutes, steady, tuesday, workout } from "./fixtures.ts";
+import type { Workout } from "@cadencia/kernel/Training/Workout";
+import type { PlannedSession } from "../src/Plan/PlannedSession.ts";
+import { easyHour, endurance, evidence, intervals, longRide, minutes, steady, threshold, tuesday, workout } from "./fixtures.ts";
 
 const opener = workout("openerActivation", [
   steady("Warm-up", 20, 0.6),
@@ -49,5 +51,39 @@ describe("rest days", () => {
         goalEvent: null,
       }),
     ).toEqual({ _tag: "PurposeMismatch", problem: "restWithRiding" });
+  });
+});
+
+describe("a proposal never asks more than the planned session's purpose", () => {
+  const check = (session: PlannedSession, proposal: Workout) =>
+    problemWith({ session, workout: proposal, evidence: evidence(), requirement: undefined, goalEvent: null })?._tag;
+  const tempo = { ...threshold, kind: "tempo" as const };
+  const vo2 = { ...threshold, kind: "vo2max" as const };
+  const sweetSpot = workout("tempo", [steady("Warm-up", 15, 0.6), steady("Sweet spot", 40, 0.9), steady("Cool-down", 10, 0.55)]);
+  const vo2Intervals = workout("vo2max", [steady("Warm-up", 20, 0.6), steady("VO2", 20, 1.3), steady("Cool-down", 20, 0.55)]);
+  const race = workout("race", [steady("Race", 60, 1.1)]);
+  const spiky = workout("threshold", [steady("Warm-up", 15, 0.6), steady("Surges", 20, 1.2), steady("Cool-down", 15, 0.55)]);
+
+  it("lets a hard day become easier or stay as planned", () => {
+    expect(check(threshold, intervals)).toBeUndefined();
+    expect(check(threshold, sweetSpot)).toBeUndefined();
+    expect(check(threshold, easyHour)).toBeUndefined();
+    expect(check(vo2, vo2Intervals)).toBeUndefined();
+  });
+
+  it("refuses a harder kind, even when it is shorter", () => {
+    expect(check(threshold, vo2Intervals)).toBe("HardensPlannedSession");
+    expect(check(tempo, race)).toBe("HardensPlannedSession");
+    expect(check(tempo, intervals)).toBe("HardensPlannedSession");
+  });
+
+  it("refuses efforts above the planned kind's ceiling", () => {
+    expect(check(threshold, spiky)).toBe("HardensPlannedSession");
+  });
+
+  it("keeps an opener day to an opener", () => {
+    const openerDay = { ...threshold, kind: "openerActivation" as const };
+    expect(check(openerDay, intervals)).toBe("HardensPlannedSession");
+    expect(check(openerDay, easyHour)).toBeUndefined();
   });
 });

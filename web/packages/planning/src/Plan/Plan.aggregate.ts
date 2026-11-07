@@ -116,30 +116,54 @@ const isOwnedByCadencia = (session: PlannedSession) =>
   session.status !== "changedInIntervals" && session.status !== "removedInIntervals";
 
 /**
- * Apply day limits to the plan's sessions from `today` on. A limit only
- * removes riding: an unavailable day is skipped, and a shorter day trims the
- * session, keeping its workout only if it still fits.
+ * A session within one day's limit, or `null` when the limit leaves it as it
+ * is. A limit only removes riding: an unavailable day is skipped, and a
+ * shorter day trims the session, keeping its workout only if it still fits.
  */
-const sessionsWithin = (plan: Active, limits: ReadonlyArray<DayLimit>, today: Day): Array<PlannedSession> => {
-  const changed: Array<PlannedSession> = [];
-  for (const limit of limits) {
-    if (limit.day < today) continue;
-    const session = plan.sessions.find((s) => s.day === limit.day && isOwnedByCadencia(s));
-    if (!session || session.status === "skipped") continue;
-    if (limit.unavailable) {
-      changed.push({ ...session, status: "skipped", targetMinutes: Minutes.make(0), workout: null });
-    } else if (limit.maxMinutes !== null && limit.maxMinutes < session.targetMinutes) {
-      const workoutFits = session.workout !== null && totalMinutes(session.workout) <= limit.maxMinutes + 0.1;
-      changed.push({
-        ...session,
-        targetMinutes: limit.maxMinutes,
-        workout: workoutFits ? session.workout : null,
-        status: workoutFits ? session.status : "provisional",
-      });
-    }
-  }
-  return changed;
+const limitedTo = (session: PlannedSession, limit: Omit<DayLimit, "day">): PlannedSession | null => {
+  if (limit.unavailable) return { ...session, status: "skipped", targetMinutes: Minutes.make(0), workout: null };
+  if (limit.maxMinutes === null || limit.maxMinutes >= session.targetMinutes) return null;
+  const workoutFits = session.workout !== null && totalMinutes(session.workout) <= limit.maxMinutes + 0.1;
+  return {
+    ...session,
+    targetMinutes: limit.maxMinutes,
+    workout: workoutFits ? session.workout : null,
+    status: workoutFits ? session.status : "provisional",
+  };
 };
+
+/**
+ * One limit per day, the strictest of those given for it: a day any limit
+ * makes unavailable stays unavailable, and otherwise the shortest cap wins.
+ * A later limit can't undo an earlier one.
+ */
+const strictestPerDay = (limits: ReadonlyArray<DayLimit>): Array<DayLimit> => {
+  const byDay = new Map<Day, DayLimit>();
+  for (const limit of limits) {
+    const seen = byDay.get(limit.day);
+    const caps = [seen?.maxMinutes, limit.maxMinutes].filter((m): m is Minutes => m != null);
+    byDay.set(
+      limit.day,
+      seen === undefined
+        ? limit
+        : {
+            day: limit.day,
+            unavailable: seen.unavailable || limit.unavailable,
+            maxMinutes: caps.length === 0 ? null : Minutes.make(Math.min(...caps)),
+          },
+    );
+  }
+  return [...byDay.values()];
+};
+
+/** Apply day limits to the plan's sessions from `today` on. */
+const sessionsWithin = (plan: Active, limits: ReadonlyArray<DayLimit>, today: Day): Array<PlannedSession> =>
+  strictestPerDay(limits).flatMap((limit) => {
+    if (limit.day < today) return [];
+    const session = plan.sessions.find((s) => s.day === limit.day && isOwnedByCadencia(s));
+    if (!session || session.status === "skipped") return [];
+    return limitedTo(session, limit) ?? [];
+  });
 
 /** Why a draft can't become a plan, if it can't. */
 const invalidReason = (cmd: CreatePlanCommand): InvalidPlan["reason"] | null => {
@@ -267,12 +291,11 @@ export class Plan extends Domain.Aggregate("Plan", {
       if (plan.sessions.some((s) => s.day === cmd.toDay && s.status !== "removedInIntervals")) {
         return yield* new DayTaken({ day: cmd.toDay });
       }
-      return [
-        new SessionMoved({
-          session: { ...session, day: cmd.toDay, status: session.workout ? "concrete" : "provisional" },
-          fromDay: session.day,
-        }),
-      ];
+      const moved: PlannedSession = { ...session, day: cmd.toDay, status: session.workout ? "concrete" : "provisional" };
+      // The athlete's requirement for the new day holds for whatever session lands there.
+      const requirement = plan.requirements.find((r) => r.day === cmd.toDay);
+      const fitted = requirement === undefined ? null : limitedTo(moved, { ...requirement, unavailable: false });
+      return [new SessionMoved({ session: fitted ?? moved, fromDay: session.day })];
     }),
 
     RecordDayRequirement: Effect.fn(function* (state, cmd) {
@@ -305,7 +328,8 @@ export class Plan extends Domain.Aggregate("Plan", {
       yield* mustBeSystem("IntervalsSync");
       if (plan._tag !== "Active") return [];
       const session = plan.sessions.find((s) => s.externalId === cmd.externalId);
-      if (!session) return [];
+      // The sync compared another version of the session (it was moved or trimmed since): stale.
+      if (!session || !isAsPublished(session, cmd.observed)) return [];
       // Only what Intervals shows as Cadencia published it can have been changed there: a session
       // being published again was compared against a stale copy. One the athlete changed can still go.
       const removable = session.status === "published" || session.status === "changedInIntervals";

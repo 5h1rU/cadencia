@@ -32,6 +32,37 @@ const isHard = (kind: SessionKind): boolean =>
 /** Kinds whose purpose is easy riding: a proposal for one of these days may not add intensity. */
 const isEasy = (kind: SessionKind): boolean => kind === "recovery" || kind === "endurance" || kind === "longRide";
 
+/**
+ * How demanding each kind's purpose is, for the kinds whose purpose sets it.
+ * A group ride, strength or an opener says nothing about sustained intensity.
+ */
+const DEMAND: Partial<Record<SessionKind, number>> = {
+  recovery: 1,
+  endurance: 2,
+  longRide: 2,
+  tempo: 3,
+  threshold: 4,
+  vo2max: 5,
+  race: 6,
+};
+
+/** The highest intensity, as a fraction of FTP, a hard kind's purpose reaches. VO₂max and races have none. */
+const PEAK_CEILING: Partial<Record<SessionKind, number>> = { tempo: 1.0, threshold: 1.1 };
+
+/**
+ * Whether a proposal asks more of the athlete than the planned session's
+ * purpose: intensity on an easy day, anything but an opener's brief efforts on
+ * an opener day, and on a hard day a harder kind or efforts above the kind's
+ * ceiling. A group ride or strength day is left to the athlete.
+ */
+const hardens = (planned: SessionKind, workout: Workout, intense: boolean, peak: number): boolean => {
+  if (isEasy(planned)) return intense;
+  if (planned === "openerActivation") return intense && workout.kind !== "openerActivation";
+  const demand = DEMAND[planned];
+  if (demand === undefined) return false;
+  return (DEMAND[workout.kind] ?? 0) > demand || peak > (PEAK_CEILING[planned] ?? Number.POSITIVE_INFINITY);
+};
+
 export type Problem =
   | { readonly _tag: "AvailabilityExceeded"; readonly allowedMinutes: Minutes; readonly proposedMinutes: Minutes }
   | { readonly _tag: "IntensityAfterHardTraining"; readonly peakIntensity: FtpFraction }
@@ -83,7 +114,7 @@ export const problemWith = (input: {
   if (conditionsOn(evidence, day)?.hardOtherTraining && intense) {
     return { _tag: "IntensityAfterHardTraining", peakIntensity: peak };
   }
-  if (isEasy(session.kind) && intense) {
+  if (hardens(session.kind, workout, intense, peak)) {
     return { _tag: "HardensPlannedSession", peakIntensity: peak };
   }
   if (workout.kind === "openerActivation") {

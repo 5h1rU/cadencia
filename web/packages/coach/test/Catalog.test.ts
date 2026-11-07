@@ -7,6 +7,7 @@ import { MessageId } from "../src/Conversation/Message.id.ts";
 import { MessageText } from "../src/Conversation/MessageText.ts";
 import { Count } from "../src/Count.ts";
 import { Attempt } from "../src/DailyDecision/Attempt.ts";
+import { DailyDecisionId } from "../src/DailyDecision/DailyDecision.id.ts";
 import { Headline } from "../src/Headline.ts";
 import { ModelName } from "../src/Provenance.ts";
 
@@ -22,6 +23,7 @@ const cases: ReadonlyArray<readonly [string, Schema.Top, ReadonlyArray<unknown>,
   ["ModelName", ModelName, ["gpt-5.5", "claude-opus-5-5"], ["", "gpt 5", "-gpt"]],
   ["Count", Count, [0, 12], [-1, 1.5]],
   ["Attempt", Attempt, [1, 2], [0, -1]],
+  ["DailyDecisionId", DailyDecisionId, ["i100:2026-11-09", "i100:2028-02-29"], ["i100:2026-02-31", "i100:2027-02-29", "i100:2026-11-9"]],
 ];
 
 describe("the schema catalog", () => {

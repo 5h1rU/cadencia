@@ -9,6 +9,7 @@ import { Paragraph, Title } from "@cadencia/kernel/Text";
 import { GoalKind } from "@cadencia/kernel/Training/Goal";
 import { Phase } from "@cadencia/kernel/Training/Phase";
 import * as Domain from "@alchemy.run/domain";
+import type * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { CalendarProblem } from "./Calendar.external.ts";
@@ -16,6 +17,7 @@ import { DayRequirement } from "./DayRequirement.ts";
 import { GoalEvent } from "./GoalEvent.ts";
 import { Plan } from "./Plan.aggregate.ts";
 import { type PlannedSession, PlannedSession as Session_ } from "./PlannedSession.ts";
+import { isOlder } from "./PlanCreation.ts";
 import { SessionId } from "./Session.id.ts";
 
 export const CurrentPlanState = Schema.Struct({
@@ -33,6 +35,8 @@ export const CurrentPlanState = Schema.Struct({
   requirements: Schema.Array(DayRequirement),
   /** Sessions the Intervals calendar refused, until one is published. */
   calendarProblems: Schema.Array(Schema.Struct({ sessionId: SessionId, problem: CalendarProblem })),
+  /** When the plan was created: a plan created before it never replaces it, whenever its events arrive. */
+  createdAt: Schema.NullOr(Schema.DateTimeUtc),
 });
 type CurrentPlanState = typeof CurrentPlanState.Type;
 
@@ -53,9 +57,15 @@ const withStatus = (status: PlannedSession["status"]) =>
     sessions: v.sessions.map((s) => (s.sessionId === e.sessionId ? { ...s, status } : s)),
   }));
 
+/** Whether a plan created at `createdAt` is older than the one the view shows. */
+const isOlderThanShown = (v: CurrentPlanState, planId: PlanId, createdAt: DateTime.Utc) =>
+  v.planId !== null && v.createdAt !== null && isOlder({ planId, createdAt }, { planId: v.planId, createdAt: v.createdAt });
+
 /**
  * The athlete's current plan: the most recently created one, with its weeks,
- * sessions and their state. The web and iOS watch it live.
+ * sessions and their state. Plans' events arrive in order per plan but not
+ * across plans, so it goes by when each plan was created, not by arrival.
+ * The web and iOS watch it live.
  */
 export class CurrentPlan extends Domain.View("CurrentPlan", {
   from: [Plan],
@@ -65,7 +75,7 @@ export class CurrentPlan extends Domain.View("CurrentPlan", {
   keyOf: { Plan: ({ source }) => ownerOf(source.id) },
   state: CurrentPlanState,
   // Bump when the state or how it folds changes, so the view is rebuilt from the plan's events.
-  version: 1,
+  version: 2,
   initial: {
     planId: null,
     status: "none",
@@ -80,23 +90,28 @@ export class CurrentPlan extends Domain.View("CurrentPlan", {
     sessions: [],
     requirements: [],
     calendarProblems: [],
+    createdAt: null,
   },
   evolve: {
-    PlanCreated: (_, e, { source }) => ({
-      planId: source.id,
-      status: "active" as const,
-      title: e.title,
-      goal: e.goal,
-      objective: e.objective,
-      startDay: e.startDay,
-      endDay: e.endDay,
-      phases: e.phases,
-      longRideWeekday: e.longRideWeekday,
-      event: e.event,
-      sessions: e.sessions,
-      requirements: [],
-      calendarProblems: [],
-    }),
+    PlanCreated: (v, e, { source, envelope }) =>
+      isOlderThanShown(v, source.id, envelope.at)
+        ? v
+        : {
+            planId: source.id,
+            status: "active" as const,
+            title: e.title,
+            goal: e.goal,
+            objective: e.objective,
+            startDay: e.startDay,
+            endDay: e.endDay,
+            phases: e.phases,
+            longRideWeekday: e.longRideWeekday,
+            event: e.event,
+            sessions: e.sessions,
+            requirements: [],
+            calendarProblems: [],
+            createdAt: envelope.at,
+          },
     SessionConcretized: forShownPlan((v, e) => replace(v, [e.session])),
     WeekRevised: forShownPlan((v, e) => replace(v, e.sessions)),
     SessionMoved: forShownPlan((v, e) => replace(v, [e.session])),

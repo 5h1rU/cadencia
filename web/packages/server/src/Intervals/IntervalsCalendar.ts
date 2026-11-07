@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { Connections } from "../Connections.ts";
-import { athletePath, callIntervals, type IntervalsError, IntervalsEventId } from "./IntervalsHttp.ts";
+import { athletePath, callIntervals, type IntervalsError, IntervalsEventId, kindOf } from "./IntervalsHttp.ts";
 import { workoutText } from "./WorkoutText.ts";
 
 /**
@@ -29,18 +29,14 @@ export const calendarEntry = (session: PlannedSession) => ({
   description: session.workout ? workoutText(session.workout) : session.purpose,
 });
 
-/** What Intervals answers to a bulk upsert: the events it wrote. */
-const Upserted = Schema.Array(Schema.Struct({ id: IntervalsEventId }));
+/** What Intervals answers to a bulk upsert of one entry: the event it wrote. */
+const Upserted = Schema.Tuple([Schema.Struct({ id: IntervalsEventId })]);
 
-/**
- * Intervals' answer in the calendar's terms: an outage or rate limit may pass
- * (unavailable); a revoked or missing authorization means the athlete isn't
- * connected; any other refusal won't change by trying again.
- */
-const calendarError = (error: IntervalsError): CalendarUnavailable | CalendarRefused =>
-  error.status === 0 || error.status === 429 || error.status >= 500
-    ? new CalendarUnavailable()
-    : new CalendarRefused({ problem: error.status === 401 || error.status === 403 ? "notConnected" : "refused" });
+/** Intervals' answer in the calendar's terms. */
+const calendarError = (error: IntervalsError): CalendarUnavailable | CalendarRefused => {
+  const kind = kindOf(error);
+  return kind === "unavailable" ? new CalendarUnavailable() : new CalendarRefused({ problem: kind });
+};
 
 /**
  * The Calendar external system over Intervals.icu. Upserts by `external_id`
@@ -68,7 +64,9 @@ export const IntervalsCalendar = Calendar.toLayer(
             query: { upsert: "true" },
             body: [calendarEntry(session)],
           }).pipe(Effect.mapError(calendarError));
-          return { published: Option.isSome(Schema.decodeUnknownOption(Upserted)(result)) };
+          // A success that doesn't name the event written confirms nothing: it is retried like an outage.
+          if (Option.isNone(Schema.decodeUnknownOption(Upserted)(result))) return yield* new CalendarUnavailable();
+          return { published: true };
         }),
       withdrawSession: ({ athleteId, externalId }) =>
         Effect.gen(function* () {

@@ -19,6 +19,19 @@ export class IntervalsError extends Schema.TaggedError<IntervalsError>()("Interv
   message: Schema.String,
 }) {}
 
+/**
+ * What an Intervals error means for whoever called: `unavailable` (no answer,
+ * a rate limit or an outage) may pass by trying again; `notConnected` (a
+ * revoked or missing authorization) needs the athlete to connect again; any
+ * other refusal won't change by trying again.
+ */
+export const kindOf = (error: IntervalsError): "unavailable" | "notConnected" | "refused" =>
+  error.status === 0 || error.status === 429 || error.status >= 500
+    ? "unavailable"
+    : error.status === 401 || error.status === 403
+      ? "notConnected"
+      : "refused";
+
 /** One call to the Intervals.icu API as the athlete, with their OAuth token. */
 export const callIntervals = (
   token: Redacted.Redacted<string>,
@@ -58,6 +71,7 @@ export const IntervalsEvent = Schema.Struct({
   start_date_local: Schema.optional(Schema.NullOr(Schema.String)),
   name: Schema.optional(Schema.NullOr(Schema.String)),
   moving_time: Schema.optional(Schema.NullOr(Schema.Number)),
+  description: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type IntervalsEvent = typeof IntervalsEvent.Type;
 
