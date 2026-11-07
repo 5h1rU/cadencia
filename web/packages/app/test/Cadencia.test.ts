@@ -15,13 +15,18 @@ import * as Duration from "effect/Duration";
 import * as Option from "effect/Option";
 import { RpcClientDefect, RpcClientError } from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
+import * as Result from "effect/Result";
+import { AsyncData } from "foldkit";
+import * as Scene from "foldkit/scene";
 import * as Story from "foldkit/story";
 import {
   backoffSeconds,
   CoachClient,
   commandFor,
   declarationOf,
+  History,
   init,
+  IntervalsHistory,
   intervalsProblemOf,
   isMovable,
   LoadIntervals,
@@ -34,6 +39,7 @@ import {
   UNKNOWN_OUTCOME,
   untilNextMidnight,
   update,
+  view,
   WaitToReconnect,
   Write,
 } from "../src/Cadencia.ts";
@@ -310,26 +316,85 @@ describe("the local day", () => {
   });
 });
 
-describe("Intervals.icu", () => {
-  it("is read when the athlete opens the history, for the last four weeks", () => {
-    const next = update(signedIn, Message.ClickedSection({ section: "history" }));
-    expect(next.model.section).toBe("history");
-    expect(next.commands?.map((c) => [c.name, c.args])).toEqual([
-      ["LoadIntervals", { range: { oldest: "2026-10-13", newest: "2026-11-09" } }],
-    ]);
-    expect(LoadIntervals.name).toBe("LoadIntervals");
+describe("the Intervals.icu history", () => {
+  const range = { oldest: Day.make("2026-10-13"), newest: Day.make("2026-11-09") };
+  const load = LoadIntervals({ range });
+  const read = Schema.decodeUnknownSync(IntervalsHistory)({
+    activities: [],
+    wellness: [],
+    athlete: { name: "Ana", weight: 61, ftp: 230 },
+  });
+  const settled = (result: Result.Result<IntervalsHistory, "signedOut" | "notConnected" | "unavailable">, at = range) =>
+    Message.SettledLoadIntervals({ range: at, result });
+
+  it("is read for the last four weeks when a section shows it, and kept on screen while it refreshes", () =>
+    Story.story(
+      update,
+      Story.given(signedIn),
+      Story.message(Message.ClickedSection({ section: "history" })),
+      Story.Command.expectExact(load),
+      Story.model((model) => expect(model.history).toEqual(AsyncData.Loading())),
+      Story.Command.resolve(load, settled(Result.succeed(read))),
+      Story.model((model) => expect(model.history).toEqual(History.Success({ data: read }))),
+      // Opening the profile reads it again, keeping what's on screen.
+      Story.message(Message.ClickedSection({ section: "profile" })),
+      Story.Command.expectExact(load),
+      Story.model((model) => expect(model.history).toEqual(History.Refreshing({ data: read }))),
+      // A refresh that fails keeps the data and says why.
+      Story.Command.resolve(load, settled(Result.fail("unavailable"))),
+      Story.model((model) => expect(model.history).toEqual(History.Stale({ error: "unavailable", data: read }))),
+      Story.Command.expectNone(),
+    ));
+
+  // Story answers each Command before the next Message, so what happens while a read is under way is
+  // stepped through update directly.
+  it("isn't read again while a read is under way", () => {
+    const loading = update(signedIn, Message.ClickedSection({ section: "history" })).model;
+    const again = update(loading, Message.ClickedSection({ section: "profile" }));
+    expect(again.commands ?? []).toEqual([]);
+    expect(again.model.history).toEqual(AsyncData.Loading());
   });
 
-  it("isn't called for a signed-out visitor", () => {
+  it("isn't read for a signed-out visitor, nor for a section that doesn't show it", () => {
     expect(update(signedOut, Message.ClickedSection({ section: "profile" })).commands ?? []).toEqual([]);
+    expect(update(signedIn, Message.ClickedSection({ section: "plan" })).commands ?? []).toEqual([]);
   });
 
-  it("offers to connect again when the connection is gone", () => {
-    const next = update(signedIn, Message.FailedIntervals({ problem: "notConnected" })).model;
-    expect(next.needsReconnect).toBe(true);
-    expect(Option.getOrNull(next.error)).toBe("Intervals.icu no está conectado.");
-    expect(update(signedIn, Message.FailedIntervals({ problem: "signedOut" })).model.athleteId).toBeNull();
+  it("ignores a late answer for four weeks that are no longer shown", () => {
+    const tomorrow = { oldest: Day.make("2026-10-14"), newest: Day.make("2026-11-10") };
+    const loading = update(signedIn, Message.ClickedSection({ section: "history" })).model;
+    const moved = update(loading, Message.ChangedDay({ today: Day.make("2026-11-10") }));
+    expect(moved.commands?.map((c) => [c.name, c.args])).toEqual([["LoadIntervals", { range: tomorrow }]]);
+    const late = update(moved.model, settled(Result.succeed(read)));
+    expect(late.model).toBe(moved.model);
+    expect(update(late.model, settled(Result.succeed(read), tomorrow)).model.history).toEqual(History.Success({ data: read }));
   });
+
+  it("signs out when the session is gone, and ignores an answer that arrives after", () => {
+    const loading = update(signedIn, Message.ClickedSection({ section: "history" })).model;
+    const gone = update(loading, settled(Result.fail("signedOut"))).model;
+    expect(gone.athleteId).toBeNull();
+    expect(gone.history).toEqual(AsyncData.Idle());
+    expect(update(gone, settled(Result.succeed(read))).model).toBe(gone);
+  });
+
+  it("is read again after the day's wellness is saved", () => {
+    const loaded: Model = { ...signedIn, history: History.Success({ data: read }) };
+    const saved = update(loaded, Message.SavedDeclaration());
+    expect(saved.commands?.map((c) => [c.name, c.args])).toEqual([["LoadIntervals", { range }]]);
+    expect(saved.model.history).toEqual(History.Refreshing({ data: read }));
+  });
+
+  it("shows that it is reading, then why it couldn't, with a way to connect again", () =>
+    Scene.scene(
+      { update, view },
+      Scene.given(signedIn),
+      Scene.click(Scene.role("button", { name: "Historial" })),
+      Scene.expect(Scene.text("Leyendo Intervals.icu…")).toExist(),
+      Scene.Command.resolve(load, settled(Result.fail("notConnected"))),
+      Scene.expect(Scene.text("Leyendo Intervals.icu…")).not.toExist(),
+      Scene.expect(Scene.role("link", { name: "Conectar de nuevo" })).toExist(),
+    ));
 });
 
 describe("the wellness form", () => {

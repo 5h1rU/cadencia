@@ -33,11 +33,12 @@ import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Option from "effect/Option";
+import * as Result from "effect/Result";
 import type * as RpcClientError from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { Command, Http, Subscription, type Update } from "foldkit";
-import type { Document, HtmlBuilder } from "foldkit/html";
+import { AsyncData, Command, Http, Subscription, type Update } from "foldkit";
+import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { defineTaggedUnion } from "foldkit/schema";
 import { modifyFields } from "foldkit/struct";
@@ -86,6 +87,17 @@ export type InFlight = typeof InFlight.Type;
 export const IntervalsProblem = Schema.Literals(["signedOut", "notConnected", "unavailable"]);
 export type IntervalsProblem = typeof IntervalsProblem.Type;
 
+/** What Intervals.icu says about the athlete's last four weeks, read together for the history and the profile. */
+export const IntervalsHistory = Schema.Struct({
+  activities: Schema.Array(ActivitySummary),
+  wellness: Schema.Array(WellnessDay),
+  athlete: AthleteMeasures,
+});
+export type IntervalsHistory = typeof IntervalsHistory.Type;
+
+/** The history as the app holds it: not asked for, loading, loaded, refreshing, or why it couldn't be read. */
+export const History = AsyncData.Schema(IntervalsHistory, IntervalsProblem);
+
 /**
  * The day's declaration as the form holds it: what the athlete typed, not yet
  * checked. It is decoded into `WellnessDeclaration` when they save it.
@@ -122,9 +134,7 @@ export const Model = Schema.Struct({
   decision: Schema.Option(DecisionState),
   thread: Schema.Option(Thread),
   profile: Schema.Option(ProfileState),
-  activities: Schema.Array(ActivitySummary),
-  wellness: Schema.Array(WellnessDay),
-  athlete: Schema.Option(AthleteMeasures),
+  history: History.schema,
   move: Schema.Struct({ sessionId: Schema.String, toDay: Schema.String }),
   requirement: Schema.Struct({ day: Schema.String, maxMinutes: Schema.String, instructions: Schema.String }),
   declaration: Declaration,
@@ -151,12 +161,8 @@ export const Message = defineMessageUnion({
   LostReads: {},
   ReconnectedReads: {},
   SignedOut: {},
-  LoadedIntervals: {
-    activities: Schema.Array(ActivitySummary),
-    wellness: Schema.Array(WellnessDay),
-    athlete: AthleteMeasures,
-  },
-  FailedIntervals: { problem: IntervalsProblem },
+  /** The history for `range` was read, or why it wasn't: the range tells a late answer from the current one. */
+  SettledLoadIntervals: { range: HistoryRange, result: Schema.Result(IntervalsHistory, IntervalsProblem) },
   ClickedAcceptIntent: { conversationId: ConversationId, messageId: MessageId },
   ClickedDismissIntent: { conversationId: ConversationId, messageId: MessageId },
   ChangedMove: { field: Schema.Literals(["sessionId", "toDay"]), value: Schema.String },
@@ -223,7 +229,7 @@ const problemOf = (error: unknown): IntervalsProblem => (error instanceof Interv
 
 export const LoadIntervals = Command.define("LoadIntervals", {
   args: { range: HistoryRange },
-  messages: [Message.LoadedIntervals, Message.FailedIntervals],
+  messages: [Message.SettledLoadIntervals],
   execute: ({ range }) =>
     Effect.all(
       {
@@ -233,8 +239,9 @@ export const LoadIntervals = Command.define("LoadIntervals", {
       },
       { concurrency: "unbounded" },
     ).pipe(
-      Effect.map((loaded) => Message.LoadedIntervals(loaded)),
-      Effect.catch((error) => Effect.succeed(Message.FailedIntervals({ problem: problemOf(error) }))),
+      Effect.mapError(problemOf),
+      Effect.result,
+      Effect.map((result) => Message.SettledLoadIntervals({ range, result })),
       Effect.provide(Http.layer),
     ),
 });
@@ -365,9 +372,7 @@ const signedOut = (model: Model): Return => ({
     decision: () => Option.none(),
     thread: () => Option.none(),
     profile: () => Option.none(),
-    activities: () => [],
-    wellness: () => [],
-    athlete: () => Option.none(),
+    history: () => AsyncData.Idle(),
     inFlight: () => Option.none(),
     savingDeclaration: () => false,
     confirmRetire: () => false,
@@ -426,20 +431,54 @@ const failed = <R>(model: Model, commandId: string, failure: Failure<R>, text: (
 const planIdOf = (model: Model) =>
   Option.flatMap(model.plan, (plan) => (plan.status === "active" ? Option.fromNullishOr(plan.planId) : Option.none()));
 
-const loadIntervalsFor = (model: Model, section: Section) =>
-  (section === "history" || section === "profile") && model.athleteId !== null
-    ? [LoadIntervals({ range: historyOf(model.today) })]
-    : [];
+const showsHistory = (section: Section) => section === "history" || section === "profile";
+
+/** Move the history to `next` and read it for the current four weeks. */
+const loadHistory = (model: Model, next: typeof History.schema.Type): Return => ({
+  model: modifyFields(model, { history: () => next }),
+  commands: [LoadIntervals({ range: historyOf(model.today) })],
+});
+
+/**
+ * Read the history when a section shows it: loaded data stays on screen while
+ * it refreshes, and a read already under way isn't started again.
+ */
+const revalidateHistory = (model: Model): Return =>
+  model.athleteId === null || !showsHistory(model.section)
+    ? { model }
+    : Option.match(AsyncData.revalidateOrLoad(model.history), {
+        onNone: () => ({ model }),
+        onSome: (next) => loadHistory(model, next),
+      });
+
+/**
+ * The four weeks moved: read them again now if they're on screen, or if a read
+ * of the old ones is under way (its answer will be ignored, so nothing else
+ * would end it). Otherwise the next visit reads them.
+ */
+const historyMoved = (model: Model): Return =>
+  model.athleteId !== null && (showsHistory(model.section) || AsyncData.isPending(model.history))
+    ? loadHistory(
+        model,
+        Option.match(AsyncData.getData(model.history), {
+          onNone: () => AsyncData.Loading(),
+          onSome: (data) => History.Refreshing({ data }),
+        }),
+      )
+    : { model };
+
+const sameRange = (a: HistoryRange, b: HistoryRange) => a.oldest === b.oldest && a.newest === b.newest;
 
 /** A read worked: the reads are healthy again. */
 const read = (model: Model): Return => ({ model: modifyFields(model, { readRetries: () => 0 }) });
 
-const intervalsFailed = (model: Model, problem: IntervalsProblem, saving: boolean): Return =>
+/** The declaration wasn't saved: say why, and offer to connect again if Intervals isn't connected. */
+const declarationFailed = (model: Model, problem: IntervalsProblem): Return =>
   problem === "signedOut"
     ? signedOut(model)
     : {
         model: modifyFields(model, {
-          ...(saving ? { savingDeclaration: () => false } : {}),
+          savingDeclaration: () => false,
           needsReconnect: () => problem === "notConnected",
           error: () => Option.some(INTERVALS_PROBLEMS[problem]),
         }),
@@ -447,14 +486,8 @@ const intervalsFailed = (model: Model, problem: IntervalsProblem, saving: boolea
 
 export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
-    ClickedSection: ({ section }) => ({
-      model: modifyFields(model, { ...clearMessages, section: () => section }),
-      commands: loadIntervalsFor(model, section),
-    }),
-    ChangedDay: ({ today }) =>
-      today === model.today
-        ? { model }
-        : { model: modifyFields(model, { today: () => today }), commands: loadIntervalsFor({ ...model, today }, model.section) },
+    ClickedSection: ({ section }) => revalidateHistory(modifyFields(model, { ...clearMessages, section: () => section })),
+    ChangedDay: ({ today }) => (today === model.today ? { model } : historyMoved(modifyFields(model, { today: () => today }))),
     ReceivedPlan: ({ plan }) => read(modifyFields(model, { plan: () => plan })),
     ReceivedDecision: ({ decision }) => read(modifyFields(model, { decision: () => decision })),
     ReceivedThread: ({ thread }) => read(modifyFields(model, { thread: () => Option.some(thread) })),
@@ -470,15 +503,18 @@ export const update = (model: Model, message: Message): Return =>
         : { model },
     ReconnectedReads: () => ({ model: modifyFields(model, { readsOnline: () => true }) }),
     SignedOut: () => signedOut(model),
-    LoadedIntervals: ({ activities, wellness, athlete }) => ({
-      model: modifyFields(model, {
-        activities: () => activities,
-        wellness: () => wellness,
-        athlete: () => Option.some(athlete),
-        needsReconnect: () => false,
-      }),
-    }),
-    FailedIntervals: ({ problem }) => intervalsFailed(model, problem, false),
+    SettledLoadIntervals: ({ range, result }) =>
+      // An answer for four weeks that are no longer shown, or after signing out, is ignored.
+      !sameRange(range, historyOf(model.today)) || !AsyncData.isPending(model.history)
+        ? { model }
+        : Result.isFailure(result) && result.failure === "signedOut"
+          ? signedOut(model)
+          : {
+              model: modifyFields(model, {
+                history: AsyncData.settle(result),
+                ...(Result.isSuccess(result) ? { needsReconnect: () => false } : {}),
+              }),
+            },
     ClickedAcceptIntent: ({ conversationId, messageId }) =>
       send(model, Write.AcceptIntent({ target: conversationId, input: { messageId, today: model.today } })),
     ClickedDismissIntent: ({ conversationId, messageId }) =>
@@ -588,14 +624,19 @@ export const update = (model: Model, message: Message): Return =>
               commands: [SaveDeclaration({ day: model.today, declaration })],
             }),
           }),
-    SavedDeclaration: () => ({
-      model: modifyFields(model, {
+    SavedDeclaration: () => {
+      const saved = modifyFields(model, {
         savingDeclaration: () => false,
         declaration: () => emptyDeclaration,
         notice: () => Option.some("Guardado en Intervals.icu."),
-      }),
-    }),
-    FailedDeclaration: ({ problem }) => intervalsFailed(model, problem, true),
+      });
+      // Today's wellness changed: refresh the history if it holds data.
+      return Option.match(AsyncData.revalidate(saved.history), {
+        onNone: () => ({ model: saved }),
+        onSome: (next) => loadHistory(saved, next),
+      });
+    },
+    FailedDeclaration: ({ problem }) => declarationFailed(model, problem),
   });
 
 // INIT
@@ -612,9 +653,7 @@ export const init = (flags: Flags): Return => ({
     decision: Option.none(),
     thread: Option.none(),
     profile: Option.none(),
-    activities: [],
-    wellness: [],
-    athlete: Option.none(),
+    history: AsyncData.Idle(),
     move: { sessionId: "", toDay: "" },
     requirement: { day: flags.today, maxMinutes: "", instructions: "" },
     declaration: emptyDeclaration,
@@ -1030,8 +1069,42 @@ const planView = (model: Model, h: HtmlBuilder<Message>) =>
     ],
   });
 
-const historyView = (model: Model, h: HtmlBuilder<Message>) => {
-  const latest = model.wellness.at(-1);
+const intervalsProblemText = (problem: IntervalsProblem) =>
+  problem === "signedOut" ? SIGNED_OUT : INTERVALS_PROBLEMS[problem];
+
+/** Why the history couldn't be read, with a way to connect again when that's the reason. */
+const historyProblem = (h: HtmlBuilder<Message>, problem: IntervalsProblem) =>
+  h.p([h.Class("error"), h.AriaLive("polite")], [
+    intervalsProblemText(problem),
+    ...(problem === "notConnected" ? [" ", reconnectLink(h, "Conectar de nuevo")] : []),
+  ]);
+
+/**
+ * The cards built from the history, in every state it can be in: until it is
+ * read, or when it can't be, one card titled `title` says so. Data already on
+ * screen stays there while it refreshes, and when a refresh fails.
+ */
+const historyCards = (
+  model: Model,
+  h: HtmlBuilder<Message>,
+  title: string,
+  cards: (history: IntervalsHistory) => ReadonlyArray<Html>,
+): ReadonlyArray<Html> => {
+  const alone = (content: Html) => [h.div([h.Class("card")], [h.h2([], [title]), content])];
+  const loading = () => alone(h.p([h.Class("muted"), h.AriaLive("polite")], ["Leyendo Intervals.icu…"]));
+  return AsyncData.match(model.history, {
+    onIdle: loading,
+    onLoading: loading,
+    onFailure: (problem) => alone(historyProblem(h, problem)),
+    onRefreshing: (history) => [h.p([h.Class("muted"), h.AriaLive("polite")], ["Actualizando desde Intervals.icu…"]), ...cards(history)],
+    onStale: ({ error, data }) => [historyProblem(h, error), ...cards(data)],
+    onSuccess: cards,
+  });
+};
+
+const historyView = (model: Model, h: HtmlBuilder<Message>) =>
+  historyCards(model, h, "Forma", ({ wellness, activities }) => {
+  const latest = wellness.at(-1);
   return [
     h.div([h.Class("card")], [
       h.h2([], ["Forma"]),
@@ -1043,7 +1116,7 @@ const historyView = (model: Model, h: HtmlBuilder<Message>) => {
     ]),
     h.div([h.Class("card")], [
       h.h2([], ["Actividades de las últimas cuatro semanas"]),
-      model.activities.length === 0
+      activities.length === 0
         ? h.p([h.Class("muted")], ["No hay actividades en Intervals.icu en estas fechas."])
         : h.div([h.Class("scroll")], [
             h.table([], [
@@ -1052,7 +1125,7 @@ const historyView = (model: Model, h: HtmlBuilder<Message>) => {
               ]),
               h.tbody(
                 [],
-                [...model.activities].reverse().map((a) =>
+                [...activities].reverse().map((a) =>
                   h.keyed("tr")(a.activityId, [], [
                     h.td([], [a.day ?? ""]),
                     h.td([], [a.name ?? ""]),
@@ -1066,7 +1139,7 @@ const historyView = (model: Model, h: HtmlBuilder<Message>) => {
           ]),
     ]),
   ];
-};
+  });
 
 const scale = (h: HtmlBuilder<Message>, label: string, field: "mood" | "motivation" | "soreness" | "fatigue", value: string) =>
   h.label([], [
@@ -1078,13 +1151,14 @@ const scale = (h: HtmlBuilder<Message>, label: string, field: "mood" | "motivati
   ]);
 
 const profileView = (model: Model, h: HtmlBuilder<Message>) => {
-  const athlete = Option.getOrNull(model.athlete);
   const report = Option.getOrNull(Option.flatMap(model.profile, (p) => Option.fromNullishOr(p.report)));
   return [
-    h.div([h.Class("card")], [
-      h.h2([], [athlete?.name ?? "Tu perfil"]),
-      h.p([], [`Peso: ${athlete?.weight != null ? `${athlete.weight} kg` : "—"} · FTP: ${athlete?.ftp != null ? `${athlete.ftp} W` : "—"}`]),
-      h.p([h.Class("muted")], ["Estos datos viven en Intervals.icu."]),
+    ...historyCards(model, h, "Tu perfil", ({ athlete }) => [
+      h.div([h.Class("card")], [
+        h.h2([], [athlete.name ?? "Tu perfil"]),
+        h.p([], [`Peso: ${athlete.weight != null ? `${athlete.weight} kg` : "—"} · FTP: ${athlete.ftp != null ? `${athlete.ftp} W` : "—"}`]),
+        h.p([h.Class("muted")], ["Estos datos viven en Intervals.icu."]),
+      ]),
     ]),
     h.div([h.Class("card")], [
       h.h2([], ["Cómo estás hoy"]),
