@@ -6,6 +6,8 @@ import { Weekday } from "@cadencia/kernel/Calendar/Week";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { Paragraph, Title } from "@cadencia/kernel/Text";
 import type { DayLimit } from "@cadencia/kernel/Training/DayLimit";
+import { GoalKind } from "@cadencia/kernel/Training/Goal";
+import { Phase } from "@cadencia/kernel/Training/Phase";
 import { Minutes } from "@cadencia/kernel/Training/Units";
 import { totalMinutes } from "@cadencia/kernel/Training/Workout";
 import * as Domain from "@alchemy.run/domain";
@@ -22,19 +24,20 @@ import {
   PurposeMismatch,
   SessionConcretized,
 } from "./ConcretizeSession.command.ts";
-import { CreatePlan, type CreatePlan as CreatePlanCommand, InvalidPlan, PlanAlreadyExists, PlanCreated } from "./CreatePlan.command.ts";
+import {
+  CreatePlan,
+  type CreatePlan as CreatePlanCommand,
+  InvalidPlan,
+  PlanAlreadyExists,
+  PlanCreated,
+} from "./CreatePlan.command.ts";
 import { DayOutsidePlan } from "./DayOutsidePlan.rejection.ts";
+import { DayRequirement } from "./DayRequirement.ts";
+import { GoalEvent } from "./GoalEvent.ts";
 import { ImplausibleToday } from "./ImplausibleToday.rejection.ts";
 import { DayTaken, MoveSession, SessionMoved, SessionNotFound, SessionNotMovable } from "./MoveSession.command.ts";
+import { type PlannedSession, PlannedSession as PlannedSessionSchema } from "./PlannedSession.ts";
 import { PlanNotActive } from "./PlanNotActive.rejection.ts";
-import {
-  DayRequirement,
-  GoalEvent,
-  GoalKind,
-  Phase,
-  type PlannedSession,
-  PlannedSession as PlannedSessionSchema,
-} from "./PlanShape.ts";
 import { isSoftened, problemWith } from "./PrescriptionRules.ts";
 import { RecordCalendarFailure, SessionPublicationFailed } from "./RecordCalendarFailure.command.ts";
 import { RecordCalendarPublication, SessionPublished } from "./RecordCalendarPublication.command.ts";

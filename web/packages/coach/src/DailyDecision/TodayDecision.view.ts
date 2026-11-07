@@ -8,9 +8,10 @@ import { Workout } from "@cadencia/kernel/Training/Workout";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { CoachNote, InterpretedOn, Refusal } from "../CoachShape.ts";
-import { ModelName } from "../CoachText.ts";
-import { Attempt } from "../Counts.ts";
+import { CoachNote } from "../CoachNote.ts";
+import { InterpretedOn, ModelName } from "../Provenance.ts";
+import { Refusal } from "../Refusal.ts";
+import { Attempt } from "./Attempt.ts";
 import { DailyDecision } from "./DailyDecision.aggregate.ts";
 
 const Proposal = Schema.Struct({ attempt: Attempt, workout: Workout, note: CoachNote });

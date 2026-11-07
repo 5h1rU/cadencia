@@ -1,8 +1,8 @@
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
-import { InterpretedOn } from "../CoachShape.ts";
-import { MessageText, ModelName } from "../CoachText.ts";
+import { MessageText } from "../Conversation/MessageText.ts";
+import { InterpretedOn, ModelName } from "../Provenance.ts";
 import { ConsultationId } from "./Consultation.id.ts";
 import { ConsultationNotOpen } from "./ConsultationNotOpen.rejection.ts";
 

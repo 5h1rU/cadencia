@@ -1,10 +1,16 @@
 import { Fingerprint } from "@cadencia/athlete/Evidence";
-import { system } from "@cadencia/identity/Actor";
+import { system, system as systemActor } from "@cadencia/identity/Actor";
 import type { Actor } from "@cadencia/identity/Actor";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
+import { WeekNumber } from "@cadencia/kernel/Calendar/Week";
+import { EntityKey } from "@cadencia/kernel/EntityKey";
+import { planIdFor } from "@cadencia/kernel/Plan.id";
 import { Story } from "@alchemy.run/domain/Story";
 import { expect, it } from "@effect/vitest";
+import { ActivePlan } from "../src/ActivePlan/ActivePlan.aggregate.ts";
+import { ActivePlanSwitched, SwitchActivePlan } from "../src/ActivePlan/SwitchActivePlan.command.ts";
 import { Calendar, CalendarRefused } from "../src/Plan/Calendar.external.ts";
 import {
   AvailabilityExceeded,
@@ -19,10 +25,17 @@ import { CreatePlan, InvalidPlan, PlanAlreadyExists } from "../src/Plan/CreatePl
 import { CurrentPlan } from "../src/Plan/CurrentPlan.view.ts";
 import { DayOutsidePlan } from "../src/Plan/DayOutsidePlan.rejection.ts";
 import { ImplausibleToday } from "../src/Plan/ImplausibleToday.rejection.ts";
-import { RecordCalendarFailure, SessionPublicationFailed } from "../src/Plan/RecordCalendarFailure.command.ts";
-import { DayTaken, MoveSession, SessionMoved, SessionNotFound, SessionNotMovable } from "../src/Plan/MoveSession.command.ts";
+import {
+  DayTaken,
+  MoveSession,
+  SessionMoved,
+  SessionNotFound,
+  SessionNotMovable,
+} from "../src/Plan/MoveSession.command.ts";
+import { Plan } from "../src/Plan/Plan.aggregate.ts";
+import type { PlannedSession } from "../src/Plan/PlannedSession.ts";
 import { PlanNotActive } from "../src/Plan/PlanNotActive.rejection.ts";
-import type { PlannedSession } from "../src/Plan/PlanShape.ts";
+import { RecordCalendarFailure, SessionPublicationFailed } from "../src/Plan/RecordCalendarFailure.command.ts";
 import { RecordCalendarPublication, SessionPublished } from "../src/Plan/RecordCalendarPublication.command.ts";
 import { DayRequirementRecorded, RecordDayRequirement } from "../src/Plan/RecordDayRequirement.command.ts";
 import {
@@ -33,14 +46,6 @@ import {
 import { PlanRetired, RetirePlan } from "../src/Plan/RetirePlan.command.ts";
 import { ReviseWeek, WeekRevised } from "../src/Plan/ReviseWeek.command.ts";
 import { Planning, PlanningHandlers } from "../src/Planning.model.ts";
-import { ActivePlan } from "../src/ActivePlan/ActivePlan.aggregate.ts";
-import { ActivePlanSwitched, SwitchActivePlan } from "../src/ActivePlan/SwitchActivePlan.command.ts";
-import { AthleteId } from "@cadencia/identity/Athlete.id";
-import { WeekNumber } from "@cadencia/kernel/Calendar/Week";
-import { EntityKey } from "@cadencia/kernel/EntityKey";
-import { planIdFor } from "@cadencia/kernel/Plan.id";
-import { Plan } from "../src/Plan/Plan.aggregate.ts";
-import { system as systemActor } from "@cadencia/identity/Actor";
 import {
   ana,
   anaId,

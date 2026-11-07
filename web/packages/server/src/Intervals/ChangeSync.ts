@@ -2,7 +2,7 @@ import { system } from "@cadencia/identity/Actor";
 import type { AthleteId } from "@cadencia/identity/Athlete.id";
 import { addDays, type Day } from "@cadencia/kernel/Calendar/Day";
 import { IntervalsSyncApi } from "@cadencia/planning/IntervalsSyncApi.api";
-import type { PlannedSession } from "@cadencia/planning/Plan/PlanShape";
+import type { PlannedSession } from "@cadencia/planning/Plan/PlannedSession";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";

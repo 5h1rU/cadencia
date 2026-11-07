@@ -9,7 +9,7 @@ import { SessionConcretized } from "./ConcretizeSession.command.ts";
 import { PlanCreated } from "./CreatePlan.command.ts";
 import { SessionMoved } from "./MoveSession.command.ts";
 import { Plan } from "./Plan.aggregate.ts";
-import type { PlannedSession } from "./PlanShape.ts";
+import type { PlannedSession } from "./PlannedSession.ts";
 import { RecordCalendarFailure } from "./RecordCalendarFailure.command.ts";
 import { RecordCalendarPublication } from "./RecordCalendarPublication.command.ts";
 import { PlanRetired } from "./RetirePlan.command.ts";

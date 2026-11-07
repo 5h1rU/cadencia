@@ -10,7 +10,6 @@ import { CurrentPlanState } from "@cadencia/planning/Plan/CurrentPlan.view";
 import { ImplausibleToday } from "@cadencia/planning/Plan/ImplausibleToday.rejection";
 import { DayTaken, SessionNotMovable } from "@cadencia/planning/Plan/MoveSession.command";
 import { SessionId } from "@cadencia/planning/Plan/Session.id";
-import { IntervalsNotConnected, IntervalsUnavailable } from "@cadencia/web-api/IntervalsGroup";
 import { describe, expect, it } from "@effect/vitest";
 import * as Duration from "effect/Duration";
 import * as Option from "effect/Option";
@@ -351,11 +350,11 @@ describe("the wellness form", () => {
   });
 });
 
-describe("the WebApi's errors, as the athlete reads them", () => {
+describe("the server's Intervals statuses, as the athlete reads them", () => {
   it("are signed out, not connected, or Intervals not answering", () => {
-    expect(intervalsProblemOf(new Unauthorized())).toBe("signedOut");
-    expect(intervalsProblemOf(new IntervalsNotConnected())).toBe("notConnected");
-    expect(intervalsProblemOf(new IntervalsUnavailable())).toBe("unavailable");
-    expect(intervalsProblemOf({ _tag: "HttpClientError" })).toBe("unavailable");
+    expect(intervalsProblemOf(401)).toBe("signedOut");
+    expect(intervalsProblemOf(409)).toBe("notConnected");
+    expect(intervalsProblemOf(502)).toBe("unavailable");
+    expect(intervalsProblemOf(500)).toBe("unavailable");
   });
 });

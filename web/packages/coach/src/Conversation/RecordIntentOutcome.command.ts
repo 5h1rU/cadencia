@@ -1,5 +1,6 @@
 import * as Domain from "@alchemy.run/domain";
-import { PlanAnswer, Refusal } from "../CoachShape.ts";
+import { PlanAnswer } from "../PlanAnswer.ts";
+import { Refusal } from "../Refusal.ts";
 import { ConversationId } from "./Conversation.id.ts";
 import { MessageId } from "./Message.id.ts";
 

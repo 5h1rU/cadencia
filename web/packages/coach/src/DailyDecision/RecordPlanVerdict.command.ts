@@ -1,6 +1,6 @@
 import * as Domain from "@alchemy.run/domain";
-import { PlanAnswer } from "../CoachShape.ts";
-import { Attempt } from "../Counts.ts";
+import { PlanAnswer } from "../PlanAnswer.ts";
+import { Attempt } from "./Attempt.ts";
 import { DailyDecisionId } from "./DailyDecision.id.ts";
 
 export class PlanVerdictRecorded extends Domain.Event("PlanVerdictRecorded", {

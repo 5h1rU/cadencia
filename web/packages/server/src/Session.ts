@@ -1,6 +1,6 @@
 import { type Actor, Actor as ActorSchema } from "@cadencia/identity/Actor";
 import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
-import { SignedToken } from "@cadencia/web-api/AuthGroup";
+import { SignedToken } from "./WebApi/AuthGroup.ts";
 import { Session, SESSION_COOKIE, Unauthorized } from "@cadencia/identity/Session.middleware";
 import * as Alchemy from "alchemy";
 import * as Clock from "effect/Clock";

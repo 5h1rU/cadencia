@@ -8,7 +8,7 @@
     "/v1/RecordDailyDecision": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "RecordDailyDecision",
         "parameters": [],
@@ -132,7 +132,7 @@
     "/v1/SendMessage": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "SendMessage",
         "parameters": [],
@@ -230,7 +230,7 @@
     "/v1/RecordCoachReply": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "RecordCoachReply",
         "parameters": [],
@@ -351,7 +351,7 @@
     "/v1/StartConsultation": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "StartConsultation",
         "parameters": [],
@@ -448,7 +448,7 @@
     "/v1/RecordCoachQuestion": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "RecordCoachQuestion",
         "parameters": [],
@@ -560,7 +560,7 @@
     "/v1/AnswerQuestion": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "AnswerQuestion",
         "parameters": [],
@@ -664,7 +664,7 @@
     "/v1/RecordDraft": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "RecordDraft",
         "parameters": [],
@@ -776,7 +776,7 @@
     "/v1/AcceptDraft": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "AcceptDraft",
         "parameters": [],
@@ -887,7 +887,7 @@
     "/v1/RecordProfileAttempt": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "RecordProfileAttempt",
         "parameters": [],
@@ -991,7 +991,7 @@
     "/v1/RecordProfile": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "RecordProfile",
         "parameters": [],
@@ -1093,7 +1093,7 @@
     "/v1/AcceptIntent": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "AcceptIntent",
         "parameters": [],
@@ -1208,7 +1208,7 @@
     "/v1/DismissIntent": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "DismissIntent",
         "parameters": [],
@@ -1312,7 +1312,7 @@
     "/v1/DismissFtpProposal": {
       "post": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "DismissFtpProposal",
         "parameters": [],
@@ -1406,7 +1406,7 @@
     "/v1/TodayDecision/{key}": {
       "get": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "getTodayDecision",
         "parameters": [
@@ -1513,7 +1513,7 @@
     "/v1/ConversationThread/{key}": {
       "get": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "getConversationThread",
         "parameters": [
@@ -1620,7 +1620,7 @@
     "/v1/ConsultationView/{key}": {
       "get": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "getConsultationView",
         "parameters": [
@@ -1727,7 +1727,7 @@
     "/v1/RiderProfileCard/{key}": {
       "get": {
         "tags": [
-          "IosCoachApi"
+          "DeviceCoachApi"
         ],
         "operationId": "getRiderProfileCard",
         "parameters": [
@@ -1834,7 +1834,7 @@
     "/v1/MoveSession": {
       "post": {
         "tags": [
-          "IosPlanningApi"
+          "DevicePlanningApi"
         ],
         "operationId": "MoveSession",
         "parameters": [],
@@ -1972,7 +1972,7 @@
     "/v1/RecordDayRequirement": {
       "post": {
         "tags": [
-          "IosPlanningApi"
+          "DevicePlanningApi"
         ],
         "operationId": "RecordDayRequirement",
         "parameters": [],
@@ -2077,7 +2077,7 @@
     "/v1/RetirePlan": {
       "post": {
         "tags": [
-          "IosPlanningApi"
+          "DevicePlanningApi"
         ],
         "operationId": "RetirePlan",
         "parameters": [],
@@ -2191,7 +2191,7 @@
     "/v1/CurrentPlan/{key}": {
       "get": {
         "tags": [
-          "IosPlanningApi"
+          "DevicePlanningApi"
         ],
         "operationId": "getCurrentPlan",
         "parameters": [
@@ -4008,10 +4008,10 @@
   "security": [],
   "tags": [
     {
-      "name": "IosCoachApi"
+      "name": "DeviceCoachApi"
     },
     {
-      "name": "IosPlanningApi"
+      "name": "DevicePlanningApi"
     }
   ]
 }

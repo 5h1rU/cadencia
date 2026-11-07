@@ -3,12 +3,12 @@ import { AthleteMeasures } from "@cadencia/athlete/AthleteMeasures";
 import { HistoryRange } from "@cadencia/athlete/HistoryRange";
 import { WellnessDay, WellnessDeclaration } from "@cadencia/athlete/Wellness";
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
-import type { RefusalReason } from "@cadencia/coach/CoachShape";
 import { ConversationId, conversationIdFor, monthOf } from "@cadencia/coach/Conversation/Conversation.id";
 import { ThreadMessage } from "@cadencia/coach/Conversation/ConversationThread.view";
 import { MessageId } from "@cadencia/coach/Conversation/Message.id";
 import { dailyDecisionIdFor } from "@cadencia/coach/DailyDecision/DailyDecision.id";
 import { TodayDecision } from "@cadencia/coach/DailyDecision/TodayDecision.view";
+import type { RefusalReason } from "@cadencia/coach/Refusal";
 import { RiderProfileCard } from "@cadencia/coach/RiderProfile/RiderProfileCard.view";
 import { AthleteId } from "@cadencia/identity/Athlete.id";
 import type { NotYours } from "@cadencia/identity/NotYours.rejection";
@@ -22,14 +22,16 @@ import { totalMinutes, type Workout } from "@cadencia/kernel/Training/Workout";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
 import type { CalendarProblem } from "@cadencia/planning/Plan/Calendar.external";
 import { CurrentPlanState } from "@cadencia/planning/Plan/CurrentPlan.view";
-import type { PlannedSession, SessionStatus } from "@cadencia/planning/Plan/PlanShape";
+import type { PlannedSession, SessionStatus } from "@cadencia/planning/Plan/PlannedSession";
 import { SessionId } from "@cadencia/planning/Plan/Session.id";
 import type * as Domain from "@alchemy.run/domain";
 import * as DomainFoldkit from "@alchemy.run/domain/Foldkit";
 import * as Duration from "effect/Duration";
-import { WebApi } from "@cadencia/web-api/WebApi";
 import * as Effect from "effect/Effect";
-import * as HttpApiClient from "effect/http-api/HttpApiClient";
+import * as Data from "effect/Data";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Option from "effect/Option";
 import type * as RpcClientError from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
@@ -194,30 +196,45 @@ export const commandFor = (write: Write, commandId: string): Command.Command<Mes
   });
 };
 
-/** The Worker's WebApi, on this origin, so the browser sends the session cookie with every call. */
-const webApi = HttpApiClient.make(WebApi, { baseUrl: globalThis.location?.origin });
+/**
+ * What a failed Intervals.icu call means to the athlete, by the status the
+ * server declares for it: 401 signed out, 409 Intervals not connected any
+ * more, anything else Intervals not answering.
+ */
+export const intervalsProblemOf = (status: number): IntervalsProblem =>
+  status === 401 ? "signedOut" : status === 409 ? "notConnected" : "unavailable";
 
-/** What a failed Intervals.icu call means to the athlete: the WebApi's declared errors, or no answer at all. */
-export const intervalsProblemOf = (error: { readonly _tag: string }): IntervalsProblem =>
-  error._tag === "Unauthorized" ? "signedOut" : error._tag === "IntervalsNotConnected" ? "notConnected" : "unavailable";
+/** A failed call, by its status; one that never got an answer is Intervals not answering. */
+class IntervalsFailed extends Data.TaggedError("IntervalsFailed")<{ readonly problem: IntervalsProblem }> {}
+
+const answered = (response: HttpClientResponse.HttpClientResponse) =>
+  response.status >= 200 && response.status < 300
+    ? Effect.succeed(response)
+    : Effect.fail(new IntervalsFailed({ problem: intervalsProblemOf(response.status) }));
+
+/** One of the server's Intervals reads, decoded with the read model `@cadencia/athlete` declares for it. */
+const readIntervals = <S extends Schema.ConstraintDecoder<unknown>>(schema: S, path: string, range?: HistoryRange) =>
+  HttpClient.get(path, range === undefined ? undefined : { urlParams: range }).pipe(
+    Effect.flatMap(answered),
+    Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
+  );
+
+const problemOf = (error: unknown): IntervalsProblem => (error instanceof IntervalsFailed ? error.problem : "unavailable");
 
 export const LoadIntervals = Command.define("LoadIntervals", {
   args: { range: HistoryRange },
   messages: [Message.LoadedIntervals, Message.FailedIntervals],
   execute: ({ range }) =>
-    webApi.pipe(
-      Effect.flatMap(({ intervals }) =>
-        Effect.all(
-          {
-            activities: intervals.activities({ query: range }),
-            wellness: intervals.wellness({ query: range }),
-            athlete: intervals.athlete(),
-          },
-          { concurrency: "unbounded" },
-        ),
-      ),
+    Effect.all(
+      {
+        activities: readIntervals(Schema.Array(ActivitySummary), "/api/intervals/activities", range),
+        wellness: readIntervals(Schema.Array(WellnessDay), "/api/intervals/wellness", range),
+        athlete: readIntervals(AthleteMeasures, "/api/intervals/athlete"),
+      },
+      { concurrency: "unbounded" },
+    ).pipe(
       Effect.map((loaded) => Message.LoadedIntervals(loaded)),
-      Effect.catch((error) => Effect.succeed(Message.FailedIntervals({ problem: intervalsProblemOf(error) }))),
+      Effect.catch((error) => Effect.succeed(Message.FailedIntervals({ problem: problemOf(error) }))),
       Effect.provide(Http.layer),
     ),
 });
@@ -226,10 +243,12 @@ export const SaveDeclaration = Command.define("SaveDeclaration", {
   args: { day: Day, declaration: WellnessDeclaration },
   messages: [Message.SavedDeclaration, Message.FailedDeclaration],
   execute: ({ day, declaration }) =>
-    webApi.pipe(
-      Effect.flatMap(({ intervals }) => intervals.declareWellness({ params: { day }, payload: declaration })),
+    HttpClientRequest.put(`/api/intervals/wellness/${day}`).pipe(
+      HttpClientRequest.schemaBodyJson(WellnessDeclaration)(declaration),
+      Effect.flatMap(HttpClient.execute),
+      Effect.flatMap(answered),
       Effect.as(Message.SavedDeclaration()),
-      Effect.catch((error) => Effect.succeed(Message.FailedDeclaration({ problem: intervalsProblemOf(error) }))),
+      Effect.catch((error) => Effect.succeed(Message.FailedDeclaration({ problem: problemOf(error) }))),
       Effect.provide(Http.layer),
     ),
 });

@@ -5,11 +5,12 @@ import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { Refusal } from "../CoachShape.ts";
-import { MessageText, ModelName } from "../CoachText.ts";
+import { ModelName } from "../Provenance.ts";
+import { Refusal } from "../Refusal.ts";
 import { Conversation } from "./Conversation.aggregate.ts";
 import { Intent, IntentStatus } from "./Intent.ts";
 import { MessageId } from "./Message.id.ts";
+import { MessageText } from "./MessageText.ts";
 
 export const ThreadMessage = Schema.Struct({
   messageId: MessageId,

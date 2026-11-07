@@ -6,8 +6,8 @@ import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { Refusal } from "../CoachShape.ts";
-import { MessageText } from "../CoachText.ts";
+import { MessageText } from "../Conversation/MessageText.ts";
+import { Refusal } from "../Refusal.ts";
 import { Consultation } from "./Consultation.aggregate.ts";
 import { PlanDraft } from "./PlanDraft.ts";
 

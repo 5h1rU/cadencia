@@ -10,7 +10,7 @@ import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { Connections } from "../Connections.ts";
-import { InvalidHandoff, type SignedToken, SignInClient, SignInExpired, SignInRefused } from "@cadencia/web-api/AuthGroup";
+import { InvalidHandoff, type SignedToken, SignInClient, SignInExpired, SignInRefused } from "../WebApi/AuthGroup.ts";
 import { signHandoff, signSession, verifyHandoff, withSessionCookie } from "../Session.ts";
 import { INTERVALS } from "./IntervalsHttp.ts";
 

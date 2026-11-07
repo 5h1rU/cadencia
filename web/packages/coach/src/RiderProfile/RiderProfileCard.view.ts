@@ -5,7 +5,7 @@ import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
-import { ModelName } from "../CoachText.ts";
+import { ModelName } from "../Provenance.ts";
 import { RiderProfile } from "./RiderProfile.aggregate.ts";
 import { RiderReport } from "./RiderReport.ts";
 

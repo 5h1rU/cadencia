@@ -1,6 +1,6 @@
-import { IosCoachApi } from "@cadencia/coach/IosCoachApi.api";
-import { IosPlanningApi } from "@cadencia/planning/IosPlanningApi.api";
-import { RequestValidation } from "@cadencia/web-api/RequestValidation.middleware";
+import { DeviceCoachApi } from "@cadencia/coach/DeviceCoachApi.api";
+import { DevicePlanningApi } from "@cadencia/planning/DevicePlanningApi.api";
+import { RequestValidation } from "./WebApi/RequestValidation.middleware.ts";
 import * as DomainHttp from "@alchemy.run/domain/Http";
 import * as Effect from "effect/Effect";
 import * as HttpApi from "effect/http-api/HttpApi";
@@ -10,8 +10,8 @@ import * as Layer from "effect/Layer";
 import { layerOverCoach, layerOverPlanning } from "./Hosting.ts";
 import { RequestValidationLive, respondToFailures, WorkerHttpPlatform } from "./WorkerHttpPlatform.ts";
 
-const Coach = DomainHttp.toHttpApi(IosCoachApi);
-const Planning = DomainHttp.toHttpApi(IosPlanningApi);
+const Coach = DomainHttp.toHttpApi(DeviceCoachApi);
+const Planning = DomainHttp.toHttpApi(DevicePlanningApi);
 
 /**
  * The domain as plain HTTP JSON, with an OpenAPI document at `/v1/openapi.json`,

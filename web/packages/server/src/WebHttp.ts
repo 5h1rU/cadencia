@@ -1,8 +1,8 @@
 import { Unauthorized } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
-import { Authentication, SignedInAthlete } from "@cadencia/web-api/Authentication.middleware";
-import { IntervalsNotConnected } from "@cadencia/web-api/IntervalsGroup";
-import { WebApi } from "@cadencia/web-api/WebApi";
+import { Authentication, SignedInAthlete } from "./WebApi/Authentication.middleware.ts";
+import { IntervalsNotConnected } from "./WebApi/IntervalsGroup.ts";
+import { WebApi } from "./WebApi/WebApi.ts";
 import * as DateTime from "effect/DateTime";
 import type { RuntimeContext } from "alchemy/RuntimeContext";
 import * as Config from "effect/Config";
@@ -19,7 +19,7 @@ import { declareWellness, readActivities, readMeasures, readWellness } from "./I
 import { PlanningInternals } from "./Hosting.ts";
 import { syncAthlete } from "./Intervals/ChangeSync.ts";
 import { exchangeHandoff, finishSignIn, startSignIn } from "./Intervals/IntervalsOAuth.ts";
-import { calendarsChanged, IntervalsWebhookGroup, sameSecret, WebhookRefused } from "./Intervals/IntervalsWebhook.ts";
+import { calendarsChanged, sameSecret, WebhookRefused } from "./Intervals/IntervalsWebhook.ts";
 import { SessionKey, verifySession, withoutSessionCookie } from "./Session.ts";
 import { RequestValidationLive, respondToFailures, WorkerHttpPlatform } from "./WorkerHttpPlatform.ts";
 
@@ -29,12 +29,6 @@ import { RequestValidationLive, respondToFailures, WorkerHttpPlatform } from "./
  * so what needs it finds it there rather than when the handlers are built.
  */
 const perRequest = <A, E>(effect: Effect.Effect<A, E, RuntimeContext>) => effect as unknown as Effect.Effect<A, E>;
-
-/**
- * What the Worker serves over plain HTTP: the web's `WebApi`, and the webhook
- * Intervals.icu calls, which the app has no business calling.
- */
-export const WorkerApi = WebApi.add(IntervalsWebhookGroup);
 
 /** A session cookie or Bearer token, as the athlete it was signed for. */
 export const AuthenticationLive = Layer.effect(
@@ -51,7 +45,7 @@ export const AuthenticationLive = Layer.effect(
   }),
 );
 
-export const SessionHttp = HttpApiBuilder.group(WorkerApi, "session", (handlers) =>
+export const SessionHttp = HttpApiBuilder.group(WebApi, "session", (handlers) =>
   handlers
     .handle("current", () => Effect.gen(function* () {
       return { athleteId: yield* SignedInAthlete };
@@ -61,7 +55,7 @@ export const SessionHttp = HttpApiBuilder.group(WorkerApi, "session", (handlers)
 
 /** The OAuth app registered in Intervals.icu; its callback is `<public origin>/auth/intervals/callback`. */
 export const AuthHttp = HttpApiBuilder.group(
-  WorkerApi,
+  WebApi,
   "auth",
   Effect.fnUntraced(function* (handlers) {
     const clientId = yield* Config.String("INTERVALS_CLIENT_ID");
@@ -85,7 +79,7 @@ export const AuthHttp = HttpApiBuilder.group(
 );
 
 export const IntervalsHttp = HttpApiBuilder.group(
-  WorkerApi,
+  WebApi,
   "intervals",
   Effect.fnUntraced(function* (handlers) {
     const connections = yield* Connections;
@@ -113,7 +107,7 @@ export const IntervalsHttp = HttpApiBuilder.group(
  * after the sync, so Intervals retries a delivery whose sync failed.
  */
 export const IntervalsWebhookHttp = HttpApiBuilder.group(
-  WorkerApi,
+  WebApi,
   "intervalsWebhook",
   Effect.fnUntraced(function* (handlers) {
     const secret = yield* Config.Redacted("INTERVALS_WEBHOOK_SECRET");
@@ -142,7 +136,7 @@ export const IntervalsWebhookHttp = HttpApiBuilder.group(
  * Intervals.icu data, with its OpenAPI document at `/api/openapi.json`.
  * Requires the session key and the Intervals connections.
  */
-export const webHttp = HttpApiBuilder.layer(WorkerApi, { openapiPath: "/api/openapi.json" }).pipe(
+export const webHttp = HttpApiBuilder.layer(WebApi, { openapiPath: "/api/openapi.json" }).pipe(
   Layer.provide([SessionHttp, AuthHttp, IntervalsHttp, IntervalsWebhookHttp]),
   Layer.provide([AuthenticationLive, RequestValidationLive]),
   Layer.provide(WorkerHttpPlatform),

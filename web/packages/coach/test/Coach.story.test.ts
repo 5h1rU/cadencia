@@ -1,17 +1,10 @@
 import { Fingerprint } from "@cadencia/athlete/Evidence";
 import type { Actor } from "@cadencia/identity/Actor";
+import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { RecordPlanCreation } from "../src/Consultation/RecordPlanCreation.command.ts";
-import { IntentExpired } from "../src/Conversation/AcceptIntent.command.ts";
-import { RecordIntentOutcome } from "../src/Conversation/RecordIntentOutcome.command.ts";
-import { RecordPlanVerdict } from "../src/DailyDecision/RecordPlanVerdict.command.ts";
-import { FtpProposalDismissed } from "../src/RiderProfile/DismissFtpProposal.command.ts";
-import { ProfileRecorded } from "../src/RiderProfile/RecordProfile.command.ts";
-import { RiderProfileCard } from "../src/RiderProfile/RiderProfileCard.view.ts";
-import { planIdFor } from "@cadencia/kernel/Plan.id";
 import { EntityKey } from "@cadencia/kernel/EntityKey";
-import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { planIdFor } from "@cadencia/kernel/Plan.id";
 import { Story } from "@alchemy.run/domain/Story";
 import { expect, it } from "@effect/vitest";
 import * as Schema from "effect/Schema";
@@ -20,42 +13,47 @@ import { CoachTimeline } from "../src/CoachTimeline.view.ts";
 import { AcceptDraft, DraftAccepted, NoDraft } from "../src/Consultation/AcceptDraft.command.ts";
 import { AnswerQuestion, AthleteAnswered } from "../src/Consultation/AnswerQuestion.command.ts";
 import { Consultation } from "../src/Consultation/Consultation.aggregate.ts";
+import { ConsultationNotOpen } from "../src/Consultation/ConsultationNotOpen.rejection.ts";
 import { ConsultationView } from "../src/Consultation/ConsultationView.view.ts";
 import { CoachAsked, RecordCoachQuestion } from "../src/Consultation/RecordCoachQuestion.command.ts";
 import { DraftProposed, RecordDraft } from "../src/Consultation/RecordDraft.command.ts";
-import { DraftRefusedByPlan, PlanCreatedFromDraft } from "../src/Consultation/RecordPlanCreation.command.ts";
-import { ConsultationNotOpen } from "../src/Consultation/ConsultationNotOpen.rejection.ts";
+import {
+  DraftRefusedByPlan,
+  PlanCreatedFromDraft,
+  RecordPlanCreation,
+} from "../src/Consultation/RecordPlanCreation.command.ts";
 import {
   ConsultationAlreadyStarted,
   ConsultationStarted,
   StartConsultation,
 } from "../src/Consultation/StartConsultation.command.ts";
-import { AcceptIntent, IntentAccepted } from "../src/Conversation/AcceptIntent.command.ts";
+import { AcceptIntent, IntentAccepted, IntentExpired } from "../src/Conversation/AcceptIntent.command.ts";
 import { Conversation } from "../src/Conversation/Conversation.aggregate.ts";
 import { ConversationThread } from "../src/Conversation/ConversationThread.view.ts";
 import { DismissIntent, IntentDismissed } from "../src/Conversation/DismissIntent.command.ts";
 import { NoOpenIntent } from "../src/Conversation/NoOpenIntent.rejection.ts";
 import { CoachReplied, RecordCoachReply } from "../src/Conversation/RecordCoachReply.command.ts";
-import { IntentApplied, IntentRefused } from "../src/Conversation/RecordIntentOutcome.command.ts";
+import { IntentApplied, IntentRefused, RecordIntentOutcome } from "../src/Conversation/RecordIntentOutcome.command.ts";
 import { MessageSent, SendMessage } from "../src/Conversation/SendMessage.command.ts";
-import { Attempt } from "../src/Counts.ts";
+import { Attempt } from "../src/DailyDecision/Attempt.ts";
 import { DailyDecision } from "../src/DailyDecision/DailyDecision.aggregate.ts";
 import {
   DailyDecisionRecorded,
   DecisionAlreadyAccepted,
   RecordDailyDecision,
 } from "../src/DailyDecision/RecordDailyDecision.command.ts";
-import { PlanVerdictRecorded } from "../src/DailyDecision/RecordPlanVerdict.command.ts";
+import { PlanVerdictRecorded, RecordPlanVerdict } from "../src/DailyDecision/RecordPlanVerdict.command.ts";
 import { TodayDecision } from "../src/DailyDecision/TodayDecision.view.ts";
 import { Planner, PlannerRequestId } from "../src/Planner.external.ts";
+import { DismissFtpProposal, FtpProposalDismissed } from "../src/RiderProfile/DismissFtpProposal.command.ts";
+import { ProfileRecorded, RecordProfile } from "../src/RiderProfile/RecordProfile.command.ts";
 import {
   AutomaticAttemptUsed,
   ProfileAttempted,
   RecordProfileAttempt,
 } from "../src/RiderProfile/RecordProfileAttempt.command.ts";
-import { DismissFtpProposal } from "../src/RiderProfile/DismissFtpProposal.command.ts";
-import { RecordProfile } from "../src/RiderProfile/RecordProfile.command.ts";
 import { RiderProfile } from "../src/RiderProfile/RiderProfile.aggregate.ts";
+import { RiderProfileCard } from "../src/RiderProfile/RiderProfileCard.view.ts";
 import { RiderReport } from "../src/RiderProfile/RiderReport.ts";
 import {
   ana,

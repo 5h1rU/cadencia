@@ -2,11 +2,12 @@ import { EvidenceSnapshot } from "@cadencia/athlete/Evidence";
 import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
+import { DayLimit } from "@cadencia/kernel/Training/DayLimit";
 import { Workout } from "@cadencia/kernel/Training/Workout";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
-import { DayLimit, PlanAnswer } from "./CoachShape.ts";
 import { PlanDraft } from "./Consultation/PlanDraft.ts";
+import { PlanAnswer } from "./PlanAnswer.ts";
 
 /**
  * Names one request to the Planner: the stream and position of the event that

@@ -1,4 +1,4 @@
-import { RequestValidation } from "@cadencia/web-api/RequestValidation.middleware";
+import { RequestValidation } from "./WebApi/RequestValidation.middleware.ts";
 import * as Effect from "effect/Effect";
 import * as HttpApiError from "effect/http-api/HttpApiError";
 import * as HttpApiMiddleware from "effect/http-api/HttpApiMiddleware";

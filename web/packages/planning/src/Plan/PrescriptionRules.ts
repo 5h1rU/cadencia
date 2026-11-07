@@ -10,7 +10,9 @@ import {
   type WorkoutStep,
 } from "@cadencia/kernel/Training/Workout";
 import type { PurposeProblem } from "./ConcretizeSession.command.ts";
-import type { DayRequirement, GoalEvent, PlannedSession } from "./PlanShape.ts";
+import type { DayRequirement } from "./DayRequirement.ts";
+import type { GoalEvent } from "./GoalEvent.ts";
+import type { PlannedSession } from "./PlannedSession.ts";
 
 /**
  * Product-wide checks on a proposed workout, ported from `PrescriptionValidator`

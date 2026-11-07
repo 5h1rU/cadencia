@@ -1,7 +1,7 @@
 import { AthleteId } from "@cadencia/identity/Athlete.id";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
-import { PlannedSession } from "./PlanShape.ts";
+import { PlannedSession } from "./PlannedSession.ts";
 import { ExternalId } from "./Session.id.ts";
 
 /** Why the calendar refused a session: the athlete isn't connected any more, or the calendar won't take it. */

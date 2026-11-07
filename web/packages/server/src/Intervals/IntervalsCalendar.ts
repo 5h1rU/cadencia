@@ -1,12 +1,12 @@
-import { Calendar, CalendarRefused, CalendarUnavailable } from "@cadencia/planning/Plan/Calendar.external";
 import { totalSeconds } from "@cadencia/kernel/Training/Workout";
-import type { PlannedSession } from "@cadencia/planning/Plan/PlanShape";
+import { Calendar, CalendarRefused, CalendarUnavailable } from "@cadencia/planning/Plan/Calendar.external";
+import type { PlannedSession } from "@cadencia/planning/Plan/PlannedSession";
 import type { RuntimeContext } from "alchemy/RuntimeContext";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { Connections } from "../Connections.ts";
-import { athletePath, callIntervals, IntervalsEventId, type IntervalsError } from "./IntervalsHttp.ts";
+import { athletePath, callIntervals, type IntervalsError, IntervalsEventId } from "./IntervalsHttp.ts";
 import { workoutText } from "./WorkoutText.ts";
 
 /**

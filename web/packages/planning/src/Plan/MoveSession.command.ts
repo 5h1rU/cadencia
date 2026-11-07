@@ -4,8 +4,8 @@ import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
 import { DayOutsidePlan } from "./DayOutsidePlan.rejection.ts";
+import { PlannedSession, SessionStatus } from "./PlannedSession.ts";
 import { PlanNotActive } from "./PlanNotActive.rejection.ts";
-import { PlannedSession, SessionStatus } from "./PlanShape.ts";
 import { SessionId } from "./Session.id.ts";
 
 /** No session with that id in the plan. */

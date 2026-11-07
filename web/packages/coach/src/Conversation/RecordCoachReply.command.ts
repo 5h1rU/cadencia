@@ -2,11 +2,11 @@ import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
-import { InterpretedOn } from "../CoachShape.ts";
-import { MessageText, ModelName } from "../CoachText.ts";
+import { InterpretedOn, ModelName } from "../Provenance.ts";
 import { ConversationId } from "./Conversation.id.ts";
 import { Intent } from "./Intent.ts";
 import { MessageId } from "./Message.id.ts";
+import { MessageText } from "./MessageText.ts";
 
 export class CoachReplied extends Domain.Event("CoachReplied", {
   messageId: MessageId,

@@ -1,5 +1,6 @@
-import type { PlanAnswer, RefusalReason } from "@cadencia/coach/CoachShape";
+import type { PlanAnswer } from "@cadencia/coach/PlanAnswer";
 import { Planner } from "@cadencia/coach/Planner.external";
+import type { RefusalReason } from "@cadencia/coach/Refusal";
 import { athlete } from "@cadencia/identity/Actor";
 import type { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Paragraph } from "@cadencia/kernel/Text";

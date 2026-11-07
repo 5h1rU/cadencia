@@ -11,8 +11,6 @@ const allowed: Record<string, ReadonlyArray<string>> = {
   identity: ["effect", "@alchemy.run/domain"],
   kernel: ["effect", "@cadencia/identity"],
   athlete: ["effect", "@cadencia/kernel"],
-  // The HTTP contract between the Worker and the web app: schemas and endpoints, no implementation.
-  "web-api": ["effect", "@cadencia/identity", "@cadencia/kernel", "@cadencia/athlete"],
   planning: ["effect", "@alchemy.run/domain", "@cadencia/identity", "@cadencia/kernel", "@cadencia/athlete"],
   coach: ["effect", "@alchemy.run/domain", "@cadencia/identity", "@cadencia/kernel", "@cadencia/athlete"],
 };

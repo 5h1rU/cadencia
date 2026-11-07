@@ -14,15 +14,11 @@ Durable Objects, and a [foldkit](https://foldkit.dev) web app.
   the backend never calls an LLM.
 - **Server** (`packages/server`) hosts both models in one Worker, signs athletes
   in with Intervals.icu OAuth, publishes sessions to their Intervals calendar,
-  notices changes made there, and serves a plain HTTP API with OpenAPI at
+  notices changes made there through Intervals' webhooks, and serves a plain HTTP API with OpenAPI at
   `/v1/openapi.json` for iOS.
 - **Shared packages**: `identity` (who acts and whose data it is), `kernel`
   (the terms both models share: days, plan ids, text, training) and `athlete`
   (what Intervals.icu says about the athlete: evidence, readiness, measures).
-- **Web API** (`packages/web-api`) declares, as an Effect `HttpApi`, what the
-  Worker serves the web over plain HTTP: the session, signing in with
-  Intervals.icu, and the athlete's Intervals data. The server implements it;
-  the app calls it with `HttpApiClient`.
 - **App** (`packages/app`) shows everything live and writes only what needs no
   AI: moving a session, a day's limit, retiring the plan, accepting or
   dismissing a proposal, and wellness declarations.

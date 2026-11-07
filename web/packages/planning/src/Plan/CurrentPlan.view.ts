@@ -6,19 +6,16 @@ import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Weekday } from "@cadencia/kernel/Calendar/Week";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { Paragraph, Title } from "@cadencia/kernel/Text";
+import { GoalKind } from "@cadencia/kernel/Training/Goal";
+import { Phase } from "@cadencia/kernel/Training/Phase";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { CalendarProblem } from "./Calendar.external.ts";
+import { DayRequirement } from "./DayRequirement.ts";
+import { GoalEvent } from "./GoalEvent.ts";
 import { Plan } from "./Plan.aggregate.ts";
-import {
-  DayRequirement,
-  GoalEvent,
-  GoalKind,
-  Phase,
-  type PlannedSession,
-  PlannedSession as Session_,
-} from "./PlanShape.ts";
+import { type PlannedSession, PlannedSession as Session_ } from "./PlannedSession.ts";
 import { SessionId } from "./Session.id.ts";
 
 export const CurrentPlanState = Schema.Struct({

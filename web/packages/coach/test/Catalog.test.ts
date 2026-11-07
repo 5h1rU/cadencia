@@ -1,11 +1,14 @@
+import { Day } from "@cadencia/kernel/Calendar/Day";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
-import { Day } from "@cadencia/kernel/Calendar/Day";
-import { Headline, MessageText, ModelName } from "../src/CoachText.ts";
 import { ConversationId, monthOf, YearMonth } from "../src/Conversation/Conversation.id.ts";
 import { MessageId } from "../src/Conversation/Message.id.ts";
-import { Attempt, Count } from "../src/Counts.ts";
+import { MessageText } from "../src/Conversation/MessageText.ts";
+import { Count } from "../src/Count.ts";
+import { Attempt } from "../src/DailyDecision/Attempt.ts";
+import { Headline } from "../src/Headline.ts";
+import { ModelName } from "../src/Provenance.ts";
 
 const UUID = "0b6f5a2e-1c3d-4e5f-8a9b-0c1d2e3f4a5b";
 

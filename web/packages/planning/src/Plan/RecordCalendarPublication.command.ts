@@ -1,6 +1,6 @@
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
-import { PlannedSession } from "./PlanShape.ts";
+import { PlannedSession } from "./PlannedSession.ts";
 import { ExternalId, SessionId } from "./Session.id.ts";
 
 export class SessionPublished extends Domain.Event("SessionPublished", {

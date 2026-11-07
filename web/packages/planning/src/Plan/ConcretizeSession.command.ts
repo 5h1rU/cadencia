@@ -8,8 +8,8 @@ import { FtpFraction, Minutes } from "@cadencia/kernel/Training/Units";
 import { Workout } from "@cadencia/kernel/Training/Workout";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
+import { PlannedSession } from "./PlannedSession.ts";
 import { PlanNotActive } from "./PlanNotActive.rejection.ts";
-import { PlannedSession } from "./PlanShape.ts";
 
 /** More riding than the day allows: availability, time away, or the athlete's own limit. */
 export class AvailabilityExceeded extends Domain.Rejection(

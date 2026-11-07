@@ -5,9 +5,13 @@ import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Weekday } from "@cadencia/kernel/Calendar/Week";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { Paragraph, Title } from "@cadencia/kernel/Text";
+import { GoalKind } from "@cadencia/kernel/Training/Goal";
+import { Phase } from "@cadencia/kernel/Training/Phase";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
-import { GoalEvent, GoalKind, Phase, PlannedSession, SessionDraft } from "./PlanShape.ts";
+import { GoalEvent } from "./GoalEvent.ts";
+import { PlannedSession } from "./PlannedSession.ts";
+import { SessionDraft } from "./SessionDraft.ts";
 
 /** The plan already exists. */
 export class PlanAlreadyExists extends Domain.Rejection("PlanAlreadyExists", {}, { httpApiStatus: 409 }) {}

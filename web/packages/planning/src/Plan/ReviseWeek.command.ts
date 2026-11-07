@@ -5,9 +5,9 @@ import { PlanId } from "@cadencia/kernel/Plan.id";
 import { DayLimit } from "@cadencia/kernel/Training/DayLimit";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
-import { PlanNotActive } from "./PlanNotActive.rejection.ts";
-import { PlannedSession } from "./PlanShape.ts";
 import { ImplausibleToday } from "./ImplausibleToday.rejection.ts";
+import { PlannedSession } from "./PlannedSession.ts";
+import { PlanNotActive } from "./PlanNotActive.rejection.ts";
 
 export class WeekRevised extends Domain.Event("WeekRevised", {
   sessions: Schema.Array(PlannedSession),

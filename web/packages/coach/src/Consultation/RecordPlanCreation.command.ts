@@ -1,6 +1,7 @@
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
-import { PlanAnswer, Refusal } from "../CoachShape.ts";
+import { PlanAnswer } from "../PlanAnswer.ts";
+import { Refusal } from "../Refusal.ts";
 import { ConsultationId } from "./Consultation.id.ts";
 
 export class PlanCreatedFromDraft extends Domain.Event("PlanCreatedFromDraft", { planId: PlanId }) {}

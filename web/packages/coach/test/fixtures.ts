@@ -8,14 +8,16 @@ import { planIdFor } from "@cadencia/kernel/Plan.id";
 import { DayLimit } from "@cadencia/kernel/Training/DayLimit";
 import { Workout } from "@cadencia/kernel/Training/Workout";
 import * as Schema from "effect/Schema";
-import { CoachNote, type Refusal } from "../src/CoachShape.ts";
-import { MessageText, ModelName } from "../src/CoachText.ts";
+import { CoachNote } from "../src/CoachNote.ts";
 import { consultationIdFor } from "../src/Consultation/Consultation.id.ts";
 import { PlanDraft } from "../src/Consultation/PlanDraft.ts";
 import { conversationIdFor, YearMonth } from "../src/Conversation/Conversation.id.ts";
 import { Intent } from "../src/Conversation/Intent.ts";
 import { MessageId } from "../src/Conversation/Message.id.ts";
+import { MessageText } from "../src/Conversation/MessageText.ts";
 import { dailyDecisionIdFor } from "../src/DailyDecision/DailyDecision.id.ts";
+import { ModelName } from "../src/Provenance.ts";
+import { type Refusal } from "../src/Refusal.ts";
 
 /** Every fixture is decoded, so a fixture that breaks a rule fails here, not in a story. */
 export const day = Schema.decodeUnknownSync(Day);

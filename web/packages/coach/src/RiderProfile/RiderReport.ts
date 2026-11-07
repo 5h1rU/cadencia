@@ -1,8 +1,8 @@
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Paragraph } from "@cadencia/kernel/Text";
 import * as Schema from "effect/Schema";
-import { Headline } from "../CoachText.ts";
-import { Count } from "../Counts.ts";
+import { Count } from "../Count.ts";
+import { Headline } from "../Headline.ts";
 
 /** The kind of rider the evidence shows. Raw values match `CyclistProfile.RiderType` in Cadencia iOS. */
 export const RiderType = Schema.Literals(["climber", "puncheur", "sprinter", "timeTrialist", "endurance", "allRounder", "developing"]);

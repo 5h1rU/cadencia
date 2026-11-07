@@ -8,7 +8,7 @@ import type { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Paragraph, Title } from "@cadencia/kernel/Text";
 import { Kilometers, Seconds } from "@cadencia/kernel/Training/Units";
-import { IntervalsUnavailable } from "@cadencia/web-api/IntervalsGroup";
+import { IntervalsUnavailable } from "../WebApi/IntervalsGroup.ts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import type * as Redacted from "effect/Redacted";

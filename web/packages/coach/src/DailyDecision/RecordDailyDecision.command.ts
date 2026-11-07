@@ -6,9 +6,9 @@ import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { Workout } from "@cadencia/kernel/Training/Workout";
 import * as Domain from "@alchemy.run/domain";
-import { CoachNote, InterpretedOn } from "../CoachShape.ts";
-import { ModelName } from "../CoachText.ts";
-import { Attempt } from "../Counts.ts";
+import { CoachNote } from "../CoachNote.ts";
+import { InterpretedOn, ModelName } from "../Provenance.ts";
+import { Attempt } from "./Attempt.ts";
 import { DailyDecisionId } from "./DailyDecision.id.ts";
 
 /** The plan already accepted a decision for this day from the same evidence. */

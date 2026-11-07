@@ -13,7 +13,7 @@ import { type Workout, WorkoutStep } from "@cadencia/kernel/Training/Workout";
 import * as Schema from "effect/Schema";
 import { PlanCreated } from "../src/Plan/CreatePlan.command.ts";
 import { Plan } from "../src/Plan/Plan.aggregate.ts";
-import type { PlannedSession } from "../src/Plan/PlanShape.ts";
+import type { PlannedSession } from "../src/Plan/PlannedSession.ts";
 import { ExternalId, externalIdFor, SessionId } from "../src/Plan/Session.id.ts";
 
 /** Every fixture is decoded, so a fixture that breaks a rule fails here, not in a story. */
