@@ -3,6 +3,16 @@ import CadenciaWorker, { PROD_WORKER_NAMES } from "@cadencia/server/CadenciaWork
 import { Stage } from "alchemy/Stage";
 import * as Alchemy from "alchemy";
 import * as Effect from "effect/Effect";
+import app from "./packages/app/package.json" with { type: "json" };
+
+/**
+ * The workspace packages the app bundles, from its own dependencies. Declared
+ * rather than detected, so a package that no longer exists can't linger in the
+ * stack's state and break the next deploy's change detection.
+ */
+const appWorkspaces = Object.keys(app.dependencies)
+  .filter((name) => name.startsWith("@cadencia/"))
+  .map((name) => ({ cwd: `../${name.slice("@cadencia/".length)}` }));
 
 /**
  * Cadencia on Cloudflare: the Worker that hosts both models, and the foldkit
@@ -21,6 +31,7 @@ export default Alchemy.Stack(
     const app = yield* Cloudflare.Website.Foldkit("CadenciaApp", {
       ...(stage === "prod" ? { name: PROD_WORKER_NAMES.app } : {}),
       rootDir: "packages/app",
+      memo: { workspaces: appWorkspaces },
       main: "src/worker.ts",
       env: { CADENCIA: api },
       assets: { runWorkerFirst: ["/api", "/api/*", "/auth/*", "/v1/*"] },
