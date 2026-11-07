@@ -37,7 +37,8 @@
       button:disabled { opacity: 0.5; cursor: default; }
       div.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
       button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-      form.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+      form.row, form.row fieldset { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+      form.row fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
       label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); }
       input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
       input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--bad); }
@@ -46,6 +47,12 @@
       .message.coach { background: var(--surface); }
       .message.athlete { background: transparent; justify-self: end; max-width: 80%; }
       .error { color: var(--bad); }
+      .report h3, .report p { margin: 0; }
+      .report { display: grid; gap: 6px; }
+      .report details summary { cursor: pointer; color: var(--accent); }
+      .report h4 { margin: 12px 0 4px; font-size: 0.95rem; }
+      .report ul { margin: 0; padding-left: 20px; }
+      .report details > p { margin-top: 12px; }
       a.connect { display: inline-block; background: var(--accent); color: var(--surface); padding: 10px 18px; border-radius: 6px; text-decoration: none; }
     </style>
   </head>

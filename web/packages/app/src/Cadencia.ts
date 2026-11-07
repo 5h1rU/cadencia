@@ -11,6 +11,7 @@ import { dailyDecisionIdFor } from "@cadencia/coach/DailyDecision/DailyDecision.
 import { TodayDecision } from "@cadencia/coach/DailyDecision/TodayDecision.view";
 import type { RefusalReason } from "@cadencia/coach/Refusal";
 import { RiderProfileCard } from "@cadencia/coach/RiderProfile/RiderProfileCard.view";
+import type { Confidence, RiderReport, RiderType } from "@cadencia/coach/RiderProfile/RiderReport";
 import { AthleteId } from "@cadencia/identity/Athlete.id";
 import type { NotYours } from "@cadencia/identity/NotYours.rejection";
 import type { Unauthorized } from "@cadencia/identity/Session.middleware";
@@ -276,6 +277,8 @@ export const Model = Schema.Struct({
   requirement: RequirementForm,
   declaration: DeclarationForm,
   savingDeclaration: Schema.Boolean,
+  /** Intervals changed while a history read was under way: its answer may predate the change, so it is read again. */
+  historyOutdated: Schema.Boolean,
   confirmRetire: Schema.Boolean,
   inFlight: Schema.Option(InFlight),
   /** Intervals.icu said the athlete's connection is gone: offer to connect again. */
@@ -512,6 +515,7 @@ const signedOut = (model: Model): Return => ({
     history: () => AsyncData.Idle(),
     inFlight: () => Option.none(),
     savingDeclaration: () => false,
+    historyOutdated: () => false,
     confirmRetire: () => false,
     notice: () => Option.none(),
     error: () => Option.some(SIGNED_OUT),
@@ -609,8 +613,28 @@ const refreshHistory =
 /** A page that shows the history opened: load it, or refresh it with the data on screen. A read under way isn't started again. */
 const historyOpened = refreshHistory(historyOnScreen, AsyncData.revalidateOrLoad);
 
-/** The history changed in Intervals: refresh it if it holds data. */
-const historyChanged = refreshHistory(isSignedIn, AsyncData.revalidate);
+/** A read of the history answered; if Intervals changed while it was under way, read it again. */
+const settledHistory = (model: Model, result: Result.Result<IntervalsHistory, IntervalsProblem>): Return => {
+  const settled = modifyFields(model, {
+    history: AsyncData.settle(result),
+    historyOutdated: () => false,
+    ...(Result.isSuccess(result) ? { needsReconnect: () => false } : {}),
+  });
+  return model.historyOutdated ? historyReread(settled) : { model: settled };
+};
+
+/** Read the history again now, keeping what's on screen. */
+const historyReread = refreshHistory(isSignedIn, reload);
+
+/**
+ * The history changed in Intervals: refresh it if it holds data. A read under
+ * way may have been answered before the change, so it is read again once it
+ * settles.
+ */
+const historyChanged: Update.Step<Model, Message, Clients> = (model) =>
+  isSignedIn(model) && AsyncData.isPending(model.history)
+    ? { model: modifyFields(model, { historyOutdated: () => true }) }
+    : refreshHistory(isSignedIn, AsyncData.revalidate)(model);
 
 /**
  * The four weeks moved: read them again now if they're on screen, or if a read
@@ -698,12 +722,7 @@ export const update = (model: Model, message: Message): Return =>
         ? { model }
         : Result.isFailure(result) && result.failure === "signedOut"
           ? signedOut(model)
-          : {
-              model: modifyFields(model, {
-                history: AsyncData.settle(result),
-                ...(Result.isSuccess(result) ? { needsReconnect: () => false } : {}),
-              }),
-            },
+          : settledHistory(model, result),
     ClickedAcceptIntent: ({ conversationId, messageId }) =>
       send(model, Write.AcceptIntent({ target: conversationId, input: { messageId, today: model.today } })),
     ClickedDismissIntent: ({ conversationId, messageId }) =>
@@ -832,6 +851,7 @@ export const init = (flags: Flags, url: Url.Url): Return =>
       requirement: emptyRequirement(flags.today),
       declaration: emptyDeclaration,
       savingDeclaration: false,
+      historyOutdated: false,
       confirmRetire: false,
       inFlight: Option.none(),
       needsReconnect: false,
@@ -1002,6 +1022,31 @@ const REFUSALS: Record<RefusalReason, string> = {
 };
 
 const refusalText = (refusal: { readonly reason: RefusalReason } | null) => (refusal === null ? "" : REFUSALS[refusal.reason]);
+
+// The rider profile reads as it does in Cadencia for iPhone, in the same words.
+const RIDER_TYPES: Record<RiderType, string> = {
+  climber: "Escalador",
+  puncheur: "Especialista en repechos",
+  sprinter: "Velocista",
+  timeTrialist: "Contrarrelojista",
+  endurance: "Fondista",
+  allRounder: "Ciclista polivalente",
+  developing: "Descubriendo tu tipo de ciclista",
+};
+
+const CONFIDENCES: Record<Confidence, string> = {
+  limited: "Primera impresión · evidencia limitada",
+  moderate: "Patrón emergente · confianza moderada",
+  high: "Patrón consistente · confianza alta",
+};
+
+/** What the report says about the rider, in the order iOS shows it. */
+const INSIGHTS = [
+  ["strengths", "Dónde destacas"],
+  ["development", "Oportunidades para mejorar"],
+  ["evidence", "La evidencia"],
+  ["caveats", "Lo que falta por conocer"],
+] as const satisfies ReadonlyArray<readonly [keyof RiderReport, string]>;
 
 const minutesOf = (workout: Workout) => Math.round(totalMinutes(workout));
 
@@ -1240,46 +1285,50 @@ const planCards = (model: Model, h: HtmlBuilder<Message>, plan: Option.Option<ty
               h.h2([], ["Mover una sesión"]),
               h.p([h.Class("muted")], ["Las sesiones que cambiaste en Intervals.icu se mueven allí."]),
               h.form([h.Class("row"), h.OnSubmit(Message.SubmittedMove())], [
-                fieldView(h, "move-session", "Sesión", model.move.sessionId, (attributes) =>
-                  h.select(
-                    [...attributes, h.OnChange((value) => Message.UpdatedMove({ field: "sessionId", value }))],
-                    [
-                      h.option([h.Value("")], ["Elige…"]),
-                      ...plan.sessions
-                        .filter((s) => s.day >= model.today && isMovable(s))
-                        .map((s) => h.option([h.Value(s.sessionId)], [`${s.day} · ${s.title}`])),
-                    ],
+                h.fieldset([h.Disabled(busy(model))], [
+                  fieldView(h, "move-session", "Sesión", model.move.sessionId, (attributes) =>
+                    h.select(
+                      [...attributes, h.OnChange((value) => Message.UpdatedMove({ field: "sessionId", value }))],
+                      [
+                        h.option([h.Value("")], ["Elige…"]),
+                        ...plan.sessions
+                          .filter((s) => s.day >= model.today && isMovable(s))
+                          .map((s) => h.option([h.Value(s.sessionId)], [`${s.day} · ${s.title}`])),
+                      ],
+                    ),
                   ),
-                ),
-                fieldView(h, "move-day", "Nuevo día", model.move.toDay, (attributes) =>
-                  h.input([...attributes, h.Type("date"), h.OnInput((value) => Message.UpdatedMove({ field: "toDay", value }))]),
-                ),
-                h.button([h.Class("primary"), h.Type("submit"), h.Disabled(busy(model))], ["Mover"]),
+                  fieldView(h, "move-day", "Nuevo día", model.move.toDay, (attributes) =>
+                    h.input([...attributes, h.Type("date"), h.OnInput((value) => Message.UpdatedMove({ field: "toDay", value }))]),
+                  ),
+                  h.button([h.Class("primary"), h.Type("submit")], ["Mover"]),
+                ]),
               ]),
             ]),
             h.div([h.Class("card")], [
               h.h2([], ["Requisito para un día"]),
               h.p([h.Class("muted")], ["El plan nunca te propondrá más minutos de los que indiques, y ajusta la sesión de ese día al momento."]),
               h.form([h.Class("row"), h.OnSubmit(Message.SubmittedRequirement())], [
-                fieldView(h, "requirement-day", "Día", model.requirement.day, (attributes) =>
-                  h.input([...attributes, h.Type("date"), h.OnInput((value) => Message.UpdatedRequirement({ field: "day", value }))]),
-                ),
-                fieldView(h, "requirement-minutes", "Máximo de minutos", model.requirement.maxMinutes, (attributes) =>
-                  h.input([
-                    ...attributes,
-                    h.Type("number"),
-                    h.Min("0"),
-                    h.OnInput((value) => Message.UpdatedRequirement({ field: "maxMinutes", value })),
-                  ]),
-                ),
-                fieldView(h, "requirement-note", "Nota", model.requirement.instructions, (attributes) =>
-                  h.input([
-                    ...attributes,
-                    h.Type("text"),
-                    h.OnInput((value) => Message.UpdatedRequirement({ field: "instructions", value })),
-                  ]),
-                ),
-                h.button([h.Class("primary"), h.Type("submit"), h.Disabled(busy(model))], ["Guardar"]),
+                h.fieldset([h.Disabled(busy(model))], [
+                  fieldView(h, "requirement-day", "Día", model.requirement.day, (attributes) =>
+                    h.input([...attributes, h.Type("date"), h.OnInput((value) => Message.UpdatedRequirement({ field: "day", value }))]),
+                  ),
+                  fieldView(h, "requirement-minutes", "Máximo de minutos", model.requirement.maxMinutes, (attributes) =>
+                    h.input([
+                      ...attributes,
+                      h.Type("number"),
+                      h.Min("0"),
+                      h.OnInput((value) => Message.UpdatedRequirement({ field: "maxMinutes", value })),
+                    ]),
+                  ),
+                  fieldView(h, "requirement-note", "Nota", model.requirement.instructions, (attributes) =>
+                    h.input([
+                      ...attributes,
+                      h.Type("text"),
+                      h.OnInput((value) => Message.UpdatedRequirement({ field: "instructions", value })),
+                    ]),
+                  ),
+                  h.button([h.Class("primary"), h.Type("submit")], ["Guardar"]),
+                ]),
               ]),
             ]),
             h.div([h.Class("card")], [
@@ -1393,37 +1442,53 @@ const profileView = (model: Model, h: HtmlBuilder<Message>) => {
       h.h2([], ["Cómo estás hoy"]),
       h.p([h.Class("muted")], ["Se guarda en el bienestar de hoy en Intervals.icu (escala de Intervals, 1 a 4)."]),
       h.form([h.Class("row"), h.OnSubmit(Message.SubmittedDeclaration())], [
-        scale(model, h, "Ánimo", "mood"),
-        scale(model, h, "Motivación", "motivation"),
-        scale(model, h, "Agujetas", "soreness"),
-        scale(model, h, "Fatiga", "fatigue"),
-        fieldView(h, "declaration-weight", "Peso (kg)", model.declaration.weight, (attributes) =>
-          h.input([...attributes, h.Type("number"), h.OnInput((value) => Message.UpdatedDeclaration({ field: "weight", value }))]),
-        ),
-        fieldView(h, "declaration-comments", "Comentario", model.declaration.comments, (attributes) =>
-          h.input([...attributes, h.Type("text"), h.OnInput((value) => Message.UpdatedDeclaration({ field: "comments", value }))]),
-        ),
-        h.button([h.Class("primary"), h.Type("submit"), h.Disabled(model.savingDeclaration)], ["Guardar en Intervals"]),
+        h.fieldset([h.Disabled(model.savingDeclaration)], [
+          scale(model, h, "Ánimo", "mood"),
+          scale(model, h, "Motivación", "motivation"),
+          scale(model, h, "Agujetas", "soreness"),
+          scale(model, h, "Fatiga", "fatigue"),
+          fieldView(h, "declaration-weight", "Peso (kg)", model.declaration.weight, (attributes) =>
+            h.input([...attributes, h.Type("number"), h.OnInput((value) => Message.UpdatedDeclaration({ field: "weight", value }))]),
+          ),
+          fieldView(h, "declaration-comments", "Comentario", model.declaration.comments, (attributes) =>
+            h.input([...attributes, h.Type("text"), h.OnInput((value) => Message.UpdatedDeclaration({ field: "comments", value }))]),
+          ),
+          h.button([h.Class("primary"), h.Type("submit")], ["Guardar en Intervals"]),
+        ]),
       ]),
     ]),
     h.div([h.Class("card")], [
       h.h2([], ["Perfil de ciclista"]),
       ...liveContent(h, model.profile, (profile) => [
-        Option.match(Option.flatMap(profile, (p) => Option.fromNullishOr(p.report)), {
-          onNone: () => h.p([h.Class("muted")], ["Se genera con la IA desde Cadencia para iPhone."]),
-          onSome: (report) =>
-            h.div([], [
-              h.p([], [h.strong([], [report.headline])]),
-              h.p([], [report.summary]),
-              h.p([h.Class("muted")], [
-                `Basado en ${report.rideCount} salidas, ${report.oldest} → ${report.newest}. Confianza: ${report.confidence}.`,
-              ]),
-            ]),
-        }),
+        Option.getOrElse(
+          Option.flatMap(profile, (card) => Option.map(Option.fromNullishOr(card.report), (report) => riderReportView(h, report, card.model))),
+          () => h.p([h.Class("muted")], ["Se genera con la IA desde Cadencia para iPhone."]),
+        ),
       ]),
     ]),
   ];
 };
+
+const riderReportView = (h: HtmlBuilder<Message>, report: RiderReport, model: string | null) =>
+  h.div([h.Class("report")], [
+    h.h3([], [RIDER_TYPES[report.riderType]]),
+    h.p([h.Class("muted")], [CONFIDENCES[report.confidence]]),
+    h.p([], [h.strong([], [report.headline])]),
+    h.p([], [report.summary]),
+    h.details([], [
+      h.summary([], ["Lo que muestra tu historial"]),
+      ...Array.flatMap(INSIGHTS, ([field, title]) =>
+        Array.match(report[field], {
+          onEmpty: () => [],
+          onNonEmpty: (items) => [h.h4([], [title]), h.ul([], items.map((item) => h.li([], [item])))],
+        }),
+      ),
+      h.p([h.Class("muted")], [
+        `${report.rideCount} salidas · ${report.oldest} → ${report.newest}`,
+        ...Array.fromNullishOr(model).map((name) => ` · ${name}`),
+      ]),
+    ]),
+  ]);
 
 const notFoundView = (h: HtmlBuilder<Message>, path: string) => [
   h.div([h.Class("card")], [

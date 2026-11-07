@@ -5,6 +5,7 @@ import { dailyDecisionIdFor } from "@cadencia/coach/DailyDecision/DailyDecision.
 import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Unauthorized } from "@cadencia/identity/Session.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
+import { RiderProfileCard } from "@cadencia/coach/RiderProfile/RiderProfileCard.view";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Paragraph } from "@cadencia/kernel/Text";
 import { CurrentPlanState } from "@cadencia/planning/Plan/CurrentPlan.view";
@@ -12,6 +13,7 @@ import { ImplausibleToday } from "@cadencia/planning/Plan/ImplausibleToday.rejec
 import { DayTaken, SessionNotMovable } from "@cadencia/planning/Plan/MoveSession.command";
 import { SessionId } from "@cadencia/planning/Plan/Session.id";
 import { describe, expect, it } from "@effect/vitest";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Option from "effect/Option";
 import { RpcClientDefect, RpcClientError } from "effect/rpc/RpcClientError";
@@ -31,6 +33,7 @@ import {
   intervalsProblemOf,
   LiveDecision,
   LivePlan,
+  LiveProfile,
   isMovable,
   LoadIntervals,
   LoadPage,
@@ -95,6 +98,7 @@ const plan = Schema.decodeUnknownSync(CurrentPlanState)({
   })),
   requirements: [],
   calendarProblems: [{ sessionId: "2026-11-13", problem: "notConnected" }],
+  createdAt: DateTime.makeUnsafe("2026-11-01T08:00:00Z"),
 });
 const planId = Option.getOrThrow(Option.fromNullishOr(plan.planId));
 const withPlan: Model = { ...signedIn, plan: LivePlan.Success({ data: Option.some(plan) }) };
@@ -567,9 +571,81 @@ describe("the wellness form", () => {
     expect(Option.isNone(declarationOf(fill({ fatigue: "two" }).declaration))).toBe(true);
   });
 
+  it("can't be edited while it saves, so saving clears only what was sent", () =>
+    Scene.scene(
+      { update, view },
+      Scene.given(update(fill({ comments: "Legs heavy" }), Message.SubmittedDeclaration()).model),
+      // The fieldset disables every field and the button in it.
+      Scene.expect(Scene.role("group")).toHaveAttr("disabled", "true"),
+    ));
+
+  it("reads the history again when it saved during a read that may predate it", () => {
+    const reading = { ...onProfile, history: AsyncData.Loading() } as Model;
+    const saving = update(fill({ mood: "3" }), Message.SubmittedDeclaration()).model;
+    const saved = update({ ...saving, history: reading.history }, Message.SavedDeclaration());
+    // The read under way isn't started twice…
+    expect(saved.commands ?? []).toEqual([]);
+    expect(saved.model.historyOutdated).toBe(true);
+    // …but once it answers, the history is read again, keeping that answer on screen meanwhile.
+    const range = { oldest: Day.make("2026-10-13"), newest: today };
+    const history = Schema.decodeUnknownSync(IntervalsHistory)({ activities: [], wellness: [], athlete: { name: "Ana", weight: 61, ftp: 230 } });
+    const answered = update(saved.model, Message.SettledLoadIntervals({ range, result: Result.succeed(history) }));
+    expect(answered.commands?.map((c) => [c.name, c.args])).toEqual([["LoadIntervals", { range }]]);
+    expect(answered.model.history).toEqual(History.Refreshing({ data: history }));
+    expect(answered.model.historyOutdated).toBe(false);
+  });
+
   it("leaves blank fields alone: they are optional", () => {
     expect(fill({ weight: "  " }).declaration.weight).toEqual(FieldValidation.NotValidated({ value: "  " }));
   });
+});
+
+describe("the rider profile", () => {
+  const card = Schema.decodeUnknownSync(RiderProfileCard.State)({
+    report: {
+      riderType: "puncheur",
+      confidence: "moderate",
+      headline: "Short climbs are your terrain",
+      summary: "You attack the steep, short ramps.",
+      strengths: ["Repeated efforts over 5 minutes"],
+      development: ["Pacing long climbs"],
+      evidence: [],
+      caveats: ["Few races in the record"],
+      oldest: "2026-05-01",
+      newest: "2026-11-01",
+      rideCount: 84,
+    },
+    model: "gpt-5.5",
+    dismissedFtp: null,
+  });
+  const onProfile = (profile: typeof RiderProfileCard.State.Type | null): Model => ({
+    ...signedIn,
+    route: AppRoute.Profile(),
+    profile: LiveProfile.Success({ data: Option.fromNullishOr(profile) }),
+  });
+
+  it("shows the whole report as Cadencia for iPhone does, in Spanish, leaving out empty lists", () =>
+    Scene.scene(
+      { update, view },
+      Scene.given(onProfile(card)),
+      Scene.expect(Scene.text("Especialista en repechos")).toExist(),
+      Scene.expect(Scene.text("Patrón emergente · confianza moderada")).toExist(),
+      Scene.expect(Scene.text("Short climbs are your terrain")).toExist(),
+      Scene.expect(Scene.text("Lo que muestra tu historial")).toExist(),
+      Scene.expect(Scene.text("Dónde destacas")).toExist(),
+      Scene.expect(Scene.text("Repeated efforts over 5 minutes")).toExist(),
+      Scene.expect(Scene.text("Oportunidades para mejorar")).toExist(),
+      Scene.expect(Scene.text("Lo que falta por conocer")).toExist(),
+      Scene.expect(Scene.text("La evidencia")).not.toExist(),
+      Scene.expect(Scene.text("84 salidas · 2026-05-01 → 2026-11-01 · gpt-5.5")).toExist(),
+    ));
+
+  it("points to the iPhone when there is no report yet", () =>
+    Scene.scene(
+      { update, view },
+      Scene.given(onProfile(null)),
+      Scene.expect(Scene.text("Se genera con la IA desde Cadencia para iPhone.")).toExist(),
+    ));
 });
 
 describe("the server's Intervals statuses, as the athlete reads them", () => {
