@@ -1,6 +1,7 @@
 import { ActivitySummary } from "@cadencia/athlete/ActivitySummary";
 import { AthleteMeasures } from "@cadencia/athlete/AthleteMeasures";
 import { HistoryRange } from "@cadencia/athlete/HistoryRange";
+import { Kilograms, WellnessScale } from "@cadencia/athlete/Measures";
 import { WellnessDay, WellnessDeclaration } from "@cadencia/athlete/Wellness";
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
 import { ConversationId, conversationIdFor, monthOf } from "@cadencia/coach/Conversation/Conversation.id";
@@ -29,18 +30,21 @@ import * as DomainFoldkit from "@alchemy.run/domain/Foldkit";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Function from "effect/Function";
+import * as Array from "effect/Array";
 import * as Data from "effect/Data";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import * as Match from "effect/Match";
 import * as Option from "effect/Option";
+import * as Record from "effect/Record";
 import * as Result from "effect/Result";
 import type * as RpcClientError from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
-import { AsyncData, Command, Http, Subscription, Update } from "foldkit";
-import type { Document, Html, HtmlBuilder } from "foldkit/html";
+import { AsyncData, Command, FieldValidation, Http, Subscription, Update } from "foldkit";
+import { Rule } from "foldkit/fieldValidation";
+import type { Attribute, Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { defineTaggedUnion } from "foldkit/schema";
 import { modifyFields } from "foldkit/struct";
@@ -118,20 +122,134 @@ export type IntervalsHistory = typeof IntervalsHistory.Type;
 export const History = AsyncData.Schema(IntervalsHistory, IntervalsProblem);
 type HistoryData = typeof History.schema.Type;
 
+// FORMS
+
 /**
- * The day's declaration as the form holds it: what the athlete typed, not yet
- * checked. It is decoded into `WellnessDeclaration` when they save it.
+ * The domain values the forms ask for, decoded from the text their controls
+ * hold with the domain's own schemas: a field passes its rule exactly when the
+ * command will accept it.
  */
-const Declaration = Schema.Struct({
-  mood: Schema.String,
-  motivation: Schema.String,
-  soreness: Schema.String,
-  fatigue: Schema.String,
-  weight: Schema.String,
-  comments: Schema.String,
+const MinutesText = Schema.FiniteFromString.pipe(Schema.decodeTo(Minutes));
+const ParagraphText = Schema.Trim.pipe(Schema.decodeTo(Paragraph));
+const ScaleText = Schema.FiniteFromString.pipe(Schema.decodeTo(WellnessScale));
+const KilogramsText = Schema.FiniteFromString.pipe(Schema.decodeTo(Kilograms));
+
+const isBlank = (text: string) => text.trim() === "";
+
+/** A field's text: what its control holds, and whether it passes its rules. */
+const TextField = FieldValidation.Field(Schema.String);
+type TextField = typeof TextField.Type;
+const blank = (value = ""): TextField => FieldValidation.NotValidated({ value });
+
+export const MOVE_RULES = {
+  sessionId: FieldValidation.makeRules({ required: "Elige una sesión.", rules: [Rule.fromSchema(SessionId, "Esa sesión no es válida.")] }),
+  toDay: FieldValidation.makeRules({ required: "Elige el día nuevo.", rules: [Rule.fromSchema(Day, "Ese día no es válido.")] }),
+};
+
+export const REQUIREMENT_RULES = {
+  day: FieldValidation.makeRules({ required: "Elige el día.", rules: [Rule.fromSchema(Day, "Ese día no es válido.")] }),
+  maxMinutes: FieldValidation.makeRules({
+    isEmpty: isBlank,
+    rules: [Rule.fromSchema(MinutesText, "Un número entero de minutos, de 0 a 1440.")],
+  }),
+  instructions: FieldValidation.makeRules({
+    required: "Escribe qué necesitas ese día.",
+    isEmpty: isBlank,
+    rules: [Rule.fromSchema(ParagraphText, "La nota es demasiado larga (4000 caracteres como máximo).")],
+  }),
+};
+
+const scaleRules = FieldValidation.makeRules({ rules: [Rule.fromSchema(ScaleText, "De 1 a 4.")] });
+
+export const DECLARATION_RULES = {
+  mood: scaleRules,
+  motivation: scaleRules,
+  soreness: scaleRules,
+  fatigue: scaleRules,
+  weight: FieldValidation.makeRules({ isEmpty: isBlank, rules: [Rule.fromSchema(KilogramsText, "Entre 20 y 350 kg.")] }),
+  comments: FieldValidation.makeRules({
+    isEmpty: isBlank,
+    rules: [Rule.fromSchema(ParagraphText, "El comentario es demasiado largo (4000 caracteres como máximo).")],
+  }),
+};
+
+/** A form's fields by name, and the rules each must pass. */
+type Form<Name extends string> = { readonly [N in Name]: TextField };
+type FormRules<Name extends string> = { readonly [N in Name]: FieldValidation.Rules<string> };
+
+const MoveForm = Schema.Struct({ sessionId: TextField, toDay: TextField });
+const RequirementForm = Schema.Struct({ day: TextField, maxMinutes: TextField, instructions: TextField });
+const DeclarationForm = Schema.Struct({
+  mood: TextField,
+  motivation: TextField,
+  soreness: TextField,
+  fatigue: TextField,
+  weight: TextField,
+  comments: TextField,
 });
-type Declaration = typeof Declaration.Type;
-const emptyDeclaration: Declaration = { mood: "", motivation: "", soreness: "", fatigue: "", weight: "", comments: "" };
+type DeclarationForm = typeof DeclarationForm.Type;
+
+const emptyMove: Form<keyof typeof MOVE_RULES> = { sessionId: blank(), toDay: blank() };
+const emptyRequirement = (day: Day): Form<keyof typeof REQUIREMENT_RULES> => ({
+  day: blank(day),
+  maxMinutes: blank(),
+  instructions: blank(),
+});
+const emptyDeclaration: DeclarationForm = {
+  mood: blank(),
+  motivation: blank(),
+  soreness: blank(),
+  fatigue: blank(),
+  weight: blank(),
+  comments: blank(),
+};
+
+/** One field edited: checked against its rules as the athlete types. */
+const edit = <Name extends string>(form: Form<Name>, rules: FormRules<Name>, name: Name, value: string): Form<Name> => ({
+  ...form,
+  [name]: FieldValidation.validate(rules[name])(value),
+});
+
+/** Every field checked, as on submit: a required field left untouched shows its message too. */
+const check = <Name extends string>(form: Form<Name>, rules: FormRules<Name>): Form<Name> =>
+  Record.map(rules, (fieldRules, name) => FieldValidation.validate(fieldRules)(form[name].value));
+
+const decode =
+  <A>(schema: Schema.Codec<A, string>) =>
+  (field: TextField): Option.Option<A> =>
+    Schema.decodeUnknownOption(schema)(field.value);
+
+/** An optional field: blank is `null`; anything else must decode. */
+const decodeOptional =
+  <A>(schema: Schema.Codec<A, string>) =>
+  (field: TextField): Option.Option<A | null> =>
+    isBlank(field.value) ? Option.some(null) : decode(schema)(field);
+
+/** What the move form sends, once every field holds what the command accepts. */
+export const moveOf = (form: Form<keyof typeof MOVE_RULES>) =>
+  Option.all({ sessionId: decode(SessionId)(form.sessionId), toDay: decode(Day)(form.toDay) });
+
+/** What the day's requirement sends, once every field holds what the command accepts. */
+export const requirementOf = (form: Form<keyof typeof REQUIREMENT_RULES>) =>
+  Option.all({
+    day: decode(Day)(form.day),
+    instructions: decode(ParagraphText)(form.instructions),
+    maxMinutes: decodeOptional(MinutesText)(form.maxMinutes),
+  });
+
+/** What the wellness form saves: the fields filled in, each as Intervals takes it. */
+export const declarationOf = (form: DeclarationForm): Option.Option<WellnessDeclaration> =>
+  Option.all({
+    mood: decodeOptional(ScaleText)(form.mood),
+    motivation: decodeOptional(ScaleText)(form.motivation),
+    soreness: decodeOptional(ScaleText)(form.soreness),
+    fatigue: decodeOptional(ScaleText)(form.fatigue),
+    weight: decodeOptional(KilogramsText)(form.weight),
+    comments: decodeOptional(ParagraphText)(form.comments),
+  }).pipe(
+    Option.map(Record.filter((value) => value !== null)),
+    Option.flatMap(Schema.decodeUnknownOption(WellnessDeclaration)),
+  );
 
 export const Flags = Schema.Struct({
   athleteId: Schema.NullOr(AthleteId),
@@ -155,9 +273,9 @@ export const Model = Schema.Struct({
   thread: LiveThread.schema,
   profile: LiveProfile.schema,
   history: History.schema,
-  move: Schema.Struct({ sessionId: Schema.String, toDay: Schema.String }),
-  requirement: Schema.Struct({ day: Schema.String, maxMinutes: Schema.String, instructions: Schema.String }),
-  declaration: Declaration,
+  move: MoveForm,
+  requirement: RequirementForm,
+  declaration: DeclarationForm,
   savingDeclaration: Schema.Boolean,
   confirmRetire: Schema.Boolean,
   inFlight: Schema.Option(InFlight),
@@ -185,9 +303,9 @@ export const Message = defineMessageUnion({
   SettledLoadIntervals: { range: HistoryRange, result: Schema.Result(IntervalsHistory, IntervalsProblem) },
   ClickedAcceptIntent: { conversationId: ConversationId, messageId: MessageId },
   ClickedDismissIntent: { conversationId: ConversationId, messageId: MessageId },
-  ChangedMove: { field: Schema.Literals(["sessionId", "toDay"]), value: Schema.String },
+  UpdatedMove: { field: Schema.Literals(["sessionId", "toDay"]), value: Schema.String },
   SubmittedMove: {},
-  ChangedRequirement: { field: Schema.Literals(["day", "maxMinutes", "instructions"]), value: Schema.String },
+  UpdatedRequirement: { field: Schema.Literals(["day", "maxMinutes", "instructions"]), value: Schema.String },
   SubmittedRequirement: {},
   ClickedRetire: {},
   ClickedConfirmRetire: {},
@@ -196,7 +314,7 @@ export const Message = defineMessageUnion({
   ClickedForgetWrite: {},
   ReceivedPlanningResult: { result: PlanningClient.Message },
   ReceivedCoachResult: { result: CoachClient.Message },
-  ChangedDeclaration: {
+  UpdatedDeclaration: {
     field: Schema.Literals(["mood", "motivation", "soreness", "fatigue", "weight", "comments"]),
     value: Schema.String,
   },
@@ -288,23 +406,6 @@ export const WaitToReconnect = Command.define("WaitToReconnect", {
   messages: [Message.ReconnectedReads],
   execute: ({ seconds }) => Effect.sleep(Duration.seconds(seconds)).pipe(Effect.as(Message.ReconnectedReads())),
 });
-
-/** What the wellness form becomes once decoded: empty fields are left out; anything else must be valid. */
-export const declarationOf = (form: Declaration) => {
-  const number = (value: string) => (value.trim() === "" ? undefined : Number(value));
-  return Schema.decodeUnknownOption(WellnessDeclaration)(
-    Object.fromEntries(
-      Object.entries({
-        mood: number(form.mood),
-        motivation: number(form.motivation),
-        soreness: number(form.soreness),
-        fatigue: number(form.fatigue),
-        weight: number(form.weight),
-        comments: form.comments.trim() === "" ? undefined : form.comments.trim(),
-      }).filter(([, v]) => v !== undefined),
-    ),
-  );
-};
 
 /** The four weeks of history the web shows. */
 const historyOf = (today: Day): HistoryRange => ({ oldest: addDays(today, -27), newest: today });
@@ -580,39 +681,25 @@ export const update = (model: Model, message: Message): Return =>
       send(model, Write.AcceptIntent({ target: conversationId, input: { messageId, today: model.today } })),
     ClickedDismissIntent: ({ conversationId, messageId }) =>
       send(model, Write.DismissIntent({ target: conversationId, input: { messageId } })),
-    ChangedMove: ({ field, value }) => ({
-      model: modifyFields(model, { move: (m) => ({ ...m, [field]: value }) }),
+    UpdatedMove: ({ field, value }) => ({
+      model: modifyFields(model, { move: (form) => edit(form, MOVE_RULES, field, value) }),
     }),
     SubmittedMove: () => {
-      const planId = planIdOf(model);
-      const toDay = Schema.decodeUnknownOption(Day)(model.move.toDay);
-      const sessionId = Schema.decodeUnknownOption(SessionId)(model.move.sessionId);
-      if (Option.isNone(planId) || Option.isNone(toDay) || Option.isNone(sessionId)) {
-        return { model: modifyFields(model, { error: () => Option.some("Elige una sesión y un día nuevo.") }) };
-      }
-      return send(model, Write.MoveSession({ target: planId.value, input: { sessionId: sessionId.value, toDay: toDay.value } }));
+      const checked = modifyFields(model, { ...clearMessages, move: (form) => check(form, MOVE_RULES) });
+      return Option.match(Option.all({ target: planIdOf(model), input: moveOf(model.move) }), {
+        onNone: () => ({ model: checked }),
+        onSome: ({ target, input }) => send(checked, Write.MoveSession({ target, input })),
+      });
     },
-    ChangedRequirement: ({ field, value }) => ({
-      model: modifyFields(model, { requirement: (r) => ({ ...r, [field]: value }) }),
+    UpdatedRequirement: ({ field, value }) => ({
+      model: modifyFields(model, { requirement: (form) => edit(form, REQUIREMENT_RULES, field, value) }),
     }),
     SubmittedRequirement: () => {
-      const planId = planIdOf(model);
-      const day = Schema.decodeUnknownOption(Day)(model.requirement.day);
-      const instructions = Schema.decodeUnknownOption(Paragraph)(model.requirement.instructions.trim());
-      const raw = model.requirement.maxMinutes.trim();
-      const minutes = raw === "" ? Option.some(null) : Schema.decodeUnknownOption(Minutes)(Number(raw));
-      if (Option.isNone(planId) || Option.isNone(day) || Option.isNone(instructions) || Option.isNone(minutes)) {
-        return {
-          model: modifyFields(model, { error: () => Option.some("Indica un día, una nota y, si quieres, un máximo de minutos.") }),
-        };
-      }
-      return send(
-        model,
-        Write.RecordDayRequirement({
-          target: planId.value,
-          input: { day: day.value, instructions: instructions.value, maxMinutes: minutes.value },
-        }),
-      );
+      const checked = modifyFields(model, { ...clearMessages, requirement: (form) => check(form, REQUIREMENT_RULES) });
+      return Option.match(Option.all({ target: planIdOf(model), input: requirementOf(model.requirement) }), {
+        onNone: () => ({ model: checked }),
+        onSome: ({ target, input }) => send(checked, Write.RecordDayRequirement({ target, input })),
+      });
     },
     ClickedRetire: () => ({ model: modifyFields(model, { confirmRetire: () => true }) }),
     ClickedCancelRetire: () => ({ model: modifyFields(model, { confirmRetire: () => false }) }),
@@ -646,11 +733,11 @@ export const update = (model: Model, message: Message): Return =>
     ReceivedPlanningResult: ({ result }) =>
       PlanningClient.Message.match<Return>(result, {
         SucceededMoveSession: ({ commandId }) =>
-          succeeded(model, commandId, "Sesión movida.", (m) => modifyFields(m, { move: () => ({ sessionId: "", toDay: "" }) })),
+          succeeded(model, commandId, "Sesión movida.", (m) => modifyFields(m, { move: () => emptyMove })),
         FailedMoveSession: ({ commandId, failure }) => failed(model, commandId, failure, explain(MOVE_REJECTIONS)),
         SucceededRecordDayRequirement: ({ commandId }) =>
           succeeded(model, commandId, "Guardado. El plan ya lo tiene en cuenta.", (m) =>
-            modifyFields(m, { requirement: () => ({ day: model.today, maxMinutes: "", instructions: "" }) }),
+            modifyFields(m, { requirement: () => emptyRequirement(model.today) }),
           ),
         FailedRecordDayRequirement: ({ commandId, failure }) =>
           failed(model, commandId, failure, explain(REQUIREMENT_REJECTIONS)),
@@ -668,23 +755,20 @@ export const update = (model: Model, message: Message): Return =>
         SucceededDismissFtpProposal: () => ({ model }),
         FailedDismissFtpProposal: () => ({ model }),
       }),
-    ChangedDeclaration: ({ field, value }) => ({
-      model: modifyFields(model, { declaration: (d) => ({ ...d, [field]: value }) }),
+    UpdatedDeclaration: ({ field, value }) => ({
+      model: modifyFields(model, { declaration: (form) => edit(form, DECLARATION_RULES, field, value) }),
     }),
-    SubmittedDeclaration: () =>
-      model.savingDeclaration
-        ? { model }
-        : Option.match(declarationOf(model.declaration), {
-            onNone: () => ({
-              model: modifyFields(model, {
-                error: () => Option.some("Revisa los datos: las escalas van de 1 a 4 y el peso, de 20 a 350 kg."),
-              }),
-            }),
-            onSome: (declaration) => ({
-              model: modifyFields(model, { ...clearMessages, savingDeclaration: () => true }),
-              commands: [SaveDeclaration({ day: model.today, declaration })],
-            }),
-          }),
+    SubmittedDeclaration: () => {
+      if (model.savingDeclaration) return { model };
+      const checked = modifyFields(model, { ...clearMessages, declaration: (form) => check(form, DECLARATION_RULES) });
+      return Option.match(declarationOf(model.declaration), {
+        onNone: () => ({ model: checked }),
+        onSome: (declaration) => ({
+          model: modifyFields(checked, { savingDeclaration: () => true }),
+          commands: [SaveDeclaration({ day: model.today, declaration })],
+        }),
+      });
+    },
     // Today's wellness is part of the history.
     SavedDeclaration: () =>
       historyChanged(
@@ -715,8 +799,8 @@ export const init = (flags: Flags): Return => ({
     thread: watching(flags),
     profile: watching(flags),
     history: AsyncData.Idle(),
-    move: { sessionId: "", toDay: "" },
-    requirement: { day: flags.today, maxMinutes: "", instructions: "" },
+    move: emptyMove,
+    requirement: emptyRequirement(flags.today),
     declaration: emptyDeclaration,
     savingDeclaration: false,
     confirmRetire: false,
@@ -958,6 +1042,40 @@ const decisionCard = (model: Model, h: HtmlBuilder<Message>) => {
   });
 };
 
+/** The message under a field that fails its rules. */
+const errorOf = (field: TextField): Option.Option<string> =>
+  FieldValidation.match(field, {
+    onNotValidated: () => Option.none(),
+    onValidating: () => Option.none(),
+    onValid: () => Option.none(),
+    onInvalid: ({ errors }) => Option.some(Array.headNonEmpty(errors)),
+  });
+
+/**
+ * A labelled form control and, when its field fails its rules, the reason
+ * under it: the control is marked invalid and described by that reason.
+ */
+const fieldView = (
+  h: HtmlBuilder<Message>,
+  id: string,
+  label: string,
+  field: TextField,
+  control: (attributes: ReadonlyArray<Attribute<Message>>) => Html,
+) => {
+  const error = errorOf(field);
+  const errorId = `${id}-error`;
+  return h.label([], [
+    label,
+    control([
+      h.Id(id),
+      h.Value(field.value),
+      h.AriaInvalid(Option.isSome(error)),
+      ...Array.fromOption(Option.as(error, h.AriaDescribedBy(errorId))),
+    ]),
+    ...Array.fromOption(Option.map(error, (reason) => h.span([h.Id(errorId), h.Class("error")], [reason]))),
+  ]);
+};
+
 const homeView = (model: Model, h: HtmlBuilder<Message>) => [
   decisionCard(model, h),
   h.div([h.Class("card")], [
@@ -1092,10 +1210,9 @@ const planCards = (model: Model, h: HtmlBuilder<Message>, plan: Option.Option<ty
               h.h2([], ["Mover una sesión"]),
               h.p([h.Class("muted")], ["Las sesiones que cambiaste en Intervals.icu se mueven allí."]),
               h.form([h.Class("row"), h.OnSubmit(Message.SubmittedMove())], [
-                h.label([], [
-                  "Sesión",
+                fieldView(h, "move-session", "Sesión", model.move.sessionId, (attributes) =>
                   h.select(
-                    [h.Value(model.move.sessionId), h.OnChange((value) => Message.ChangedMove({ field: "sessionId", value }))],
+                    [...attributes, h.OnChange((value) => Message.UpdatedMove({ field: "sessionId", value }))],
                     [
                       h.option([h.Value("")], ["Elige…"]),
                       ...plan.sessions
@@ -1103,11 +1220,10 @@ const planCards = (model: Model, h: HtmlBuilder<Message>, plan: Option.Option<ty
                         .map((s) => h.option([h.Value(s.sessionId)], [`${s.day} · ${s.title}`])),
                     ],
                   ),
-                ]),
-                h.label([], [
-                  "Nuevo día",
-                  h.input([h.Type("date"), h.Value(model.move.toDay), h.OnInput((value) => Message.ChangedMove({ field: "toDay", value }))]),
-                ]),
+                ),
+                fieldView(h, "move-day", "Nuevo día", model.move.toDay, (attributes) =>
+                  h.input([...attributes, h.Type("date"), h.OnInput((value) => Message.UpdatedMove({ field: "toDay", value }))]),
+                ),
                 h.button([h.Class("primary"), h.Type("submit"), h.Disabled(busy(model))], ["Mover"]),
               ]),
             ]),
@@ -1115,31 +1231,24 @@ const planCards = (model: Model, h: HtmlBuilder<Message>, plan: Option.Option<ty
               h.h2([], ["Requisito para un día"]),
               h.p([h.Class("muted")], ["El plan nunca te propondrá más minutos de los que indiques, y ajusta la sesión de ese día al momento."]),
               h.form([h.Class("row"), h.OnSubmit(Message.SubmittedRequirement())], [
-                h.label([], [
-                  "Día",
+                fieldView(h, "requirement-day", "Día", model.requirement.day, (attributes) =>
+                  h.input([...attributes, h.Type("date"), h.OnInput((value) => Message.UpdatedRequirement({ field: "day", value }))]),
+                ),
+                fieldView(h, "requirement-minutes", "Máximo de minutos", model.requirement.maxMinutes, (attributes) =>
                   h.input([
-                    h.Type("date"),
-                    h.Value(model.requirement.day),
-                    h.OnInput((value) => Message.ChangedRequirement({ field: "day", value })),
-                  ]),
-                ]),
-                h.label([], [
-                  "Máximo de minutos",
-                  h.input([
+                    ...attributes,
                     h.Type("number"),
                     h.Min("0"),
-                    h.Value(model.requirement.maxMinutes),
-                    h.OnInput((value) => Message.ChangedRequirement({ field: "maxMinutes", value })),
+                    h.OnInput((value) => Message.UpdatedRequirement({ field: "maxMinutes", value })),
                   ]),
-                ]),
-                h.label([], [
-                  "Nota",
+                ),
+                fieldView(h, "requirement-note", "Nota", model.requirement.instructions, (attributes) =>
                   h.input([
+                    ...attributes,
                     h.Type("text"),
-                    h.Value(model.requirement.instructions),
-                    h.OnInput((value) => Message.ChangedRequirement({ field: "instructions", value })),
+                    h.OnInput((value) => Message.UpdatedRequirement({ field: "instructions", value })),
                   ]),
-                ]),
+                ),
                 h.button([h.Class("primary"), h.Type("submit"), h.Disabled(busy(model))], ["Guardar"]),
               ]),
             ]),
@@ -1233,14 +1342,13 @@ const historyView = (model: Model, h: HtmlBuilder<Message>) =>
   ];
   });
 
-const scale = (h: HtmlBuilder<Message>, label: string, field: "mood" | "motivation" | "soreness" | "fatigue", value: string) =>
-  h.label([], [
-    label,
+const scale = (model: Model, h: HtmlBuilder<Message>, label: string, field: "mood" | "motivation" | "soreness" | "fatigue") =>
+  fieldView(h, `declaration-${field}`, label, model.declaration[field], (attributes) =>
     h.select(
-      [h.Value(value), h.OnChange((v) => Message.ChangedDeclaration({ field, value: v }))],
+      [...attributes, h.OnChange((value) => Message.UpdatedDeclaration({ field, value }))],
       [h.option([h.Value("")], ["—"]), ...["1", "2", "3", "4"].map((n) => h.option([h.Value(n)], [n]))],
     ),
-  ]);
+  );
 
 const profileView = (model: Model, h: HtmlBuilder<Message>) => {
   return [
@@ -1255,26 +1363,16 @@ const profileView = (model: Model, h: HtmlBuilder<Message>) => {
       h.h2([], ["Cómo estás hoy"]),
       h.p([h.Class("muted")], ["Se guarda en el bienestar de hoy en Intervals.icu (escala de Intervals, 1 a 4)."]),
       h.form([h.Class("row"), h.OnSubmit(Message.SubmittedDeclaration())], [
-        scale(h, "Ánimo", "mood", model.declaration.mood),
-        scale(h, "Motivación", "motivation", model.declaration.motivation),
-        scale(h, "Agujetas", "soreness", model.declaration.soreness),
-        scale(h, "Fatiga", "fatigue", model.declaration.fatigue),
-        h.label([], [
-          "Peso (kg)",
-          h.input([
-            h.Type("number"),
-            h.Value(model.declaration.weight),
-            h.OnInput((value) => Message.ChangedDeclaration({ field: "weight", value })),
-          ]),
-        ]),
-        h.label([], [
-          "Comentario",
-          h.input([
-            h.Type("text"),
-            h.Value(model.declaration.comments),
-            h.OnInput((value) => Message.ChangedDeclaration({ field: "comments", value })),
-          ]),
-        ]),
+        scale(model, h, "Ánimo", "mood"),
+        scale(model, h, "Motivación", "motivation"),
+        scale(model, h, "Agujetas", "soreness"),
+        scale(model, h, "Fatiga", "fatigue"),
+        fieldView(h, "declaration-weight", "Peso (kg)", model.declaration.weight, (attributes) =>
+          h.input([...attributes, h.Type("number"), h.OnInput((value) => Message.UpdatedDeclaration({ field: "weight", value }))]),
+        ),
+        fieldView(h, "declaration-comments", "Comentario", model.declaration.comments, (attributes) =>
+          h.input([...attributes, h.Type("text"), h.OnInput((value) => Message.UpdatedDeclaration({ field: "comments", value }))]),
+        ),
         h.button([h.Class("primary"), h.Type("submit"), h.Disabled(model.savingDeclaration)], ["Guardar en Intervals"]),
       ]),
     ]),

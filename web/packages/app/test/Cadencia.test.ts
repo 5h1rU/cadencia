@@ -6,6 +6,7 @@ import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Unauthorized } from "@cadencia/identity/Session.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { Day } from "@cadencia/kernel/Calendar/Day";
+import { Paragraph } from "@cadencia/kernel/Text";
 import { CurrentPlanState } from "@cadencia/planning/Plan/CurrentPlan.view";
 import { ImplausibleToday } from "@cadencia/planning/Plan/ImplausibleToday.rejection";
 import { DayTaken, SessionNotMovable } from "@cadencia/planning/Plan/MoveSession.command";
@@ -16,7 +17,7 @@ import * as Option from "effect/Option";
 import { RpcClientDefect, RpcClientError } from "effect/rpc/RpcClientError";
 import * as Schema from "effect/Schema";
 import * as Result from "effect/Result";
-import { AsyncData } from "foldkit";
+import { AsyncData, FieldValidation } from "foldkit";
 import * as Scene from "foldkit/scene";
 import * as Story from "foldkit/story";
 import {
@@ -47,6 +48,10 @@ import {
 } from "../src/Cadencia.ts";
 
 const ana = AthleteId.make("i100");
+
+/** The reasons a field fails its rules, if it does. */
+const errorsOf = (field: FieldValidation.Field<string>) =>
+  field._tag === "Invalid" ? Option.some(field.errors) : Option.none();
 const today = Day.make("2026-11-09");
 const signedIn = init({ athleteId: ana, today, session: "s" }).model;
 const signedOut = init({ athleteId: null, today, session: "s" }).model;
@@ -92,8 +97,8 @@ const move = Write.MoveSession({
 /** The model with the athlete's move filled in and sent: the first command id of the page is `s:0`. */
 const moveSent = (() => {
   const filled = [
-    Message.ChangedMove({ field: "sessionId", value: "2026-11-10" }),
-    Message.ChangedMove({ field: "toDay", value: "2026-11-14" }),
+    Message.UpdatedMove({ field: "sessionId", value: "2026-11-10" }),
+    Message.UpdatedMove({ field: "toDay", value: "2026-11-14" }),
     Message.SubmittedMove(),
   ].reduce((m, message) => update(m, message).model, withPlan);
   return filled;
@@ -106,8 +111,8 @@ describe("sending a write", () => {
     Story.story(
     update,
     Story.given(withPlan),
-    Story.message(Message.ChangedMove({ field: "sessionId", value: "2026-11-10" })),
-    Story.message(Message.ChangedMove({ field: "toDay", value: "2026-11-14" })),
+    Story.message(Message.UpdatedMove({ field: "sessionId", value: "2026-11-10" })),
+    Story.message(Message.UpdatedMove({ field: "toDay", value: "2026-11-14" })),
     Story.message(Message.SubmittedMove()),
     // Exactly the domain command, with the page's first command id.
     Story.Command.expectExact(commandFor(move, "s:0")),
@@ -132,7 +137,7 @@ describe("sending a write", () => {
     Story.model((model) => {
       expect(Option.isNone(model.inFlight)).toBe(true);
       expect(Option.getOrNull(model.notice)).toBe("Sesión movida.");
-      expect(model.move).toEqual({ sessionId: "", toDay: "" });
+      expect(model.move).toEqual({ sessionId: FieldValidation.NotValidated({ value: "" }), toDay: FieldValidation.NotValidated({ value: "" }) });
       expect(model.commandIds.sent).toBe(1);
     }),
   ));
@@ -140,7 +145,7 @@ describe("sending a write", () => {
   it("sends nothing else while a write is in flight", () => {
     const again = update(moveSent, Message.SubmittedMove());
     expect(again.commands ?? []).toEqual([]);
-    expect(again.model).toBe(moveSent);
+    expect(again.model.inFlight).toEqual(moveSent.inFlight);
   });
 
   it("names a real rejection in the athlete's words and lets the next write go", () => {
@@ -232,11 +237,45 @@ describe("sending a write", () => {
     expect(Option.getOrNull(expired.model.error)).toBe("Esa propuesta era para días que ya han pasado.");
   });
 
-  it("explains what's missing instead of sending an incomplete move", () => {
+  it("says what each field is missing instead of sending an incomplete move", () => {
     const next = update(withPlan, Message.SubmittedMove());
-    expect(Option.getOrNull(next.model.error)).toBe("Elige una sesión y un día nuevo.");
+    expect(next.model.move.sessionId).toEqual(FieldValidation.Invalid({ value: "", errors: ["Elige una sesión."] }));
+    expect(next.model.move.toDay).toEqual(FieldValidation.Invalid({ value: "", errors: ["Elige el día nuevo."] }));
     expect(next.commands ?? []).toEqual([]);
   });
+
+  it("checks a field as the athlete fills it in", () => {
+    const typed = update(withPlan, Message.UpdatedMove({ field: "toDay", value: "2026-11-14" })).model;
+    expect(typed.move.toDay).toEqual(FieldValidation.Valid({ value: "2026-11-14" }));
+    expect(typed.move.sessionId).toEqual(FieldValidation.NotValidated({ value: "" }));
+  });
+
+  it("sends a day's requirement with no limit when the minutes are left blank, and refuses a fraction", () => {
+    const filled = [
+      Message.UpdatedRequirement({ field: "day", value: "2026-11-12" }),
+      Message.UpdatedRequirement({ field: "instructions", value: "  Solo rodillo  " }),
+    ].reduce((m, message) => update(m, message).model, withPlan);
+    const fraction = update(update(filled, Message.UpdatedRequirement({ field: "maxMinutes", value: "45.5" })).model, Message.SubmittedRequirement());
+    expect(Option.getOrNull(errorsOf(fraction.model.requirement.maxMinutes))).toEqual(["Un número entero de minutos, de 0 a 1440."]);
+    expect(fraction.commands ?? []).toEqual([]);
+    const sent = update(filled, Message.SubmittedRequirement());
+    expect(sent.commands?.map((c) => c.name)).toEqual(["RecordDayRequirement"]);
+    expect(Option.getOrNull(sent.model.inFlight)?.write).toEqual(
+      Write.RecordDayRequirement({
+        target: planId,
+        input: { day: Day.make("2026-11-12"), instructions: Paragraph.make("Solo rodillo"), maxMinutes: null },
+      }),
+    );
+  });
+
+  it("shows each field's reason under it", () =>
+    Scene.scene(
+      { update, view },
+      Scene.given({ ...withPlan, section: "plan" }),
+      Scene.click(Scene.role("button", { name: "Mover" })),
+      Scene.expect(Scene.text("Elige una sesión.")).toExist(),
+      Scene.expect(Scene.text("Elige el día nuevo.")).toExist(),
+    ));
 
   it("asks before retiring the plan", () => {
     const asked = update(withPlan, Message.ClickedRetire());
@@ -452,20 +491,32 @@ describe("the Intervals.icu history", () => {
 });
 
 describe("the wellness form", () => {
-  const form = { mood: "", motivation: "", soreness: "", fatigue: "", weight: "", comments: "" };
+  const onProfile: Model = { ...signedIn, section: "profile" };
+  const fill = (fields: Partial<Record<"mood" | "motivation" | "soreness" | "fatigue" | "weight" | "comments", string>>) =>
+    Object.entries(fields).reduce(
+      (m, [field, value]) =>
+        update(m, Message.UpdatedDeclaration({ field: field as "mood", value: value ?? "" })).model,
+      onProfile,
+    );
 
   it("sends only what the athlete filled in, in Intervals' units", () => {
-    expect(Option.getOrNull(declarationOf({ ...form, mood: "3", weight: "74.1", comments: " Legs heavy " }))).toEqual({
-      mood: 3,
-      weight: 74.1,
-      comments: "Legs heavy",
-    });
+    const saved = update(fill({ mood: "3", weight: "74.1", comments: " Legs heavy " }), Message.SubmittedDeclaration());
+    expect(saved.commands?.map((c) => [c.name, c.args])).toEqual([
+      ["SaveDeclaration", { day: today, declaration: { mood: 3, weight: 74.1, comments: "Legs heavy" } }],
+    ]);
+    expect(Option.getOrNull(declarationOf(fill({ mood: "3" }).declaration))).toEqual({ mood: 3 });
   });
 
-  it("refuses values outside Intervals' scales", () => {
-    expect(Option.isNone(declarationOf({ ...form, mood: "5" }))).toBe(true);
-    expect(Option.isNone(declarationOf({ ...form, weight: "7" }))).toBe(true);
-    expect(Option.isNone(declarationOf({ ...form, fatigue: "two" }))).toBe(true);
+  it("refuses values outside Intervals' scales, saying so under the field", () => {
+    const heavy = fill({ weight: "7" });
+    expect(Option.getOrNull(errorsOf(heavy.declaration.weight))).toEqual(["Entre 20 y 350 kg."]);
+    expect(update(heavy, Message.SubmittedDeclaration()).commands ?? []).toEqual([]);
+    expect(Option.isNone(declarationOf(fill({ mood: "5" }).declaration))).toBe(true);
+    expect(Option.isNone(declarationOf(fill({ fatigue: "two" }).declaration))).toBe(true);
+  });
+
+  it("leaves blank fields alone: they are optional", () => {
+    expect(fill({ weight: "  " }).declaration.weight).toEqual(FieldValidation.NotValidated({ value: "  " }));
   });
 });
 
