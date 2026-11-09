@@ -12,7 +12,7 @@ import * as Schema from "effect/Schema";
 import { Connections } from "../Connections.ts";
 import { InvalidHandoff, type SignedToken, SignInClient, SignInExpired, SignInRefused } from "../WebApi/AuthGroup.ts";
 import { signHandoff, signSession, verifyHandoff, withSessionCookie } from "../Session.ts";
-import { INTERVALS } from "./IntervalsHttp.ts";
+import { INTERVALS, INTERVALS_DEADLINE } from "./IntervalsHttp.ts";
 
 /** What Cadencia needs from Intervals: the same scopes Cadencia iOS asks for. */
 export const SCOPES = ["ACTIVITY:WRITE", "WELLNESS:WRITE", "CALENDAR:WRITE", "SETTINGS:WRITE", "CHATS:WRITE"] as const;
@@ -107,8 +107,9 @@ export const finishSignIn = Effect.fn(function* (
   const flow = yield* flowOf(headers);
   const { code, state } = query;
   if (!code || !state || Option.isNone(flow) || flow.value.state !== state) return yield* new SignInExpired();
-  const exchanged = yield* Effect.tryPromise(async () => {
+  const exchanged = yield* Effect.tryPromise(async (signal) => {
     const response = await fetch(new URL("/api/oauth/token", INTERVALS), {
+      signal,
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
       body: new URLSearchParams({
@@ -122,6 +123,8 @@ export const finishSignIn = Effect.fn(function* (
     if (!response.ok) throw new Error(`Intervals refused the code: ${response.status}`);
     return (await response.json()) as unknown;
   }).pipe(
+    // An exchange Intervals doesn't answer in time is aborted, and refused like one it couldn't be reached for.
+    Effect.timeout(INTERVALS_DEADLINE),
     Effect.flatMap(Schema.decodeUnknownEffect(TokenResponse)),
     Effect.mapError(() => new SignInRefused()),
   );

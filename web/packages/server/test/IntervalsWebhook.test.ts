@@ -129,16 +129,23 @@ describe("Intervals.icu webhooks", () => {
         yield* connect;
         yield* createPlan;
         yield* published;
+        // Both are reported as errors, by id, status and kind, without what Intervals answered.
+        const failure = { message: "Intervals call failed", operation: "syncCalendar", athleteId: "i100" };
+        const reported = () => vi.spyOn(console, "error").mockImplementation(() => {});
         const revoked = vi
           .spyOn(globalThis, "fetch")
           .mockImplementation(async () => new Response("unauthorized", { status: 401 }));
+        const letGo = reported();
         expect((yield* deliver([{ athlete_id: "i100", type: "CALENDAR_UPDATED" }])).status).toBe(200);
         expect(revoked).toHaveBeenCalledTimes(1);
+        expect(letGo.mock.calls).toEqual([[{ ...failure, status: 401, kind: "notConnected" }]]);
         expect(yield* statuses).toEqual(["published", "published", "published"]);
 
         vi.restoreAllMocks();
         vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("down", { status: 503 }));
+        const outage = reported();
         expect((yield* deliver([{ athlete_id: "i100", type: "CALENDAR_UPDATED" }])).status).toBe(503);
+        expect(outage.mock.calls).toEqual([[{ ...failure, status: 503, kind: "unavailable" }]]);
         expect(yield* statuses).toEqual(["published", "published", "published"]);
 
         // An answer that isn't a calendar says nothing was removed.

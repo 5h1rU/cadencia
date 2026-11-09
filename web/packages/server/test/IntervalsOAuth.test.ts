@@ -2,17 +2,22 @@ import { athlete } from "@cadencia/identity/Actor";
 import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { SESSION_COOKIE } from "@cadencia/identity/Authenticated.middleware";
 import { describe, expect, it } from "@effect/vitest";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Base64Url from "effect/encoding/Base64Url";
+import * as Fiber from "effect/Fiber";
 import * as Cookies from "effect/http/Cookies";
 import * as Headers from "effect/http/Headers";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Option from "effect/Option";
 import * as Redacted from "effect/Redacted";
 import * as Result from "effect/Result";
+import * as TestClock from "effect/testing/TestClock";
 import { afterEach, vi } from "vitest";
 import { Connections } from "../src/Connections.ts";
+import { INTERVALS_DEADLINE } from "../src/Intervals/IntervalsHttp.ts";
 import { actorOf, signHandoff, signSession } from "../src/Session.ts";
+import { neverAnswers } from "./intervals.ts";
 import { inWorker, ORIGIN, serve } from "./worker.ts";
 
 const FLOW_COOKIE = "cadencia_oauth";
@@ -208,6 +213,25 @@ describe("GET /auth/intervals/callback", () => {
         expect(calls).toHaveLength(1);
         expect(response.status).toBe(502);
         expect(Option.isNone(Cookies.getValue(response.cookies, SESSION_COOKIE))).toBe(true);
+        expect(Option.isNone(yield* (yield* Connections).find(intervalsAthlete))).toBe(true);
+      }),
+    ),
+  );
+
+  it.effect("refuses the sign-in when Intervals doesn't answer the exchange within the deadline", () =>
+    inWorker(
+      Effect.gen(function* () {
+        const requests = neverAnswers();
+        const { flowCookie, flow } = yield* start();
+        const answering = yield* Effect.forkChild(
+          serve(`/auth/intervals/callback?code=a-code&state=${flow.state}`, { headers: { cookie: `${FLOW_COOKIE}=${flowCookie}` } }),
+        );
+        yield* TestClock.adjust(Duration.subtract(INTERVALS_DEADLINE, Duration.millis(1)));
+        expect(requests.map((signal) => signal.aborted)).toEqual([false]);
+        expect(answering.pollUnsafe()).toBeUndefined();
+        yield* TestClock.adjust("1 millis");
+        expect((yield* Fiber.join(answering)).status).toBe(502);
+        expect(requests.map((signal) => signal.aborted)).toEqual([true]);
         expect(Option.isNone(yield* (yield* Connections).find(intervalsAthlete))).toBe(true);
       }),
     ),

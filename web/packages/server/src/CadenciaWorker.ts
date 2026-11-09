@@ -1,18 +1,9 @@
-import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
-import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
 import * as Cloudflare from "@alchemy.run/cloudflare";
-import * as DomainCloudflare from "@alchemy.run/cloudflare/Domain";
 import * as Effect from "effect/Effect";
-import { HttpServerRequest } from "effect/http/HttpServerRequest";
-import * as Layer from "effect/Layer";
 import { Stage } from "alchemy/Stage";
-import { clientHttp } from "./ClientHttpApi.ts";
-import { D1Connections } from "./Connections.ts";
-import { CoachHosted, overCoach, overPlanning, PlanningHosted } from "./Hosting.ts";
 import { IntervalsCalendar } from "./Intervals/IntervalsCalendar.ts";
-import { PlanningPlanner } from "./Planner.ts";
-import { SessionKeyLive, SessionLive } from "./Session.ts";
-import { webHttp } from "./WebHttp.ts";
+import { SessionKeyLive } from "./Session.ts";
+import { hostedOnCloudflare, workerHandlers } from "./WorkerHandlers.ts";
 
 /**
  * The Workers' names in prod. Intervals.icu has the app's origin registered as
@@ -24,29 +15,8 @@ export const PROD_WORKER_NAMES = {
   app: "cadencia-cadenciaapp-prod-6ki44jvdsgk3fzku",
 } as const;
 
-/**
- * Both models on Durable Objects in the EU, the Coach's Planner answered by
- * Planning in process, the Calendar by Intervals.icu, and the athletes'
- * Intervals tokens in D1. Swap `layerDurableObjects` for `Domain.InMemory`
- * and nothing else changes.
- */
-const CadenciaLive = SessionLive.pipe(
-  Layer.provideMerge(SessionKeyLive),
-  Layer.provideMerge(CoachHosted),
-  Layer.provideMerge(PlanningPlanner),
-  Layer.provideMerge(PlanningHosted),
-  Layer.provideMerge(IntervalsCalendar),
-  Layer.provideMerge(D1Connections),
-  Layer.provide(
-    Layer.mergeAll(
-      DomainCloudflare.layerDurableObjects({ jurisdiction: "eu" }),
-      Cloudflare.D1.QueryDatabaseBinding,
-      // Workers Traces: the Domain spans of commands, policies and external calls, and failed
-      // policy runs that happen outside any request.
-      Cloudflare.Telemetry(),
-    ),
-  ),
-);
+/** Sessions signed with the stage's own key, and the Calendar answered by Intervals.icu. */
+const CadenciaLive = hostedOnCloudflare(SessionKeyLive, IntervalsCalendar);
 
 export default class CadenciaWorker extends Cloudflare.Worker<CadenciaWorker>()(
   "CadenciaWorker",
@@ -58,24 +28,16 @@ export default class CadenciaWorker extends Cloudflare.Worker<CadenciaWorker>()(
       ...(stage === "prod" ? { name: PROD_WORKER_NAMES.api } : {}),
       // Cloudflare.Telemetry needs a compatibility date with `tracing.startActiveSpan`.
       compatibility: { date: "2026-08-25" },
+      // Workers Issues groups recurring failures (exceptions, 5xx answers, `console.error`) in the
+      // dashboard. An explicit `observability` replaces Alchemy's default whole, so the default
+      // logs are written out again; `traces` stays unset, which is what lets
+      // `Cloudflare.Telemetry()` (in `hostedOnCloudflare`) fill it in.
+      observability: {
+        enabled: true,
+        logs: { enabled: true, invocationLogs: true },
+        issues: { enabled: true },
+      },
     };
   }),
-  Effect.gen(function* () {
-    const planningApi = yield* overPlanning(AthletePlanningApi);
-    const coachApi = yield* overCoach(AthleteCoachApi);
-    const ios = yield* clientHttp;
-    const web = yield* webHttp;
-
-    return {
-      // The domain's own Apis for the web app; the domain over HTTP for iOS; and the Worker's
-      // HttpApi (session, signing in, Intervals reads, Intervals' webhooks) for everything else.
-      fetch: Effect.gen(function* () {
-        const { pathname } = new URL((yield* HttpServerRequest).url, "http://localhost");
-        if (pathname.startsWith("/api/planning")) return yield* planningApi.fetch;
-        if (pathname.startsWith("/api/coach")) return yield* coachApi.fetch;
-        if (pathname.startsWith("/v1/")) return yield* ios;
-        return yield* web;
-      }),
-    };
-  }).pipe(Effect.provide(CadenciaLive)),
+  workerHandlers.pipe(Effect.provide(CadenciaLive)),
 ) {}

@@ -10,7 +10,7 @@ import { Connections } from "../Connections.ts";
 import { overPlanning } from "../Hosting.ts";
 import { actingAs } from "../Session.ts";
 import { calendarEntry } from "./IntervalsCalendar.ts";
-import { athletePath, callIntervals, IntervalsEvent, kindOf } from "./IntervalsHttp.ts";
+import { athletePath, callIntervals, IntervalsEvent, kindOf, reportIntervalsFailure } from "./IntervalsHttp.ts";
 import { CalendarSyncUnavailable } from "./IntervalsWebhook.ts";
 
 /** Text as the athlete reads it: line endings and spacing at the ends of lines don't change it. */
@@ -72,6 +72,8 @@ export const syncAthlete = (athleteId: AthleteId, today: Day) =>
       query: { oldest: addDays(today, -1), newest: plan.endDay },
     }).pipe(
       Effect.map(Option.some),
+      // A refusal that is let go would otherwise leave no trace.
+      Effect.tapError(reportIntervalsFailure("syncCalendar", athleteId)),
       Effect.catchTag("IntervalsError", (error) =>
         kindOf(error) === "unavailable" ? Effect.fail(new CalendarSyncUnavailable()) : Effect.succeed(Option.none()),
       ),

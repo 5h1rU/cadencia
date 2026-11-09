@@ -6,10 +6,15 @@ import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Paragraph } from "@cadencia/kernel/Text";
 import { afterEach, describe, expect, it, vi } from "@effect/vitest";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Fiber from "effect/Fiber";
 import * as Redacted from "effect/Redacted";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
+import { INTERVALS_DEADLINE } from "../src/Intervals/IntervalsHttp.ts";
+import { neverAnswers } from "./intervals.ts";
 import {
   activityFromIntervals,
   measuresFromIntervals,
@@ -198,6 +203,19 @@ describe("Intervals reads that fail", () => {
       vi.restoreAllMocks();
       answer(429);
       expect(yield* read).toBe("IntervalsUnavailable");
+    }),
+  );
+
+  it.effect("are an outage when Intervals doesn't answer within the deadline, and the request is aborted", () =>
+    Effect.gen(function* () {
+      const requests = neverAnswers();
+      const reading = yield* Effect.forkChild(read);
+      yield* TestClock.adjust(Duration.subtract(INTERVALS_DEADLINE, Duration.millis(1)));
+      expect(requests.map((signal) => signal.aborted)).toEqual([false]);
+      expect(reading.pollUnsafe()).toBeUndefined();
+      yield* TestClock.adjust("1 millis");
+      expect(yield* Fiber.join(reading)).toBe("IntervalsUnavailable");
+      expect(requests.map((signal) => signal.aborted)).toEqual([true]);
     }),
   );
 });

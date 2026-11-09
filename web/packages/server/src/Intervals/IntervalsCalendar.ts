@@ -6,7 +6,14 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { Connections } from "../Connections.ts";
-import { athletePath, callIntervals, type IntervalsError, IntervalsEventId, kindOf } from "./IntervalsHttp.ts";
+import {
+  athletePath,
+  callIntervals,
+  type IntervalsError,
+  IntervalsEventId,
+  kindOf,
+  reportIntervalsFailure,
+} from "./IntervalsHttp.ts";
 import { workoutText } from "./WorkoutText.ts";
 
 /**
@@ -43,6 +50,10 @@ const calendarError = (error: IntervalsError): CalendarUnavailable | CalendarRef
  * (with OAuth, Intervals updates this app's event with the same id instead of
  * duplicating it) and deletes by `external_id`. An athlete who disconnected
  * Intervals has no token any more: the calendar refuses them as not connected.
+ *
+ * The policy records a refusal as an event and retries an outage, so neither
+ * fails the Worker: every call Intervals fails is reported here, for
+ * Cloudflare to group.
  */
 export const IntervalsCalendar = Calendar.toLayer(
   Effect.gen(function* () {
@@ -63,7 +74,7 @@ export const IntervalsCalendar = Calendar.toLayer(
           const result = yield* callIntervals(token, "POST", athletePath(athleteId, "/events/bulk"), {
             query: { upsert: "true" },
             body: [calendarEntry(session)],
-          }).pipe(Effect.mapError(calendarError));
+          }).pipe(Effect.tapError(reportIntervalsFailure("publishSession", athleteId)), Effect.mapError(calendarError));
           // A success that doesn't name the event written confirms nothing: it is retried like an outage.
           if (Option.isNone(Schema.decodeUnknownOption(Upserted)(result))) return yield* new CalendarUnavailable();
           return { published: true };
@@ -73,7 +84,7 @@ export const IntervalsCalendar = Calendar.toLayer(
           const token = yield* tokenFor(athleteId);
           yield* callIntervals(token, "PUT", athletePath(athleteId, "/events/bulk-delete"), {
             body: [{ external_id: externalId }],
-          }).pipe(Effect.mapError(calendarError));
+          }).pipe(Effect.tapError(reportIntervalsFailure("withdrawSession", athleteId)), Effect.mapError(calendarError));
           return { withdrawn: true };
         }),
     };
