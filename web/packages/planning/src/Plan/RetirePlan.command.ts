@@ -1,5 +1,5 @@
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
@@ -19,7 +19,7 @@ export class PlanRetired extends Domain.Event("PlanRetired", {
  */
 export class RetirePlan extends Domain.Command("RetirePlan", {
   target: PlanId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: { today: Day },
   events: [PlanRetired],
   rejects: [PlanNotActive, ImplausibleToday, NotYours],

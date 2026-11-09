@@ -1,6 +1,6 @@
 import { athlete } from "@cadencia/identity/Actor";
 import { AthleteId } from "@cadencia/identity/Athlete.id";
-import { SESSION_COOKIE } from "@cadencia/identity/Session.middleware";
+import { SESSION_COOKIE } from "@cadencia/identity/Authenticated.middleware";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Base64Url from "effect/encoding/Base64Url";

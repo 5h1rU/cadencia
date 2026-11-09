@@ -1,6 +1,6 @@
 import { athlete } from "@cadencia/identity/Actor";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Weekday } from "@cadencia/kernel/Calendar/Week";
 import { EntityKey } from "@cadencia/kernel/EntityKey";
@@ -31,7 +31,7 @@ const AcceptingCalendar = Calendar.toLayer(
 const Hosted = Planning.layer(PlanningHandlers).pipe(Layer.provide(Layer.mergeAll(AcceptingCalendar, Domain.InMemory)));
 
 /** Every call is Ana's: what the server's session does for a signed-in athlete. */
-const AsAna = Layer.succeed(Session, (effect) => Effect.provideService(effect, CurrentActor, athlete(ana)));
+const AsAna = Layer.succeed(Authenticated, (effect) => Effect.provideService(effect, CurrentActor, athlete(ana)));
 
 /**
  * The Api the app talks to, answered by the real Planning model in this

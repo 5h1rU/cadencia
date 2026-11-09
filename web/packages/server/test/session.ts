@@ -1,5 +1,5 @@
 import type { Actor } from "@cadencia/identity/Actor";
-import { sessionClient } from "@cadencia/identity/Session.middleware";
+import { sessionClient } from "@cadencia/identity/Authenticated.middleware";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";

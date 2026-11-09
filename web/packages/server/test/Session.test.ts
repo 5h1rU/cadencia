@@ -1,6 +1,6 @@
 import { athlete } from "@cadencia/identity/Actor";
+import { Authenticated, SESSION_COOKIE, Unauthorized } from "@cadencia/identity/Authenticated.middleware";
 import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
-import { Session, SESSION_COOKIE, Unauthorized } from "@cadencia/identity/Session.middleware";
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Headers from "effect/http/Headers";
@@ -87,7 +87,7 @@ describe("SessionLive", () => {
   /** Run `effect` through the middleware as a request with these headers. */
   const throughSession = <A>(effect: Effect.Effect<A, never, CurrentActor>, headers: Headers.Headers) =>
     Effect.gen(function* () {
-      const middleware = yield* Session;
+      const middleware = yield* Authenticated;
       return yield* middleware(effect as never, { headers } as never);
     }).pipe(Effect.scoped, Effect.provide(World));
 

@@ -1,6 +1,6 @@
 import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
 
@@ -15,7 +15,7 @@ export class ProfileAttempted extends Domain.Event("ProfileAttempted", { automat
  */
 export class RecordProfileAttempt extends Domain.Command("RecordProfileAttempt", {
   target: AthleteId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: { automatic: Schema.Boolean },
   events: [ProfileAttempted],
   rejects: [AutomaticAttemptUsed, NotYours],

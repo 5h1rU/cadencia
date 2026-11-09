@@ -1,5 +1,5 @@
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
 import { InterpretedOn, ModelName } from "../Provenance.ts";
@@ -21,7 +21,7 @@ export class CoachReplied extends Domain.Event("CoachReplied", {
 /** Record the AI's reply to a message, and the change to the plan it proposes, if any. */
 export class RecordCoachReply extends Domain.Command("RecordCoachReply", {
   target: ConversationId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: {
     messageId: MessageId,
     inReplyTo: MessageId,

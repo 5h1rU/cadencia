@@ -1,7 +1,7 @@
 import { AthleteId, ownerOf } from "@cadencia/identity/Athlete.id";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { mustOwn } from "@cadencia/identity/owns";
-import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -39,7 +39,7 @@ export class TimelineEntry extends Domain.Event("TimelineEntry", {
 export class CoachTimeline extends Domain.View("CoachTimeline", {
   from: [DailyDecision, Conversation, RiderProfile],
   key: AthleteId,
-  middleware: [Session],
+  middleware: [Authenticated],
   rejects: [NotYours],
   keyOf: {
     DailyDecision: ({ source }) => ownerOf(source.id),

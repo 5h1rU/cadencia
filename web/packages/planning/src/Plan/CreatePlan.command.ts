@@ -1,6 +1,6 @@
 import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Weekday } from "@cadencia/kernel/Calendar/Week";
 import { PlanId } from "@cadencia/kernel/Plan.id";
@@ -49,7 +49,7 @@ export class PlanCreated extends Domain.Event("PlanCreated", {
 /** Create a plan from an accepted consultation draft. Sent by the Coach on the athlete's behalf; the plan id names its athlete. */
 export class CreatePlan extends Domain.Command("CreatePlan", {
   target: PlanId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: {
     title: Title,
     goal: GoalKind,

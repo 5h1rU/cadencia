@@ -10,17 +10,18 @@ export class Unauthorized extends Schema.TaggedError<Unauthorized>()("Unauthoriz
 export const SESSION_COOKIE = "cadencia_session";
 
 /**
- * Authenticates a request and provides the athlete making it as the
- * {@link CurrentActor}. Browsers send the session cookie; Cadencia iOS and
- * other clients send `Authorization: Bearer`.
+ * Guards a command or a read: the request must come from a signed-in athlete,
+ * who is provided as the {@link CurrentActor}. Browsers send the session
+ * cookie; Cadencia iOS and other clients send `Authorization: Bearer`. In the
+ * domain "session" means a training session: this is named for what it requires.
  */
-export class Session extends RpcMiddleware.Service<Session, { provides: CurrentActor }>()(
-  "Cadencia/Session",
+export class Authenticated extends RpcMiddleware.Service<Authenticated, { provides: CurrentActor }>()(
+  "Cadencia/Authenticated",
   { error: Unauthorized },
 ) {}
 
 /** Client side, for clients that are not browsers: send this token with every call. */
 export const sessionClient = (token: string) =>
-  RpcMiddleware.layerClient(Session, ({ request, next }) =>
+  RpcMiddleware.layerClient(Authenticated, ({ request, next }) =>
     next({ ...request, headers: Headers.set(request.headers, "authorization", `Bearer ${token}`) }),
   );

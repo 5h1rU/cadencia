@@ -1,7 +1,7 @@
 import { AthleteId, ownerOf } from "@cadencia/identity/Athlete.id";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { mustOwn } from "@cadencia/identity/owns";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Weekday } from "@cadencia/kernel/Calendar/Week";
 import { PlanId } from "@cadencia/kernel/Plan.id";
@@ -70,7 +70,7 @@ const isOlderThanShown = (v: CurrentPlanState, planId: PlanId, createdAt: DateTi
 export class CurrentPlan extends Domain.View("CurrentPlan", {
   from: [Plan],
   key: AthleteId,
-  middleware: [Session],
+  middleware: [Authenticated],
   rejects: [NotYours],
   keyOf: { Plan: ({ source }) => ownerOf(source.id) },
   state: CurrentPlanState,

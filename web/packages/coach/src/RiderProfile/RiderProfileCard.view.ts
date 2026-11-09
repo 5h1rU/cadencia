@@ -1,7 +1,7 @@
 import { FtpWatts } from "@cadencia/athlete/Measures";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { mustOwn } from "@cadencia/identity/owns";
-import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -13,7 +13,7 @@ import { RiderReport } from "./RiderReport.ts";
 export class RiderProfileCard extends Domain.View("RiderProfileCard", {
   from: [RiderProfile],
   key: RiderProfile,
-  middleware: [Session],
+  middleware: [Authenticated],
   rejects: [NotYours],
   state: Schema.Struct({
     report: Schema.NullOr(RiderReport),

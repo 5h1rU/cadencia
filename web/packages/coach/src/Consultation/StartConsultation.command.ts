@@ -1,5 +1,5 @@
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import { ConsultationId } from "./Consultation.id.ts";
 
@@ -11,7 +11,7 @@ export class ConsultationStarted extends Domain.Event("ConsultationStarted", {})
 /** Start a consultation to build a plan. */
 export class StartConsultation extends Domain.Command("StartConsultation", {
   target: ConsultationId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: {},
   events: [ConsultationStarted],
   rejects: [ConsultationAlreadyStarted, NotYours],

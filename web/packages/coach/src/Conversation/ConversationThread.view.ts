@@ -1,7 +1,7 @@
 import { ownerOf } from "@cadencia/identity/Athlete.id";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { mustOwn } from "@cadencia/identity/owns";
-import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -34,7 +34,7 @@ const update = (v: Thread, messageId: MessageId, change: Partial<ThreadMessage>)
 export class ConversationThread extends Domain.View("ConversationThread", {
   from: [Conversation],
   key: Conversation,
-  middleware: [Session],
+  middleware: [Authenticated],
   rejects: [NotYours],
   state: Schema.Struct({ messages: Schema.Array(ThreadMessage) }),
   // Bump when the state or how it folds changes, so the view is rebuilt from its events.

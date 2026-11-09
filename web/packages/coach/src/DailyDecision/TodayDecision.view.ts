@@ -1,8 +1,8 @@
 import { EvidenceSnapshot } from "@cadencia/athlete/Evidence";
 import { AthleteId, ownerOf } from "@cadencia/identity/Athlete.id";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { mustOwn } from "@cadencia/identity/owns";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Workout } from "@cadencia/kernel/Training/Workout";
 import * as Domain from "@alchemy.run/domain";
@@ -23,7 +23,7 @@ const Proposal = Schema.Struct({ attempt: Attempt, workout: Workout, note: Coach
 export class TodayDecision extends Domain.View("TodayDecision", {
   from: [DailyDecision],
   key: DailyDecision,
-  middleware: [Session],
+  middleware: [Authenticated],
   rejects: [NotYours],
   state: Schema.Struct({
     athleteId: Schema.NullOr(AthleteId),

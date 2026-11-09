@@ -1,5 +1,5 @@
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
 import { ConsultationId } from "./Consultation.id.ts";
@@ -21,7 +21,7 @@ export class DraftAccepted extends Domain.Event("DraftAccepted", { planId: PlanI
  */
 export class AcceptDraft extends Domain.Command("AcceptDraft", {
   target: ConsultationId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: { planId: PlanId, draftRevision: Count },
   events: [DraftAccepted],
   rejects: [ConsultationNotOpen, NoDraft, DraftChanged, NotYours],

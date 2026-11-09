@@ -1,7 +1,7 @@
 import { ownerOf } from "@cadencia/identity/Athlete.id";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
 import { mustOwn } from "@cadencia/identity/owns";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
@@ -18,7 +18,7 @@ const Turn = Schema.Struct({ role: Schema.Literals(["coach", "athlete"]), text: 
 export class ConsultationView extends Domain.View("ConsultationView", {
   from: [Consultation],
   key: Consultation,
-  middleware: [Session],
+  middleware: [Authenticated],
   rejects: [NotYours],
   state: Schema.Struct({
     stage: Schema.Literals(["new", "open", "accepted", "created"]),

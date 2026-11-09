@@ -1,5 +1,5 @@
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { Paragraph } from "@cadencia/kernel/Text";
@@ -21,7 +21,7 @@ export class DayRequirementRecorded extends Domain.Event("DayRequirementRecorded
  */
 export class RecordDayRequirement extends Domain.Command("RecordDayRequirement", {
   target: PlanId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: { day: Day, instructions: Paragraph, maxMinutes: Schema.NullOr(Minutes) },
   events: [DayRequirementRecorded, WeekRevised],
   rejects: [PlanNotActive, DayOutsidePlan, NotYours],

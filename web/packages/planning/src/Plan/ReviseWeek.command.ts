@@ -1,5 +1,5 @@
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { DayLimit } from "@cadencia/kernel/Training/DayLimit";
@@ -20,7 +20,7 @@ export class WeekRevised extends Domain.Event("WeekRevised", {
  */
 export class ReviseWeek extends Domain.Command("ReviseWeek", {
   target: PlanId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: { limits: Schema.Array(DayLimit), today: Day },
   events: [WeekRevised],
   rejects: [PlanNotActive, ImplausibleToday, NotYours],

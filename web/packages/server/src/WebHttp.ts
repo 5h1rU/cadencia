@@ -1,4 +1,4 @@
-import { Unauthorized } from "@cadencia/identity/Session.middleware";
+import { Unauthorized } from "@cadencia/identity/Authenticated.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Authentication, SignedInAthlete } from "./WebApi/Authentication.middleware.ts";
 import { IntervalsNotConnected } from "./WebApi/IntervalsGroup.ts";

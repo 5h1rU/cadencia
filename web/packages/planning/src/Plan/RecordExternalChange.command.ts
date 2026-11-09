@@ -1,5 +1,5 @@
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
 import * as Schema from "effect/Schema";
@@ -23,7 +23,7 @@ export class SessionRemovedInIntervals extends Domain.Event("SessionRemovedInInt
  */
 export class RecordExternalChange extends Domain.Command("RecordExternalChange", {
   target: PlanId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: { externalId: ExternalId, change: Schema.Literals(["changed", "removed"]), observed: PlannedSession },
   events: [SessionChangedInIntervals, SessionRemovedInIntervals],
   rejects: [NotYours],

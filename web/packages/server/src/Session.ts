@@ -1,7 +1,7 @@
 import { type Actor, Actor as ActorSchema } from "@cadencia/identity/Actor";
 import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
 import { SignedToken } from "./WebApi/AuthGroup.ts";
-import { Session, SESSION_COOKIE, Unauthorized } from "@cadencia/identity/Session.middleware";
+import { Authenticated, SESSION_COOKIE, Unauthorized } from "@cadencia/identity/Authenticated.middleware";
 import * as Alchemy from "alchemy";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
@@ -9,7 +9,6 @@ import * as Effect from "effect/Effect";
 import * as Base64Url from "effect/encoding/Base64Url";
 import * as Cookies from "effect/http/Cookies";
 import * as Headers from "effect/http/Headers";
-import { HttpServerRequest } from "effect/http/HttpServerRequest";
 import * as HttpServerResponse from "effect/http/HttpServerResponse";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
@@ -110,9 +109,9 @@ export const actorOf = Effect.fn(function* (headers: Headers.Headers) {
   return Option.isNone(token) ? Option.none<Actor>() : yield* verify(token.value, "session");
 });
 
-/** The {@link Session} middleware: provides the request's actor, or fails with Unauthorized. */
+/** The {@link Authenticated} middleware: provides the request's actor, or fails with Unauthorized. */
 export const SessionLive = Layer.effect(
-  Session,
+  Authenticated,
   Effect.gen(function* () {
     const key = yield* SessionKey;
     return (effect, { headers }) =>
@@ -128,9 +127,9 @@ export const SessionLive = Layer.effect(
   }),
 );
 
-/** The session middleware for code in the Worker that already knows who it acts for. */
+/** The {@link Authenticated} middleware for code in the Worker that already knows who it acts for. */
 export const actingAs = (actor: Actor) =>
-  Layer.succeed(Session, (effect) => Effect.provideService(effect, CurrentActor, actor));
+  Layer.succeed(Authenticated, (effect) => Effect.provideService(effect, CurrentActor, actor));
 
 const cookieOptions = { httpOnly: true, secure: true, sameSite: "lax", path: "/" } as const;
 

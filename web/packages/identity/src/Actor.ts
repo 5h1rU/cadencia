@@ -6,7 +6,7 @@ export const SystemName = Schema.Literals(["CalendarPublishing", "IntervalsSync"
 export type SystemName = typeof SystemName.Type;
 
 /**
- * Who is acting. `Session` provides it for every request; policies act as a
+ * Who is acting. `Authenticated` provides it for every request; policies act as a
  * named system actor.
  */
 export const Actor = Schema.Union([

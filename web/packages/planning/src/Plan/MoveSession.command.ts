@@ -1,5 +1,5 @@
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import * as Domain from "@alchemy.run/domain";
@@ -32,7 +32,7 @@ export class SessionMoved extends Domain.Event("SessionMoved", {
 /** Move a planned session to another day of the plan. */
 export class MoveSession extends Domain.Command("MoveSession", {
   target: PlanId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: { sessionId: SessionId, toDay: Day },
   events: [SessionMoved],
   rejects: [PlanNotActive, SessionNotFound, SessionNotMovable, DayOutsidePlan, DayTaken, NotYours],

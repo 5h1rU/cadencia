@@ -1,5 +1,5 @@
 import type { AthleteId } from "@cadencia/identity/Athlete.id";
-import { SESSION_COOKIE, Unauthorized } from "@cadencia/identity/Session.middleware";
+import { SESSION_COOKIE, Unauthorized } from "@cadencia/identity/Authenticated.middleware";
 import * as Context from "effect/Context";
 import * as HttpApiMiddleware from "effect/http-api/HttpApiMiddleware";
 import * as HttpApiSecurity from "effect/http-api/HttpApiSecurity";

@@ -1,6 +1,6 @@
 import { EvidenceSnapshot, Fingerprint } from "@cadencia/athlete/Evidence";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { SessionKind } from "@cadencia/kernel/Training/SessionKind";
@@ -66,7 +66,7 @@ export class SessionConcretized extends Domain.Event("SessionConcretized", {
 /** Turn a planned day into a concrete workout, within the plan's limits. */
 export class ConcretizeSession extends Domain.Command("ConcretizeSession", {
   target: PlanId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: { day: Day, workout: Workout, evidence: EvidenceSnapshot },
   events: [SessionConcretized],
   rejects: [

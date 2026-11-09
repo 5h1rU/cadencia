@@ -1,7 +1,7 @@
 import { conversationIdFor, YearMonth } from "@cadencia/coach/Conversation/Conversation.id";
 import { dailyDecisionIdFor } from "@cadencia/coach/DailyDecision/DailyDecision.id";
+import { Unauthorized } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Unauthorized } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { describe, expect, it } from "@effect/vitest";
 import * as Option from "effect/Option";

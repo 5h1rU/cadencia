@@ -1,7 +1,7 @@
 import { EvidenceSnapshot, Fingerprint } from "@cadencia/athlete/Evidence";
 import { AthleteId } from "@cadencia/identity/Athlete.id";
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { Workout } from "@cadencia/kernel/Training/Workout";
@@ -36,7 +36,7 @@ export class DailyDecisionRecorded extends Domain.Event("DailyDecisionRecorded",
  */
 export class RecordDailyDecision extends Domain.Command("RecordDailyDecision", {
   target: DailyDecisionId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: {
     planId: PlanId,
     workout: Workout,

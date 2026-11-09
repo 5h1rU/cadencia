@@ -1,5 +1,5 @@
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import * as Domain from "@alchemy.run/domain";
 import { InterpretedOn, ModelName } from "../Provenance.ts";
 import { ConsultationId } from "./Consultation.id.ts";
@@ -15,7 +15,7 @@ export class DraftProposed extends Domain.Event("DraftProposed", {
 /** Record the plan the AI drafted from the answers. */
 export class RecordDraft extends Domain.Command("RecordDraft", {
   target: ConsultationId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: { draft: PlanDraft, model: ModelName, interpretedOn: InterpretedOn },
   events: [DraftProposed],
   rejects: [ConsultationNotOpen, NotYours],

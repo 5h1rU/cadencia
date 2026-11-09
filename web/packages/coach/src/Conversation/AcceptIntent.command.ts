@@ -1,5 +1,5 @@
+import { Authenticated } from "@cadencia/identity/Authenticated.middleware";
 import { NotYours } from "@cadencia/identity/NotYours.rejection";
-import { Session } from "@cadencia/identity/Session.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import * as Domain from "@alchemy.run/domain";
 import { ConversationId } from "./Conversation.id.ts";
@@ -20,7 +20,7 @@ export class IntentAccepted extends Domain.Event("IntentAccepted", {
 /** The athlete accepts the change the coach proposed. Needs no AI: the web can send it. */
 export class AcceptIntent extends Domain.Command("AcceptIntent", {
   target: ConversationId,
-  middleware: [Session],
+  middleware: [Authenticated],
   input: { messageId: MessageId, today: Day },
   events: [IntentAccepted],
   rejects: [NoOpenIntent, IntentExpired, NotYours],

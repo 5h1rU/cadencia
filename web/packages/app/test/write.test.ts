@@ -1,7 +1,7 @@
 import { conversationIdFor, YearMonth } from "@cadencia/coach/Conversation/Conversation.id";
 import { IntentExpired } from "@cadencia/coach/Conversation/AcceptIntent.command";
 import { MessageId } from "@cadencia/coach/Conversation/Message.id";
-import { Unauthorized } from "@cadencia/identity/Session.middleware";
+import { Unauthorized } from "@cadencia/identity/Authenticated.middleware";
 import { Day } from "@cadencia/kernel/Calendar/Day";
 import { Paragraph } from "@cadencia/kernel/Text";
 import { ImplausibleToday } from "@cadencia/planning/Plan/ImplausibleToday.rejection";
