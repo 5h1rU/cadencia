@@ -7,26 +7,6 @@
     " " : {
 
     },
-    "Indoor FTP is used when Intervals has one. Estimates use Intervals' eFTP when it has one, else the 42-day power curve, and only become the working FTP when you accept them. An accepted FTP is saved to Intervals." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Se usa el FTP de interior cuando Intervals tiene uno. Las estimaciones usan el eFTP de Intervals cuando existe y, si no, la curva de potencia de 42 días, y solo pasan a ser tu FTP de trabajo cuando las aceptas. El FTP que aceptas se guarda en Intervals."
-          }
-        }
-      }
-    },
-    "Saved on this phone. Intervals.icu sync is pending." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Guardado en este teléfono. La sincronización con Intervals.icu está pendiente."
-          }
-        }
-      }
-    },
     "The coach drafted the plan again while you were reading it. Review the new draft before accepting it." : {
       "localizations" : {
         "es" : {
@@ -37,92 +17,12 @@
         }
       }
     },
-    "Your accepted FTP is waiting to be saved to Intervals.icu." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El FTP que aceptaste está pendiente de guardarse en Intervals.icu."
-          }
-        }
-      }
-    },
     "–" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "–"
-          }
-        }
-      }
-    },
-    "Cadencia keeps your plan and the coach's notes on its server in the EU. The coach's AI runs on this phone." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cadencia guarda tu plan y las notas del entrenador en su servidor en la UE. La IA del entrenador funciona en este teléfono."
-          }
-        }
-      }
-    },
-    "Currently: API key · %@" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ahora: clave de API · %@"
-          }
-        }
-      }
-    },
-    "Intervals.icu no longer accepts Cadencia. Sign in again in Settings." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Intervals.icu ya no acepta a Cadencia. Vuelve a iniciar sesión en Ajustes."
-          }
-        }
-      }
-    },
-    "Intervals.icu no longer accepts Cadencia. Sign in again in Settings. Your saved debrief is still available." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Intervals.icu ya no acepta a Cadencia. Vuelve a iniciar sesión en Ajustes. Tu análisis guardado sigue disponible."
-          }
-        }
-      }
-    },
-    "Sign in again if Intervals.icu stops accepting Cadencia." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vuelve a iniciar sesión si Intervals.icu deja de aceptar a Cadencia."
-          }
-        }
-      }
-    },
-    "You sign in with Intervals.icu through Cadencia's server, which keeps your plan, your conversation with the coach and its decisions in the EU. This phone keeps its Intervals.icu access in the Keychain and sends it only to intervals.icu." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inicias sesión con Intervals.icu a través del servidor de Cadencia, que guarda tu plan, tu conversación con el entrenador y sus decisiones en la UE. Este teléfono guarda su acceso a Intervals.icu en el llavero y solo lo envía a intervals.icu."
-          }
-        }
-      }
-    },
-    "Your Cadencia sign-in has expired. Sign in again to use your plan and the coach; rides keep uploading meanwhile." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu sesión de Cadencia caducó. Vuelve a iniciar sesión para usar tu plan y el entrenador; mientras tanto, las salidas se siguen subiendo."
           }
         }
       }
@@ -397,6 +297,7 @@
       }
     },
     "%@, %@%@ · priority %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -428,6 +329,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@: hasta %lld min"
+          }
+        }
+      }
+    },
+    "%@: your request for the session" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: tu petición para la sesión"
           }
         }
       }
@@ -1368,12 +1279,76 @@
         }
       }
     },
+    "Cadencia can't keep this as written (%@). Try again." : {
+
+    },
+    "Cadencia couldn't be reached. Check your connection and try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo conectar con Cadencia. Revisa tu conexión e inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "Cadencia did not complete the sign-in. Try again." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadencia no completó el inicio de sesión. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "Cadencia hasn't confirmed the new plan yet. Check the Plan tab in a moment." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadencia aún no ha confirmado el nuevo plan. Revisa la pestaña Plan en un momento."
+          }
+        }
+      }
+    },
+    "Cadencia is unavailable right now. Try again later." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadencia no está disponible ahora mismo. Inténtalo más tarde."
+          }
+        }
+      }
+    },
     "Cadencia keeps Intervals.icu as the system of record. Nothing is stored on other servers." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cadencia usa Intervals.icu como fuente de verdad. Nada se guarda en otros servidores."
+          }
+        }
+      }
+    },
+    "Cadencia keeps Intervals.icu as the system of record. Your plan and the coach's notes are kept on Cadencia's server in the EU; the coach's AI runs on this phone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadencia usa Intervals.icu como fuente de verdad. Tu plan y las notas del entrenador se guardan en el servidor de Cadencia en la UE; la IA del entrenador funciona en este teléfono."
+          }
+        }
+      }
+    },
+    "Cadencia keeps your plan and the coach's notes on its server in the EU. The coach's AI runs on this phone." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadencia guarda tu plan y las notas del entrenador en su servidor en la UE. La IA del entrenador funciona en este teléfono."
           }
         }
       }
@@ -1384,6 +1359,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cadencia lee la VFC, la frecuencia cardiaca en reposo, el sueño y las medidas disponibles en Salud."
+          }
+        }
+      }
+    },
+    "Cadencia refused the change (%@)." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cadencia rechazó el cambio (%@)."
           }
         }
       }
@@ -1670,6 +1655,7 @@
       }
     },
     "Clear conversation" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -1680,6 +1666,7 @@
       }
     },
     "Clear this conversation?" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -2194,6 +2181,16 @@
         }
       }
     },
+    "Couldn’t create the plan" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo crear el plan"
+          }
+        }
+      }
+    },
     "Couldn’t import route" : {
       "localizations" : {
         "es" : {
@@ -2274,6 +2271,16 @@
         }
       }
     },
+    "Create a plan so the coach can keep requests for other days." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crea un plan para que el entrenador pueda guardar peticiones para otros días."
+          }
+        }
+      }
+    },
     "Create plan" : {
       "localizations" : {
         "es" : {
@@ -2290,6 +2297,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "CTL"
+          }
+        }
+      }
+    },
+    "Currently: API key · %@" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora: clave de API · %@"
           }
         }
       }
@@ -3581,6 +3598,7 @@
       }
     },
     "Goal: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4164,6 +4182,16 @@
         }
       }
     },
+    "Indoor FTP is used when Intervals has one. Estimates use Intervals' eFTP when it has one, else the 42-day power curve, and only become the working FTP when you accept them. An accepted FTP is saved to Intervals." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se usa el FTP de interior cuando Intervals tiene uno. Las estimaciones usan el eFTP de Intervals cuando existe y, si no, la curva de potencia de 42 días, y solo pasan a ser tu FTP de trabajo cuando las aceptas. El FTP que aceptas se guarda en Intervals."
+          }
+        }
+      }
+    },
     "Intensity" : {
       "localizations" : {
         "es" : {
@@ -4241,6 +4269,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Intervals.icu aún no ha terminado de analizar esta sesión. Intenta de nuevo en un momento."
+          }
+        }
+      }
+    },
+    "Intervals.icu no longer accepts Cadencia. Sign in again in Settings." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intervals.icu ya no acepta a Cadencia. Vuelve a iniciar sesión en Ajustes."
+          }
+        }
+      }
+    },
+    "Intervals.icu no longer accepts Cadencia. Sign in again in Settings. Your saved debrief is still available." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intervals.icu ya no acepta a Cadencia. Vuelve a iniciar sesión en Ajustes. Tu análisis guardado sigue disponible."
+          }
+        }
+      }
+    },
+    "Intervals.icu refused this session, so it isn't on your calendar." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intervals.icu rechazó esta sesión, así que no está en tu calendario."
           }
         }
       }
@@ -4407,6 +4465,7 @@
       }
     },
     "Legs feel fresh" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4417,6 +4476,7 @@
       }
     },
     "Legs feel heavy" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -4427,6 +4487,7 @@
       }
     },
     "Legs feel normal" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -5195,6 +5256,16 @@
         }
       }
     },
+    "Not applied" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No aplicado"
+          }
+        }
+      }
+    },
     "Not connected" : {
       "localizations" : {
         "es" : {
@@ -5211,6 +5282,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No encontrado"
+          }
+        }
+      }
+    },
+    "Not now" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ahora no"
+          }
+        }
+      }
+    },
+    "Not on your Intervals calendar. Sign in to Cadencia again in Settings to reconnect." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No está en tu calendario de Intervals. Vuelve a iniciar sesión en Cadencia en Ajustes para reconectar."
           }
         }
       }
@@ -6402,6 +6493,7 @@
       }
     },
     "Review proposed workout" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6703,6 +6795,7 @@
       }
     },
     "Save workout request" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -6738,6 +6831,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Guardado en las notas de Intervals.icu"
+          }
+        }
+      }
+    },
+    "Saved on this phone. Intervals.icu sync is pending." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardado en este teléfono. La sincronización con Intervals.icu está pendiente."
           }
         }
       }
@@ -7046,12 +7149,92 @@
         }
       }
     },
+    "Sign in" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciar sesión"
+          }
+        }
+      }
+    },
+    "Sign in again if Intervals.icu stops accepting Cadencia." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a iniciar sesión si Intervals.icu deja de aceptar a Cadencia."
+          }
+        }
+      }
+    },
+    "Sign in to Cadencia in Settings so your plan can confirm today's session." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia sesión en Cadencia en Ajustes para que tu plan confirme la sesión de hoy."
+          }
+        }
+      }
+    },
+    "Sign in to Cadencia in Settings to build your cyclist profile." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia sesión en Cadencia en Ajustes para crear tu perfil de ciclista."
+          }
+        }
+      }
+    },
+    "Sign in to Cadencia in Settings to create a plan." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia sesión en Cadencia en Ajustes para crear un plan."
+          }
+        }
+      }
+    },
+    "Sign in to Cadencia in Settings to talk to the coach." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia sesión en Cadencia en Ajustes para hablar con el entrenador."
+          }
+        }
+      }
+    },
+    "Sign in to Cadencia with the same Intervals.icu account the app uses." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicia sesión en Cadencia con la misma cuenta de Intervals.icu que usa la app."
+          }
+        }
+      }
+    },
     "Sign in to ChatGPT again" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Vuelve a iniciar sesión en ChatGPT"
+          }
+        }
+      }
+    },
+    "Sign in with Intervals.icu" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciar sesión con Intervals.icu"
           }
         }
       }
@@ -7389,6 +7572,7 @@
       }
     },
     "Suggestions you haven't applied are removed. Changes you already applied stay." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7682,6 +7866,7 @@
       }
     },
     "The coach couldn't produce a valid workout for this request. Your current workout is unchanged. Try rephrasing the request." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7792,6 +7977,7 @@
       }
     },
     "The coach will build this workout from your recovery on that day." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -7828,6 +8014,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La respuesta del entrenador se interrumpió. Inténtalo de nuevo."
+          }
+        }
+      }
+    },
+    "The days this change was for have passed, so your plan can't apply it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los días de este cambio ya pasaron, así que tu plan no puede aplicarlo."
           }
         }
       }
@@ -8089,6 +8285,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Esta ruta es demasiado grande. Usa un GPX de menos de 20 MB y 200.000 puntos."
+          }
+        }
+      }
+    },
+    "This session can't be moved any more: it was changed in Intervals.icu or skipped." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta sesión ya no se puede mover: se cambió en Intervals.icu o se saltó."
           }
         }
       }
@@ -8524,6 +8730,7 @@
       }
     },
     "Use this workout" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9044,6 +9251,16 @@
         }
       }
     },
+    "Without a plan the coach takes your request into today's session when it decides the day." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin un plan, el entrenador tiene en cuenta tu petición en la sesión de hoy cuando decide el día."
+          }
+        }
+      }
+    },
     "Without a trainer you can still record with a power meter and heart rate band; targets will show on screen only." : {
       "localizations" : {
         "es" : {
@@ -9115,6 +9332,7 @@
       }
     },
     "Workout request saved" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9125,6 +9343,7 @@
       }
     },
     "Workout updated" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9225,6 +9444,16 @@
         }
       }
     },
+    "You sign in with Intervals.icu through Cadencia's server, which keeps your plan, your conversation with the coach and its decisions in the EU. This phone keeps its Intervals.icu access in the Keychain and sends it only to intervals.icu." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inicias sesión con Intervals.icu a través del servidor de Cadencia, que guarda tu plan, tu conversación con el entrenador y sus decisiones en la UE. Este teléfono guarda su acceso a Intervals.icu en el llavero y solo lo envía a intervals.icu."
+          }
+        }
+      }
+    },
     "You're offline. Reconnect and ask the coach again." : {
       "localizations" : {
         "es" : {
@@ -9295,6 +9524,16 @@
         }
       }
     },
+    "Your accepted FTP is waiting to be saved to Intervals.icu." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El FTP que aceptaste está pendiente de guardarse en Intervals.icu."
+          }
+        }
+      }
+    },
     "Your account returned no models." : {
       "localizations" : {
         "es" : {
@@ -9341,6 +9580,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tu cuerpo necesita descanso hoy."
+          }
+        }
+      }
+    },
+    "Your Cadencia sign-in expired. Sign in again in Settings." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu sesión de Cadencia caducó. Vuelve a iniciar sesión en Ajustes."
+          }
+        }
+      }
+    },
+    "Your Cadencia sign-in has expired. Sign in again to use your plan and the coach; rides keep uploading meanwhile." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu sesión de Cadencia caducó. Vuelve a iniciar sesión para usar tu plan y el entrenador; mientras tanto, las salidas se siguen subiendo."
           }
         }
       }
@@ -9435,6 +9694,16 @@
         }
       }
     },
+    "Your device's date doesn't match today's. Check the date and time in your device settings." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La fecha de tu dispositivo no coincide con la de hoy. Revisa la fecha y la hora en los ajustes del dispositivo."
+          }
+        }
+      }
+    },
     "Your event" : {
       "localizations" : {
         "es" : {
@@ -9481,6 +9750,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tus datos de Intervals.icu, una prescripción diaria y un rodillo que escucha."
+          }
+        }
+      }
+    },
+    "Your plan couldn't be created from this draft. Go back and ask the coach to revise it." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo crear tu plan con este borrador. Vuelve atrás y pide al entrenador que lo revise."
+          }
+        }
+      }
+    },
+    "Your plan couldn't take this change." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu plan no pudo aceptar este cambio."
+          }
+        }
+      }
+    },
+    "Your plan didn't accept the coach's session for today. Ask again later or tell the coach what changed." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu plan no aceptó la sesión que propuso el entrenador para hoy. Vuelve a preguntar más tarde o cuéntale al entrenador qué ha cambiado."
+          }
+        }
+      }
+    },
+    "Your plan hasn't confirmed today's session yet. Pull to refresh in a moment." : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu plan aún no ha confirmado la sesión de hoy. Desliza para actualizar en un momento."
+          }
+        }
+      }
+    },
+    "Your plan is updating…" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu plan se está actualizando…"
           }
         }
       }
@@ -9586,6 +9905,7 @@
       }
     },
     "Your training context changed. Ask the coach for an updated workout preview." : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -9697,306 +10017,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cero"
-          }
-        }
-      }
-    },
-    "Sign in to Cadencia with the same Intervals.icu account the app uses." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inicia sesión en Cadencia con la misma cuenta de Intervals.icu que usa la app."
-          }
-        }
-      }
-    },
-    "Your Cadencia sign-in expired. Sign in again in Settings." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu sesión de Cadencia caducó. Vuelve a iniciar sesión en Ajustes."
-          }
-        }
-      }
-    },
-    "Cadencia couldn't be reached. Check your connection and try again." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo conectar con Cadencia. Revisa tu conexión e inténtalo de nuevo."
-          }
-        }
-      }
-    },
-    "This session can't be moved any more: it was changed in Intervals.icu or skipped." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esta sesión ya no se puede mover: se cambió en Intervals.icu o se saltó."
-          }
-        }
-      }
-    },
-    "The days this change was for have passed, so your plan can't apply it." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Los días de este cambio ya pasaron, así que tu plan no puede aplicarlo."
-          }
-        }
-      }
-    },
-    "Your device's date doesn't match today's. Check the date and time in your device settings." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La fecha de tu dispositivo no coincide con la de hoy. Revisa la fecha y la hora en los ajustes del dispositivo."
-          }
-        }
-      }
-    },
-    "Not on your Intervals calendar. Sign in to Cadencia again in Settings to reconnect." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No está en tu calendario de Intervals. Vuelve a iniciar sesión en Cadencia en Ajustes para reconectar."
-          }
-        }
-      }
-    },
-    "Intervals.icu refused this session, so it isn't on your calendar." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Intervals.icu rechazó esta sesión, así que no está en tu calendario."
-          }
-        }
-      }
-    },
-    "Cadencia refused the change (%@)." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cadencia rechazó el cambio (%@)."
-          }
-        }
-      }
-    },
-    "Cadencia is unavailable right now. Try again later." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cadencia no está disponible ahora mismo. Inténtalo más tarde."
-          }
-        }
-      }
-    },
-    "Sign in to Cadencia in Settings so your plan can confirm today's session." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inicia sesión en Cadencia en Ajustes para que tu plan confirme la sesión de hoy."
-          }
-        }
-      }
-    },
-    "Your plan didn't accept the coach's session for today. Ask again later or tell the coach what changed." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu plan no aceptó la sesión que propuso el entrenador para hoy. Vuelve a preguntar más tarde o cuéntale al entrenador qué ha cambiado."
-          }
-        }
-      }
-    },
-    "Your plan hasn't confirmed today's session yet. Pull to refresh in a moment." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu plan aún no ha confirmado la sesión de hoy. Desliza para actualizar en un momento."
-          }
-        }
-      }
-    },
-    "Sign in to Cadencia in Settings to create a plan." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inicia sesión en Cadencia en Ajustes para crear un plan."
-          }
-        }
-      }
-    },
-    "Your plan couldn't be created from this draft. Go back and ask the coach to revise it." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo crear tu plan con este borrador. Vuelve atrás y pide al entrenador que lo revise."
-          }
-        }
-      }
-    },
-    "Cadencia hasn't confirmed the new plan yet. Check the Plan tab in a moment." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cadencia aún no ha confirmado el nuevo plan. Revisa la pestaña Plan en un momento."
-          }
-        }
-      }
-    },
-    "Sign in to Cadencia in Settings to build your cyclist profile." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inicia sesión en Cadencia en Ajustes para crear tu perfil de ciclista."
-          }
-        }
-      }
-    },
-    "Sign in to Cadencia in Settings to talk to the coach." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inicia sesión en Cadencia en Ajustes para hablar con el entrenador."
-          }
-        }
-      }
-    },
-    "Without a plan the coach takes your request into today's session when it decides the day." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sin un plan, el entrenador tiene en cuenta tu petición en la sesión de hoy cuando decide el día."
-          }
-        }
-      }
-    },
-    "Create a plan so the coach can keep requests for other days." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Crea un plan para que el entrenador pueda guardar peticiones para otros días."
-          }
-        }
-      }
-    },
-    "Cadencia did not complete the sign-in. Try again." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cadencia no completó el inicio de sesión. Inténtalo de nuevo."
-          }
-        }
-      }
-    },
-    "%@: your request for the session" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@: tu petición para la sesión"
-          }
-        }
-      }
-    },
-    "Not now" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ahora no"
-          }
-        }
-      }
-    },
-    "Your plan is updating…" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu plan se está actualizando…"
-          }
-        }
-      }
-    },
-    "Not applied" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No aplicado"
-          }
-        }
-      }
-    },
-    "Your plan couldn't take this change." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tu plan no pudo aceptar este cambio."
-          }
-        }
-      }
-    },
-    "Couldn’t create the plan" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo crear el plan"
-          }
-        }
-      }
-    },
-    "Sign in" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Iniciar sesión"
-          }
-        }
-      }
-    },
-    "Sign in with Intervals.icu" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Iniciar sesión con Intervals.icu"
-          }
-        }
-      }
-    },
-    "Cadencia keeps Intervals.icu as the system of record. Your plan and the coach's notes are kept on Cadencia's server in the EU; the coach's AI runs on this phone." : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cadencia usa Intervals.icu como fuente de verdad. Tu plan y las notas del entrenador se guardan en el servidor de Cadencia en la UE; la IA del entrenador funciona en este teléfono."
           }
         }
       }
