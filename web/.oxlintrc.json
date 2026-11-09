@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // oxlint's defaults (the `correctness` category), as errors so CI fails on a new finding.
+  "categories": { "correctness": "error" },
+  "rules": {
+    // A leading underscore marks a deliberately unused name. oxlint already skips such variables; this adds parameters.
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }]
+  },
+  "overrides": [
+    {
+      // False positive: `method` is a parameter ("GET" | "POST" | …), and the body is only set when the caller gives one.
+      "files": ["packages/server/src/Intervals/IntervalsHttp.ts"],
+      "rules": { "unicorn/no-invalid-fetch-options": "off" }
+    }
+  ]
+}

@@ -29,7 +29,22 @@ Durable Objects, and a [foldkit](https://foldkit.dev) web app.
 npx pnpm@10 install
 npx pnpm@10 test        # stories and tests of every package
 npx pnpm@10 typecheck
+npx pnpm@10 test:integ  # the API Worker on local workerd
 ```
+
+`test` hosts both models in memory. `test:integ` runs
+`packages/server/test/integ/Workerd.integ.ts`, which deploys a test variant of
+the API Worker (`CadenciaTestWorker`: the same handlers, Durable Objects and D1,
+with a fixed session key and a Calendar that accepts everything) to local
+workerd with `@alchemy.run/test`, and drives it as a client would: commands over
+`/v1`, a `CurrentPlan` watch over a WebSocket on `/api/planning`, the session
+and the D1-backed Intervals routes. It takes about fifteen seconds, touches no
+Cloudflare account and never calls Intervals.icu. It runs under Vitest with its
+own config (`packages/server/vitest.integ.config.ts`), so `test` and CI never
+deploy anything. Run it from `web/`, where the D1 migrations' path resolves. It
+takes the first free port from 1337. Local workerd doesn't emulate the EU
+jurisdiction, and each run leaves one small SQLite file (about 100 KB) in
+`.alchemy/local/d1`, which Alchemy doesn't delete with the database.
 
 ## Deploy
 

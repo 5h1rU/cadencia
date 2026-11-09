@@ -9,7 +9,9 @@
     "deploy": "alchemy deploy",
     "dev": "alchemy dev",
     "destroy": "alchemy destroy",
+    "lint": "oxlint",
     "test": "pnpm -r --filter './packages/*' test",
+    "test:integ": "pnpm --filter @cadencia/server test:integ",
     "typecheck": "pnpm -r --filter './packages/*' typecheck && tsc --noEmit -p tsconfig.stack.json"
   },
   "dependencies": {
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261106.1",
+    "oxlint": "^1.93.0",
     "typescript": "^7.0.2"
   }
 }

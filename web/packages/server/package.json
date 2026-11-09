@@ -9,6 +9,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "test:integ": "cd ../.. && vitest run --config packages/server/vitest.integ.config.ts",
     "typecheck": "tsc --noEmit -p .",
     "ios-client": "node scripts/openapi.ts ../../../CadenciaCore/OpenAPI/openapi.json && node scripts/swift.ts ../../../CadenciaCore/OpenAPI/openapi.json ../../../CadenciaCore/Sources/CadenciaCore/Backend/CadenciaAPI.generated.swift"
   },
@@ -25,6 +26,7 @@
     "effect": "^4.1.2"
   },
   "devDependencies": {
+    "@alchemy.run/test": "2.0.0-beta.85",
     "@effect/vitest": "^4.1.2",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"

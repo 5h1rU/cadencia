@@ -27,7 +27,7 @@ const WorkerConfig = ConfigProvider.layer(
 );
 
 /** A calendar that accepts everything, in place of Intervals.icu. */
-const AcceptingCalendar = Calendar.toLayer(
+export const AcceptingCalendar = Calendar.toLayer(
   Effect.succeed({
     publishSession: () => Effect.succeed({ published: true }),
     withdrawSession: () => Effect.succeed({ withdrawn: true }),
