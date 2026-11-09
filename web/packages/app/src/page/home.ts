@@ -2,6 +2,7 @@ import { addDays } from "@cadencia/kernel/Calendar/Day";
 import * as Option from "effect/Option";
 import { AsyncData } from "foldkit";
 import type { HtmlBuilder } from "foldkit/html";
+import { DECISION_ABSENCES, decisionAbsence } from "../domain/decisionAbsence.ts";
 import { Message } from "../message.ts";
 import { Model } from "../model.ts";
 import { liveContent } from "../view/live.ts";
@@ -22,7 +23,15 @@ const decisionCard = (model: Model, h: HtmlBuilder<Message>) => {
       h.div([h.Class("card")], [
         h.h2([], ["Hoy"]),
         ...liveContent(h, model.decision, () => [
-          h.p([h.Class("muted")], ["La decisión de hoy aparecerá cuando abras Cadencia en el iPhone."]),
+          // Until the plan is read, say what holds whatever it says.
+          h.p([h.Class("muted")], [
+            DECISION_ABSENCES[
+              Option.match(AsyncData.getData(model.plan), {
+                onNone: () => "notYet" as const,
+                onSome: (plan) => decisionAbsence(plan, model.today),
+              })
+            ],
+          ]),
         ]),
       ]),
     onSome: ({ decision, note }) =>
