@@ -1,34 +1,25 @@
 import { AthleteCoachApi } from "@cadencia/coach/AthleteCoachApi.api";
-import { AthleteId } from "@cadencia/identity/Athlete.id";
 import { AthletePlanningApi } from "@cadencia/planning/AthletePlanningApi.api";
 import * as Domain from "@alchemy.run/domain";
 import * as Effect from "effect/Effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
-import * as Schema from "effect/Schema";
 import * as Layer from "effect/Layer";
 import * as Socket from "effect/socket/Socket";
 import { Http, Runtime } from "foldkit";
-import { Flags, init, localDayOf, Message, Model, subscriptions, update, view } from "./Cadencia.ts";
-
-/** Who is signed in: the session cookie is HttpOnly, so ask the server. Anything unexpected is signed out. */
-const signedIn = HttpClient.get("/api/session").pipe(
-  Effect.flatMap(HttpClientResponse.filterStatusOk),
-  Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Struct({ athleteId: AthleteId }))),
-  Effect.map(({ athleteId }) => athleteId),
-  Effect.orElseSucceed(() => null),
-  Effect.provide(Http.layer),
-);
-
-/** Today in the athlete's own time zone; the app moves it on at local midnight. */
-const today = Effect.sync(() => localDayOf(new Date()));
+import { flags } from "./flags.ts";
+import { init } from "./main.ts";
+import { Message } from "./message.ts";
+import { Flags, Model } from "./model.ts";
+import { subscriptions } from "./subscription.ts";
+import { viewTransition } from "./transition.ts";
+import { update } from "./update.ts";
+import { view } from "./view.ts";
 
 /**
  * Both Apis for the life of the app, on this origin, so the browser sends the
  * session cookie with every call and every watch.
  */
-const Clients = Layer.mergeAll(
+export const Clients = Layer.mergeAll(
   AthletePlanningApi.layerClient.pipe(Layer.provide(Domain.protocolWebSocket(`${location.origin}/api/planning`))),
   AthleteCoachApi.layerClient.pipe(Layer.provide(Domain.protocolWebSocket(`${location.origin}/api/coach`))),
 ).pipe(Layer.provide([Socket.layerWebSocketConstructorGlobal, FetchHttpClient.layer]));
@@ -48,18 +39,13 @@ Runtime.run(
       onUrlChange: (url) => Message.ChangedUrl({ url }),
     },
     container: document.getElementById("root"),
+    // Moving between pages and the history arriving animate, where the browser can; nothing else does.
+    viewTransition,
     // In development only. The Message schema lets the DevTools MCP dispatch Messages; the Model holds
     // no secrets (the session cookie is HttpOnly).
     devTools: { Message },
   }),
   {
-    flags: Effect.gen(function* () {
-      return {
-        athleteId: yield* signedIn,
-        today: yield* today,
-        // Names this page's commands, so each is unique even across reloads.
-        session: crypto.randomUUID(),
-      };
-    }),
+    flags: flags.pipe(Effect.provide(Http.layer)),
   },
 );

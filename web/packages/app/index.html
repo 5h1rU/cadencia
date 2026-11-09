@@ -53,6 +53,44 @@
       .report h4 { margin: 12px 0 4px; font-size: 0.95rem; }
       .report ul { margin: 0; padding-left: 20px; }
       .report details > p { margin-top: 12px; }
+      main.page { position: relative; display: grid; gap: 20px; view-transition-name: page; }
+      /* Data on screen stays while it is read again; it dims, and says so, only if the read takes a while. */
+      .card { transition: opacity 150ms ease-out; }
+      main.refreshing > .card { opacity: 0.6; transition-delay: 400ms; }
+      p.pending { position: absolute; z-index: 1; top: 21px; right: 20px; margin: 0; font-size: 0.8rem; color: var(--muted); animation: fade-in 150ms ease-out 400ms both; }
+      .placeholder { height: 22px; border-radius: 4px; background: linear-gradient(90deg, var(--line) 25%, var(--bg) 50%, var(--line) 75%) 0 0 / 200% 100%; animation: shimmer 1.4s linear infinite; }
+      .history-form .placeholder { width: 60%; }
+      @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+      ::view-transition-old(page), ::view-transition-new(page) { animation-duration: 200ms; animation-timing-function: ease-out; }
+      html:active-view-transition-type(forward)::view-transition-old(page) { animation-name: page-out-to-start; }
+      html:active-view-transition-type(forward)::view-transition-new(page) { animation-name: page-in-from-end; }
+      html:active-view-transition-type(backward)::view-transition-old(page) { animation-name: page-out-to-end; }
+      html:active-view-transition-type(backward)::view-transition-new(page) { animation-name: page-in-from-start; }
+      @keyframes page-out-to-start { to { opacity: 0; transform: translateX(-24px); } }
+      @keyframes page-in-from-end { from { opacity: 0; transform: translateX(24px); } }
+      @keyframes page-out-to-end { to { opacity: 0; transform: translateX(24px); } }
+      @keyframes page-in-from-start { from { opacity: 0; transform: translateX(-24px); } }
+      /* The history's first answer grows the placeholders into its cards. */
+      html:active-view-transition-type(reveal) .history-form { view-transition-name: history-form; view-transition-class: reveal; }
+      html:active-view-transition-type(reveal) .history-activities { view-transition-name: history-activities; view-transition-class: reveal; }
+      ::view-transition-group(*.reveal) { overflow: clip; border-radius: 8px; animation-duration: 350ms; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
+      ::view-transition-old(*.reveal) { animation: fade-out 120ms ease-out both; }
+      ::view-transition-new(*.reveal) { animation: fade-in 300ms ease-out 60ms both; }
+      html:active-view-transition-type(reveal)::view-transition-new(page) { animation-name: rise-in; }
+      /* A refresh fades new activities in and slides the others to their place. */
+      html:active-view-transition-type(refresh) tr.activity { view-transition-name: match-element; view-transition-class: activity; }
+      ::view-transition-group(*.activity) { animation-duration: 300ms; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
+      ::view-transition-new(*.activity):only-child { animation: row-in 300ms ease-out both; }
+      ::view-transition-old(*.activity):only-child { animation: fade-out 200ms ease-in both; }
+      @keyframes fade-in { from { opacity: 0; } }
+      @keyframes fade-out { to { opacity: 0; } }
+      @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }
+      @keyframes row-in { from { opacity: 0; transform: translateY(-8px); } }
+      @media (prefers-reduced-motion: reduce) {
+        ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+        .placeholder, p.pending { animation: none; }
+        .card { transition: none; }
+      }
       a.connect { display: inline-block; background: var(--accent); color: var(--surface); padding: 10px 18px; border-radius: 6px; text-decoration: none; }
     </style>
   </head>

@@ -29,3 +29,14 @@ export const routeOf = Route.parseUrlWithFallback(
   Route.oneOf(homeRouter, coachRouter, planRouter, historyRouter, profileRouter),
   AppRoute.NotFound,
 );
+
+/** The path that shows `route`. */
+export const hrefOf = (route: AppRoute): string =>
+  AppRoute.match(route, {
+    Home: () => homeRouter(),
+    Coach: () => coachRouter(),
+    Plan: () => planRouter(),
+    History: () => historyRouter(),
+    Profile: () => profileRouter(),
+    NotFound: ({ path }) => path,
+  });
