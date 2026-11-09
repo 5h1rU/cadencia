@@ -1,7 +1,7 @@
 import { AthleteId, ownerOf } from "@cadencia/identity/Athlete.id";
 import { CurrentActor } from "@cadencia/identity/CurrentActor.context";
 import { mustBeSystem, mustOwn } from "@cadencia/identity/owns";
-import { Day, daysBetween } from "@cadencia/kernel/Calendar/Day";
+import { addDays, Day, daysBetween } from "@cadencia/kernel/Calendar/Day";
 import { Weekday } from "@cadencia/kernel/Calendar/Week";
 import { PlanId } from "@cadencia/kernel/Plan.id";
 import { Paragraph, Title } from "@cadencia/kernel/Text";
@@ -277,7 +277,10 @@ export class Plan extends Domain.Aggregate("Plan", {
       if (plan.sessions.some((s) => s.day === cmd.toDay && s.status !== "removedInIntervals")) {
         return yield* new DayTaken({ day: cmd.toDay });
       }
-      const moved: PlannedSession = { ...session, day: cmd.toDay, status: session.workout ? "concrete" : "provisional" };
+      // An opener's workout is for the eve of the event: on any other day the session waits for a new one.
+      const workout =
+        session.workout?.kind === "openerActivation" && plan.event?.day !== addDays(cmd.toDay, 1) ? null : session.workout;
+      const moved: PlannedSession = { ...session, day: cmd.toDay, workout, status: workout ? "concrete" : "provisional" };
       // The athlete's requirement for the new day holds for whatever session lands there.
       const requirement = plan.requirements.find((r) => r.day === cmd.toDay);
       const fitted = requirement === undefined ? null : limitedTo(moved, { ...requirement, unavailable: false });

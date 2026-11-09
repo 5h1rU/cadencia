@@ -34,7 +34,7 @@ const isEasy = (kind: SessionKind): boolean => kind === "recovery" || kind === "
 
 /**
  * How demanding each kind's purpose is, for the kinds whose purpose sets it.
- * A group ride, strength or an opener says nothing about sustained intensity.
+ * A group ride, strength or an opener has no place on this ladder.
  */
 const DEMAND: Partial<Record<SessionKind, number>> = {
   recovery: 1,
@@ -50,17 +50,65 @@ const DEMAND: Partial<Record<SessionKind, number>> = {
 const PEAK_CEILING: Partial<Record<SessionKind, number>> = { tempo: 1.0, threshold: 1.1 };
 
 /**
+ * The highest average intensity a whole session of the kind reaches, warm-up
+ * and recoveries included. It bounds the dose: a session can stay under its
+ * kind's peak and still ask far more than the kind does, by never easing off.
+ */
+const MEAN_CEILING: Partial<Record<SessionKind, number>> = { tempo: 0.85, threshold: 0.95 };
+
+/**
+ * How much work above FTP one unbroken effort may ask, in seconds times the
+ * fraction of FTP above it: 600 is ten minutes at 200 %, or an hour at 117 %.
+ * A trained rider has between 60 and 120, so only an effort nobody could
+ * finish is refused, on any day and for any kind.
+ */
+export const SUPRA_FTP_BUDGET = 600;
+
+/** The session's average intensity, by time. */
+const meanIntensity = (workout: Workout): number => {
+  const seconds = totalSeconds(workout);
+  if (seconds === 0) return 0;
+  return workout.steps.reduce((sum, s) => sum + ((s.startIntensity + s.endIntensity) / 2) * s.durationSeconds, 0) / seconds;
+};
+
+/** A step's work above FTP: the area between its intensity and FTP, where it is above. */
+const workAboveFtp = (step: WorkoutStep): number => {
+  const low = Math.min(step.startIntensity, step.endIntensity);
+  const high = Math.max(step.startIntensity, step.endIntensity);
+  if (high <= 1) return 0;
+  if (low >= 1) return ((low + high) / 2 - 1) * step.durationSeconds;
+  // A ramp that crosses FTP: the triangle above it.
+  return ((high - 1) / 2) * ((high - 1) / (high - low)) * step.durationSeconds;
+};
+
+/** Whether some unbroken effort above FTP asks more than anyone has. A step at or under FTP ends the effort. */
+const isBeyondReach = (workout: Workout): boolean => {
+  let effort = 0;
+  for (const step of workout.steps) {
+    const work = workAboveFtp(step);
+    effort = work === 0 ? 0 : effort + work;
+    if (effort > SUPRA_FTP_BUDGET) return true;
+  }
+  return false;
+};
+
+/**
  * Whether a proposal asks more of the athlete than the planned session's
- * purpose: intensity on an easy day, anything but an opener's brief efforts on
- * an opener day, and on a hard day a harder kind or efforts above the kind's
- * ceiling. A group ride or strength day is left to the athlete.
+ * purpose: intensity on an easy day or on a strength day (the gym is that
+ * day's load), anything but an opener's brief efforts on an opener day, and on
+ * a hard day a harder kind, efforts above the kind's peak, or a session that
+ * averages above the kind's dose. A group ride is left to the athlete.
  */
 const hardens = (planned: SessionKind, workout: Workout, intense: boolean, peak: number): boolean => {
-  if (isEasy(planned)) return intense;
+  if (isEasy(planned) || planned === "strength") return intense;
   if (planned === "openerActivation") return intense && workout.kind !== "openerActivation";
   const demand = DEMAND[planned];
   if (demand === undefined) return false;
-  return (DEMAND[workout.kind] ?? 0) > demand || peak > (PEAK_CEILING[planned] ?? Number.POSITIVE_INFINITY);
+  return (
+    (DEMAND[workout.kind] ?? 0) > demand ||
+    peak > (PEAK_CEILING[planned] ?? Number.POSITIVE_INFINITY) ||
+    meanIntensity(workout) > (MEAN_CEILING[planned] ?? Number.POSITIVE_INFINITY)
+  );
 };
 
 export type Problem =
@@ -124,6 +172,7 @@ export const problemWith = (input: {
     const problem = openerProblem(workout);
     if (problem) return { _tag: "PurposeMismatch", problem };
   }
+  if (isBeyondReach(workout)) return { _tag: "PurposeMismatch", problem: "effortBeyondReach" };
   return undefined;
 };
 

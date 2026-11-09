@@ -46,10 +46,11 @@ export const PurposeProblem = Schema.Literals([
   "openerEffortTooLong",
   "openerRecoveryTooShort",
   "openerWithoutFinalRecovery",
+  "effortBeyondReach",
 ]);
 export type PurposeProblem = typeof PurposeProblem.Type;
 
-/** The workout's shape contradicts its stated purpose: a rest day with riding, a malformed opener. */
+/** The workout's shape contradicts its stated purpose: a rest day with riding, a malformed opener, an effort nobody could finish. */
 export class PurposeMismatch extends Domain.Rejection(
   "PurposeMismatch",
   { day: Day, problem: PurposeProblem },

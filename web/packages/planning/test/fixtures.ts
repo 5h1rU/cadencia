@@ -12,6 +12,7 @@ import { FtpFraction, Minutes } from "@cadencia/kernel/Training/Units";
 import { type Workout, WorkoutStep } from "@cadencia/kernel/Training/Workout";
 import * as Schema from "effect/Schema";
 import { PlanCreated } from "../src/Plan/CreatePlan.command.ts";
+import type { GoalEvent } from "../src/Plan/GoalEvent.ts";
 import { Plan } from "../src/Plan/Plan.aggregate.ts";
 import type { PlannedSession } from "../src/Plan/PlannedSession.ts";
 import { ExternalId, externalIdFor, SessionId } from "../src/Plan/Session.id.ts";
@@ -58,6 +59,7 @@ export const basePhase = Schema.decodeUnknownSync(Phase)({ focus: "base", startW
 export const planCreated = (
   sessions: ReadonlyArray<PlannedSession> = [endurance, threshold, longRide],
   objective: Paragraph | null = null,
+  event: GoalEvent | null = null,
 ) =>
   new PlanCreated({
     athleteId: anaId,
@@ -68,7 +70,7 @@ export const planCreated = (
     endDay: day("2026-12-20"),
     phases: [basePhase],
     longRideWeekday: weekday(7),
-    event: null,
+    event,
     sessions,
   });
 

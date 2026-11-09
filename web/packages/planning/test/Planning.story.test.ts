@@ -68,6 +68,7 @@ import {
   planCreated,
   planId,
   saturday,
+  session,
   sessionId,
   steady,
   threshold,
@@ -367,6 +368,39 @@ it.effect("a session moved onto a day with a requirement keeps to it", () =>
     then(plan, published(threshold)),
   ),
 );
+
+it.effect("an opener moved off the eve of its event waits for a new workout; any other session keeps its own", () => {
+  const friday = day("2026-11-13");
+  const wednesday = day("2026-11-11");
+  const opener = session(friday, "openerActivation", 45, "Opener");
+  const activation = workout("openerActivation", [
+    steady("Warm-up", 20, 0.6),
+    steady("Effort", 1, 1.05),
+    steady("Easy", 3, 0.55),
+    steady("Cool-down", 10, 0.55),
+  ]);
+  const granFondo = { name: title("Gran fondo"), day: saturday, distanceKm: null, isRace: false, objective: paragraph("Finish strong") };
+  const concrete = (s: PlannedSession, w: typeof activation): PlannedSession => ({ ...s, status: "concrete", workout: w });
+  return story(
+    given(
+      plan,
+      planCreated([endurance, opener], null, granFondo),
+      new SessionConcretized({ session: concrete(opener, activation), softened: false, fingerprint }),
+      new SessionConcretized({ session: concrete(endurance, easyHour), softened: false, fingerprint }),
+    ),
+    as(ana),
+    when(plan, new MoveSession({ sessionId: opener.sessionId, toDay: wednesday })),
+    then(plan, new SessionMoved({ session: { ...opener, day: wednesday }, fromDay: friday })),
+    call(Calendar.publishSession, { athleteId: anaId, session: { ...opener, day: wednesday } }),
+    succeed(Calendar.publishSession, { published: true }),
+    then(plan, published(opener)),
+    when(plan, new MoveSession({ sessionId: endurance.sessionId, toDay: tuesday })),
+    then(plan, new SessionMoved({ session: { ...concrete(endurance, easyHour), day: tuesday }, fromDay: monday })),
+    call(Calendar.publishSession, { athleteId: anaId, session: { ...concrete(endurance, easyHour), day: tuesday } }),
+    succeed(Calendar.publishSession, { published: true }),
+    then(plan, published(endurance)),
+  );
+});
 
 it.effect("two limits for one day keep the strictest, in either order", () =>
   story(
