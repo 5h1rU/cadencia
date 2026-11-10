@@ -14,6 +14,9 @@ const appWorkspaces = Object.keys(app.dependencies)
   .filter((name) => name.startsWith("@cadencia/"))
   .map((name) => ({ cwd: `../${name.slice("@cadencia/".length)}` }));
 
+/** The hostname prod's app serves, in the account's `felipejaner.com` zone. */
+const PROD_DOMAIN = "cadencia.felipejaner.com";
+
 /**
  * Cadencia on Cloudflare: the Worker that hosts both models, and the foldkit
  * web app. The app's Worker serves the build and forwards the API, the
@@ -29,7 +32,9 @@ export default Alchemy.Stack(
     const api = yield* CadenciaWorker;
     const stage = yield* Stage;
     const app = yield* Cloudflare.Website.Foldkit("CadenciaApp", {
-      ...(stage === "prod" ? { name: PROD_WORKER_NAMES.app } : {}),
+      // prod also answers at its own hostname; the workers.dev URL stays, since Intervals.icu and
+      // the iOS builds already in use know that origin.
+      ...(stage === "prod" ? { name: PROD_WORKER_NAMES.app, domain: PROD_DOMAIN } : {}),
       rootDir: "packages/app",
       memo: { workspaces: appWorkspaces },
       main: "src/worker.ts",
